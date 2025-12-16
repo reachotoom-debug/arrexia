@@ -1,0 +1,33 @@
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
+
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+  ]),
+  {
+    rules: {
+      // Relax noisy rules for MVP V1 - set to "warn" instead of "error"
+      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/immutability": "warn",
+      "react-hooks/exhaustive-deps": "warn",
+      // Turn off style rules for now
+      "@next/next/no-img-element": "off",
+      // Additional rules downgraded to "warn" for MVP
+      "prefer-const": "warn",
+      "react/no-unescaped-entities": "warn",
+    },
+  },
+]);
+
+export default eslintConfig;
