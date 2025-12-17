@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { PaymentForm } from "../_components/PaymentForm";
-import { type PaymentFormValues } from "@/lib/payments/schema";
+import { PaymentFormSchema, type PaymentFormValues } from "@/lib/payments/schema";
 import { createPayment } from "../actions";
 import { getEligibleInvoices } from "../_lib/getEligibleInvoices";
 
@@ -48,9 +48,28 @@ export default async function NewPaymentPage({
     currency: inv.currency,
   }));
 
-  async function handleCreate(values: PaymentFormValues) {
+  async function handleCreate(formData: FormData) {
     "use server";
-    const result = await createPayment(workspaceId, values);
+    const raw = {
+      clientId: formData.get("clientId"),
+      invoiceId: formData.get("invoiceId"),
+      amount: Number(formData.get("amount") ?? 0),
+      date: String(formData.get("date") ?? ""),
+      method: String(formData.get("method") ?? ""),
+      status: String(formData.get("status") ?? ""),
+      transactionId: formData.get("transactionId") ? String(formData.get("transactionId")) : null,
+      notes: formData.get("notes") ? String(formData.get("notes")) : null,
+      payment_provider: formData.get("payment_provider")
+        ? String(formData.get("payment_provider"))
+        : "",
+    };
+
+    const parsed = PaymentFormSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new Error(parsed.error.errors.map((e) => e.message).join("; "));
+    }
+
+    const result = await createPayment(workspaceId, parsed.data as PaymentFormValues);
     if ("error" in result) {
       throw new Error(result.error);
     }
@@ -128,7 +147,7 @@ export default async function NewPaymentPage({
           mode="create"
           clients={clients}
           invoices={invoices}
-          onSubmit={handleCreate}
+          action={handleCreate}
           workspaceId={workspaceId}
           cancelUrl={`/${workspaceId}/payments`}
           invoicesError={invoicesError}

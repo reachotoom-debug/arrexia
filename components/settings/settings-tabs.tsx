@@ -2,14 +2,16 @@
 
 import { useState } from "react";
 
-type TabId = "workspace" | "email" | "reminders" | "payments" | "account";
+type TabId = "workspace" | "email" | "reminders" | "payments" | "billing" | "account";
 
 interface SettingsTabsProps {
   workspaceContent: React.ReactNode;
   emailContent: React.ReactNode;
   remindersContent: React.ReactNode;
   paymentsContent: React.ReactNode;
+  billingContent: React.ReactNode;
   accountContent: React.ReactNode;
+  initialTab?: TabId;
 }
 
 export function SettingsTabs({
@@ -17,9 +19,11 @@ export function SettingsTabs({
   emailContent,
   remindersContent,
   paymentsContent,
+  billingContent,
   accountContent,
+  initialTab = "workspace",
 }: SettingsTabsProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("workspace");
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
   return (
     <div className="space-y-6">
@@ -79,6 +83,19 @@ export function SettingsTabs({
             Payments & Defaults
           </button>
           <button
+            onClick={() => setActiveTab("billing")}
+            className={`
+              whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium transition-colors
+              ${
+                activeTab === "billing"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700"
+              }
+            `}
+          >
+            Billing
+          </button>
+          <button
             onClick={() => setActiveTab("account")}
             className={`
               whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium transition-colors
@@ -100,6 +117,7 @@ export function SettingsTabs({
         {activeTab === "email" && emailContent}
         {activeTab === "reminders" && remindersContent}
         {activeTab === "payments" && paymentsContent}
+        {activeTab === "billing" && billingContent}
         {activeTab === "account" && accountContent}
       </div>
     </div>

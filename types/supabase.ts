@@ -1327,6 +1327,41 @@ export type Database = {
           },
         ]
       }
+      workspace_plans: {
+        Row: {
+          client_limit: number | null
+          created_at: string
+          invoice_limit_monthly: number | null
+          plan: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          client_limit?: number | null
+          created_at?: string
+          invoice_limit_monthly?: number | null
+          plan?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          client_limit?: number | null
+          created_at?: string
+          invoice_limit_monthly?: number | null
+          plan?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_plans_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_reminder_settings: {
         Row: {
           auto_reminders_enabled: boolean

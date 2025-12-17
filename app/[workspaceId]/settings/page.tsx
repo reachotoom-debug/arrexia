@@ -8,14 +8,32 @@ import { EmailSettingsForm } from "./_components/EmailSettingsForm";
 import { RemindersSettingsSection } from "./_components/RemindersSettingsSection";
 import { PaymentSettingsForm } from "./_components/PaymentSettingsForm";
 import { AccountSettingsSection } from "./_components/AccountSettingsSection";
+import { BillingPlans } from "./_components/BillingPlans";
 
 interface SettingsPageProps {
   params: Promise<{ workspaceId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function SettingsPage({ params }: SettingsPageProps) {
+export default async function SettingsPage({ params, searchParams }: SettingsPageProps) {
   const { workspaceId } = await params;
   await requireWorkspace(workspaceId);
+  const resolvedSearchParams = await searchParams;
+  const tabParam = Array.isArray(resolvedSearchParams?.tab)
+    ? resolvedSearchParams.tab[0]
+    : resolvedSearchParams?.tab;
+  const initialTab =
+    tabParam === "billing"
+      ? "billing"
+      : tabParam === "payments"
+      ? "payments"
+      : tabParam === "reminders"
+      ? "reminders"
+      : tabParam === "email"
+      ? "email"
+      : tabParam === "account"
+      ? "account"
+      : "workspace";
 
   // Load all settings, profile, and user in parallel
   const [settingsResult, profileResult, userResult] = await Promise.all([
@@ -45,6 +63,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
       />
 
       <SettingsTabs
+        initialTab={initialTab}
         workspaceContent={
           <WorkspaceProfileForm workspaceId={workspaceId} settings={settings} />
         }
@@ -57,6 +76,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
         paymentsContent={
           <PaymentSettingsForm workspaceId={workspaceId} settings={settings} />
         }
+        billingContent={<BillingPlans workspaceId={workspaceId} />}
         accountContent={
           <AccountSettingsSection
             profile={

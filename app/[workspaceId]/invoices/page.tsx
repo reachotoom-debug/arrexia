@@ -10,6 +10,7 @@ import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
 import { InvoicesPreferencesGate } from "./_components/InvoicesPreferencesGate";
 import { InvoicesClientFilterBadge } from "./_components/InvoicesClientFilterBadge";
 import { InvoicesSearchInput } from "./_components/InvoicesSearchInput";
+import { PlanLimitBanner } from "@/components/billing/PlanLimitBanner";
 // Note: invoices_view provides status (capitalized: 'Void', 'Paid', 'Partially Paid', 'Draft', 'Overdue', 'Sent'),
 // is_overdue, days_overdue, and risk_level directly. No need to compute them in TypeScript.
 
@@ -525,6 +526,9 @@ export default async function InvoicesPage({
   const workspaceId = workspace.id;
 
   const resolvedSearchParams = (await searchParams) || {};
+  const limitCodeParam = Array.isArray(resolvedSearchParams.limit)
+    ? resolvedSearchParams.limit[0]
+    : resolvedSearchParams.limit;
 
   // Load invoices using the refactored function
   let invoiceData;
@@ -662,6 +666,8 @@ export default async function InvoicesPage({
   const canPrev = safePage > 1;
   const canNext = safePage < totalPages;
 
+  const isInvoiceLimitReached = limitCodeParam === "PLAN_LIMIT_INVOICES";
+
   return (
     <>
       <InvoicesPreferencesGate
@@ -669,6 +675,7 @@ export default async function InvoicesPage({
         searchParams={resolvedSearchParams}
       />
       <div className="max-w-5xl mx-auto py-6 space-y-4">
+      {isInvoiceLimitReached ? <PlanLimitBanner code="PLAN_LIMIT_INVOICES" /> : null}
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -678,12 +685,22 @@ export default async function InvoicesPage({
           </p>
         </div>
 
-        <Link
-          href={`/${workspaceId}/invoices/new`}
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-        >
-          New Invoice
-        </Link>
+        {isInvoiceLimitReached ? (
+          <button
+            className="inline-flex items-center justify-center rounded-lg bg-slate-200 px-3 py-2 text-sm font-medium text-slate-600 shadow-sm"
+            disabled
+            title="Upgrade to create more"
+          >
+            New Invoice
+          </button>
+        ) : (
+          <Link
+            href={`/${workspaceId}/invoices/new`}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+          >
+            New Invoice
+          </Link>
+        )}
       </div>
 
       {/* View Presets */}

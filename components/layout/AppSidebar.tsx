@@ -10,6 +10,7 @@ import {
   CreditCard,
   Bell,
   Settings as SettingsIcon,
+  LogOut,
 } from "lucide-react";
 import { DEFAULT_AVATAR_URL } from "@/lib/constants";
 
@@ -121,6 +122,13 @@ export function AppSidebar({
                 </Link>
               );
             })}
+            <Link
+              href="/logout"
+              className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            >
+              <LogOut className="h-4 w-4 text-slate-400 group-hover:text-slate-700" />
+              <span className="truncate">Logout</span>
+            </Link>
           </nav>
         </div>
 
@@ -150,7 +158,7 @@ export function AppSidebar({
           <div className="mt-2 flex items-center justify-between text-xs">
             <span className="text-slate-500">Plan: {planLabel}</span>
             <Link
-              href={`/${workspaceId}/settings?tab=billing`}
+              href={`/pricing?workspaceId=${workspaceId}`}
               className="text-xs font-medium text-blue-600 hover:text-blue-700"
             >
               Upgrade

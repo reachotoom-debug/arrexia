@@ -15,6 +15,8 @@ import {
   type PaymentTermsCode 
 } from "@/lib/invoices/paymentTerms";
 import { logAuditEvent } from "@/lib/audit/log";
+import { assertInvoiceCreateAllowed } from "@/lib/billing/assertWithinPlanLimits";
+import { redirect } from "next/navigation";
 
 const ORGANIZATION_ID = "05d2d292-d95b-44f4-b774-22f10068124f";
 
@@ -27,6 +29,15 @@ export async function createInvoice(
   // Validate user and workspace access at the start
   const { user } = await requireUser();
   const { workspace } = await requireWorkspace(workspaceId);
+
+  try {
+    await assertInvoiceCreateAllowed(workspaceId);
+  } catch (error: any) {
+    if (error?.code === "PLAN_LIMIT_INVOICES") {
+      redirect(`/${workspaceId}/invoices?limit=PLAN_LIMIT_INVOICES`);
+    }
+    throw error;
+  }
 
   const parsed = InvoiceFormSchema.parse(rawValues);
   const supabase = await supabaseServer();

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace, requireUser } from "@/lib/auth/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   workspaceProfileSchema,
   emailSettingsSchema,
@@ -14,6 +15,8 @@ import {
   ReminderRuleSchema,
 } from "@/lib/reminders/schema";
 import { MAX_AVATAR_FILE_SIZE_BYTES, ALLOWED_AVATAR_MIME_TYPES, DEFAULT_AVATAR_URL } from "@/lib/constants";
+import type { WorkspacePlan } from "@/lib/billing/getWorkspacePlan";
+import type { WorkspacePlan } from "@/lib/billing/getWorkspacePlan";
 
 /**
  * Save workspace profile settings
@@ -205,6 +208,46 @@ export async function testEmailSettings(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to send test email",
+    };
+  }
+}
+
+export async function updateWorkspacePlan(
+  workspaceId: string,
+  plan: WorkspacePlan
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireWorkspace(workspaceId);
+    const admin = supabaseAdmin();
+
+    const limits =
+      plan === "free"
+        ? { invoice_limit_monthly: 5, client_limit: 5 }
+        : { invoice_limit_monthly: null, client_limit: null };
+
+    const { error } = await admin
+      .from("workspace_plans")
+      .upsert(
+        {
+          workspace_id: workspaceId,
+          plan,
+          ...limits,
+        },
+        { onConflict: "workspace_id" }
+      );
+
+    if (error) {
+      console.error("[updateWorkspacePlan] upsert error", error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath(`/${workspaceId}/settings?tab=billing`);
+    return { success: true };
+  } catch (error) {
+    console.error("[updateWorkspacePlan] error", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update plan",
     };
   }
 }

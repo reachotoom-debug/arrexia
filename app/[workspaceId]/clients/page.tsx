@@ -7,6 +7,7 @@ import { ClientsPreferencesGate } from "./_components/ClientsPreferencesGate";
 import { computeInvoiceMetrics } from "@/lib/invoices/metrics";
 import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
 import { ClientsSearchInput } from "./_components/ClientsSearchInput";
+import { PlanLimitBanner } from "@/components/billing/PlanLimitBanner";
 
 const ORGANIZATION_ID = "05d2d292-d95b-44f4-b774-22f10068124f";
 const CLIENTS_PAGE_SIZE = 10;
@@ -534,6 +535,9 @@ export default async function ClientsPage({
   const { workspaceId } = await params;
   await requireWorkspace(workspaceId);
   const resolvedSearchParams = await searchParams;
+  const limitCodeParam = Array.isArray(resolvedSearchParams.limit)
+    ? resolvedSearchParams.limit[0]
+    : resolvedSearchParams.limit;
   
   // Check if required params are missing and redirect to canonical URL
   const hasStatus = resolvedSearchParams.status !== undefined;
@@ -819,6 +823,8 @@ export default async function ClientsPage({
   const canPrev = safePage > 1;
   const canNext = safePage < totalPages;
 
+  const isClientLimitReached = limitCodeParam === "PLAN_LIMIT_CLIENTS";
+
   return (
     <>
       <ClientsPreferencesGate
@@ -826,6 +832,7 @@ export default async function ClientsPage({
         searchParams={resolvedSearchParams}
       />
       <div className="max-w-6xl mx-auto py-6 space-y-4">
+      {isClientLimitReached ? <PlanLimitBanner code="PLAN_LIMIT_CLIENTS" /> : null}
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -835,12 +842,22 @@ export default async function ClientsPage({
           </p>
         </div>
 
-        <Link
-          href={`/${workspaceId}/clients/new`}
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-        >
-          New Client
-        </Link>
+        {isClientLimitReached ? (
+          <button
+            className="inline-flex items-center justify-center rounded-lg bg-slate-200 px-3 py-2 text-sm font-medium text-slate-600 shadow-sm"
+            disabled
+            title="Upgrade to create more"
+          >
+            New Client
+          </button>
+        ) : (
+          <Link
+            href={`/${workspaceId}/clients/new`}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+          >
+            New Client
+          </Link>
+        )}
       </div>
 
       {/* View Presets */}

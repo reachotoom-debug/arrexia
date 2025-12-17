@@ -30,6 +30,7 @@ on conflict (workspace_id) do nothing;
 -- Enable RLS and allow members to read their workspace plan
 alter table public.workspace_plans enable row level security;
 
+drop policy if exists "Workspace members can select workspace_plans" on public.workspace_plans;
 create policy "Workspace members can select workspace_plans"
 on public.workspace_plans
 for select

@@ -60,6 +60,14 @@ export async function requireUser(): Promise<{ user: AuthUserInfo; userError: Po
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
+    // Handle expired/invalid refresh token: clear cookies and redirect
+    if (
+      userError?.code === "refresh_token_not_found" ||
+      (userError as any)?.status === 400
+    ) {
+      await supabase.auth.signOut();
+      throw new Error("redirect:/login");
+    }
     throw new Error("User not authenticated");
   }
 
@@ -78,7 +86,7 @@ export async function requireUser(): Promise<{ user: AuthUserInfo; userError: Po
   return {
     user: {
       id: user.id,
-      email: user.email,
+      email: user.email ?? null,
       fullName: profile?.full_name || null,
       avatarUrl: profile?.avatar_url || null,
     },
@@ -115,6 +123,13 @@ export async function requireWorkspace(
   } = await authSupabase.auth.getUser();
 
   if (userError || !user) {
+    if (
+      userError?.code === "refresh_token_not_found" ||
+      (userError as any)?.status === 400
+    ) {
+      await authSupabase.auth.signOut();
+      throw new Error("redirect:/login");
+    }
     throw new Error("User not authenticated");
   }
 
@@ -127,7 +142,7 @@ export async function requireWorkspace(
 
   const authUser: AuthUserInfo = {
     id: user.id,
-    email: user.email,
+    email: user.email ?? null,
     fullName: profile?.full_name || null,
     avatarUrl: profile?.avatar_url || null,
   };

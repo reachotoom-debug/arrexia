@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+import { LogOut } from "lucide-react";
 
 export interface SidebarProps {
   workspaceId: string;
@@ -108,10 +109,19 @@ export function Sidebar({ workspaceId, user }: SidebarProps) {
         <div className="mt-3 flex items-center justify-between">
           <span className="text-xs text-gray-500">Plan: Free</span>
           <Link
-            href={`/${workspaceId}/settings?tab=billing`}
+            href={`/pricing?workspaceId=${workspaceId}`}
             className="text-xs font-medium text-blue-600 hover:underline"
           >
             Upgrade
+          </Link>
+        </div>
+        <div className="mt-2">
+          <Link
+            href="/logout"
+            className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
           </Link>
         </div>
       </div>

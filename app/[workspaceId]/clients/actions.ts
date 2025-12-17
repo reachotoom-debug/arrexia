@@ -6,12 +6,22 @@ import {
   ClientFormSchema,
   type ClientFormValues,
 } from "@/lib/clients/schema";
+import { assertClientCreateAllowed } from "@/lib/billing/assertWithinPlanLimits";
+import { redirect } from "next/navigation";
 
 export async function createClient(
   workspaceId: string,
   rawValues: ClientFormValues
 ) {
   const parsed = ClientFormSchema.parse(rawValues);
+  try {
+    await assertClientCreateAllowed(workspaceId);
+  } catch (error: any) {
+    if (error?.code === "PLAN_LIMIT_CLIENTS") {
+      redirect(`/${workspaceId}/clients?limit=PLAN_LIMIT_CLIENTS`);
+    }
+    throw error;
+  }
   const supabase = await supabaseServer();
 
   // Convert paymentTerms string to number

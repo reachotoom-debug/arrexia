@@ -24,7 +24,7 @@ interface PaymentFormProps {
   initialData?: PaymentFormValues;
   clients: { id: string; name: string }[];
   invoices: Invoice[];
-  onSubmit: (values: PaymentFormValues) => Promise<void>;
+  action: (formData: FormData) => Promise<void>;
   workspaceId: string;
   cancelUrl?: string;
   invoicesError?: string; // Error message from getEligibleInvoices
@@ -35,7 +35,7 @@ export function PaymentForm({
   initialData,
   clients,
   invoices,
-  onSubmit,
+  action,
   workspaceId,
   cancelUrl,
   invoicesError,
@@ -53,7 +53,7 @@ export function PaymentForm({
     setValue,
     setError,
     clearErrors,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<PaymentFormValues>({
     resolver: zodResolver(PaymentFormSchema),
     defaultValues: initialData ?? {
@@ -164,29 +164,9 @@ export function PaymentForm({
     return amount <= selectedInvoiceOutstanding + tolerance && amount > 0;
   }, [amount, selectedInvoiceOutstanding, isEdit]);
 
-  const submitHandler = async (values: PaymentFormValues) => {
-    // Final validation check before submit (only in create mode)
-    if (!isEdit && selectedInvoiceOutstanding !== null) {
-      const tolerance = 0.01;
-      if (values.amount > selectedInvoiceOutstanding + tolerance) {
-        setError("amount", {
-          type: "manual",
-          message: `Amount cannot exceed outstanding balance of ${formatMoney(selectedInvoiceOutstanding, "USD")}`,
-        });
-        return;
-      }
-    }
-    
-    try {
-      await onSubmit(values);
-    } catch (error) {
-      console.error("[PaymentForm] submit failed", error);
-    }
-  };
-
   return (
     <form
-      onSubmit={handleSubmit(submitHandler)}
+      action={action}
       className="space-y-6 max-w-2xl mx-auto"
     >
       {/* Header */}
@@ -213,16 +193,10 @@ export function PaymentForm({
           </button>
           <button
             type="submit"
-            disabled={isSubmitting || !isFormValid}
+            disabled={!isFormValid}
             className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isSubmitting
-              ? isEdit
-                ? "Saving..."
-                : "Recording..."
-              : isEdit
-              ? "Save Changes"
-              : "Record Payment"}
+            {isEdit ? "Save Changes" : "Record Payment"}
           </button>
         </div>
       </div>

@@ -17,7 +17,6 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const workspaceId = searchParams.get("workspaceId");
 
   const {
     register,
@@ -29,11 +28,6 @@ export default function LoginPage() {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
-    if (!workspaceId) {
-      setError("root", { message: "Missing workspace ID" });
-      return;
-    }
-
     const supabase = supabaseBrowser();
     const { error } = await supabase.auth.signInWithPassword({
       email: data.email,
@@ -45,29 +39,39 @@ export default function LoginPage() {
       return;
     }
 
+    // After sign-in, find a workspace (first membership). If none, go to onboarding.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setError("root", { message: "Signed in, but no user found" });
+      return;
+    }
+
+    const { data: memberships, error: membershipsError } = await supabase
+      .from("workspace_members")
+      .select("workspace_id, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (membershipsError) {
+      setError("root", { message: membershipsError.message || "Failed to load workspace" });
+      return;
+    }
+
+    const workspaceId = memberships?.[0]?.workspace_id;
+    if (!workspaceId) {
+      router.push("/pricing");
+      return;
+    }
+
     router.push(`/${workspaceId}/dashboard`);
   };
 
-  if (!workspaceId) {
-    return (
-      <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm border border-slate-200">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            FlowCollect
-          </h1>
-          <p className="text-sm text-slate-500">
-            Cash Solved.
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-red-600">Missing workspace ID</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm border border-slate-200">
+      <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm border border-slate-200">
       <div className="text-center mb-8">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           FlowCollect
