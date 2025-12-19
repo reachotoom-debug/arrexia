@@ -50,10 +50,8 @@ export default async function RemindersPage({
   params,
   searchParams,
 }: RemindersPageProps) {
-  const user = await requireUser();
-  const resolvedParams = await params;
-  const { workspace } = await requireWorkspace(resolvedParams.workspaceId);
-  const workspaceId = workspace.id;
+  const { workspaceId } = await params;
+  const { workspace } = await requireWorkspace(workspaceId);
 
   const supabase = await supabaseServer();
   const resolvedSearchParams = (await searchParams) || {};

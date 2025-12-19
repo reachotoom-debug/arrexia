@@ -1,4 +1,5 @@
 import PaymentsTable from "@/components/payments/PaymentsTable";
+import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { ErrorState, EmptyState } from "@/components/ui/state";
 import Link from "next/link";
@@ -449,6 +450,7 @@ async function loadPayments(
 
 export default async function PaymentsPage({ params, searchParams }: PaymentsPageProps) {
   const { workspaceId } = await params;
+  const { workspace } = await requireWorkspace(workspaceId);
   const resolvedSearchParams = await searchParams;
   const supabase = await supabaseServer();
 

@@ -1,48 +1,25 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { supabaseServer } from "@/lib/supabase/server";
 
 export type AuthUserInfo = {
   id: string;
   email: string | null;
 };
 
+export type WorkspaceInfo = {
+  id: string;
+  name: string;
+};
+
 export async function requireUser(): Promise<{ user: AuthUserInfo }> {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll().map((cookie) => ({
-            name: cookie.name,
-            value: cookie.value,
-          }));
-        },
-        setAll() {
-          // no-op: server components should not modify cookies
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    // Handle expired/invalid refresh token: redirect without signing out
-    if (
-      userError?.code === "refresh_token_not_found" ||
-      (userError as any)?.status === 400
-    ) {
-      redirect("/login");
-    }
+  const supabase = await supabaseServer();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  
+  // Treat refresh_token_not_found and any auth errors as unauthenticated
+  if (!user || error) {
     redirect("/login");
   }
-
+  
   return {
     user: {
       id: user.id,
@@ -51,42 +28,19 @@ export async function requireUser(): Promise<{ user: AuthUserInfo }> {
   };
 }
 
-export async function requireWorkspace(workspaceId: string) {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll().map((cookie) => ({
-            name: cookie.name,
-            value: cookie.value,
-          }));
-        },
-        setAll() {
-          // no-op: server components should not modify cookies
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    // Handle expired/invalid refresh token: redirect without signing out
-    if (
-      userError?.code === "refresh_token_not_found" ||
-      (userError as any)?.status === 400
-    ) {
-      redirect("/login");
-    }
+export async function requireWorkspace(workspaceId: string): Promise<{
+  user: AuthUserInfo;
+  workspace: WorkspaceInfo;
+}> {
+  const supabase = await supabaseServer();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  // Treat refresh_token_not_found and any auth errors as unauthenticated
+  if (!user || authError) {
     redirect("/login");
   }
 
+  // Check membership first
   const { data: membership } = await supabase
     .from("workspace_members")
     .select("workspace_id")
@@ -95,8 +49,28 @@ export async function requireWorkspace(workspaceId: string) {
     .maybeSingle();
 
   if (!membership) {
-    redirect("/login");
+    redirect("/start");
   }
 
-  return { user, workspaceId };
+  // Load workspace - must exist if membership exists
+  const { data: workspace, error: wsError } = await supabase
+    .from("workspaces")
+    .select("*")
+    .eq("id", workspaceId)
+    .single();
+
+  if (!workspace || wsError) {
+    redirect("/start");
+  }
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email ?? null,
+    },
+    workspace: {
+      id: workspace.id,
+      name: workspace.name,
+    },
+  };
 }

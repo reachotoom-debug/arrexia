@@ -16,7 +16,6 @@ import {
 } from "@/lib/reminders/schema";
 import { MAX_AVATAR_FILE_SIZE_BYTES, ALLOWED_AVATAR_MIME_TYPES, DEFAULT_AVATAR_URL } from "@/lib/constants";
 import type { WorkspacePlan } from "@/lib/billing/getWorkspacePlan";
-import type { WorkspacePlan } from "@/lib/billing/getWorkspacePlan";
 
 /**
  * Save workspace profile settings
@@ -212,44 +211,35 @@ export async function testEmailSettings(
   }
 }
 
-export async function updateWorkspacePlan(
-  workspaceId: string,
-  plan: WorkspacePlan
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    await requireWorkspace(workspaceId);
-    const admin = supabaseAdmin();
+export async function setWorkspacePlanAction(formData: FormData) {
+  const workspaceId = String(formData.get("workspaceId") || "");
+  const plan = String(formData.get("plan") || "");
 
-    const limits =
-      plan === "free"
-        ? { invoice_limit_monthly: 5, client_limit: 5 }
-        : { invoice_limit_monthly: null, client_limit: null };
+  if (!workspaceId) throw new Error("Missing workspaceId");
+  if (!["free", "starter", "pro"].includes(plan)) throw new Error("Invalid plan");
 
-    const { error } = await admin
-      .from("workspace_plans")
-      .upsert(
-        {
-          workspace_id: workspaceId,
-          plan,
-          ...limits,
-        },
-        { onConflict: "workspace_id" }
-      );
+  const { user } = await requireUser();
 
-    if (error) {
-      console.error("[updateWorkspacePlan] upsert error", error);
-      return { success: false, error: error.message };
-    }
+  const admin = supabaseAdmin();
+  const limits =
+    plan === "free"
+      ? { invoice_limit_monthly: 5, client_limit: 5 }
+      : { invoice_limit_monthly: null, client_limit: null };
 
-    revalidatePath(`/${workspaceId}/settings?tab=billing`);
-    return { success: true };
-  } catch (error) {
-    console.error("[updateWorkspacePlan] error", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to update plan",
-    };
-  }
+  const { error } = await admin
+    .from("workspace_plans")
+    .upsert(
+      {
+        workspace_id: workspaceId,
+        plan: plan as WorkspacePlan,
+        ...limits,
+      },
+      { onConflict: "workspace_id" }
+    );
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/${workspaceId}/settings`);
 }
 
 /**

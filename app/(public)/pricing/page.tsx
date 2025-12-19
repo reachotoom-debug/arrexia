@@ -60,7 +60,9 @@ export default async function PricingPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const planHref = (plan: "free" | "starter" | "pro") => `/start?plan=${plan}`;
+  const planHref = (plan: "free" | "starter" | "pro") => {
+    return `/register?next=${encodeURIComponent(`/start?plan=${plan}`)}`;
+  };
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-12">

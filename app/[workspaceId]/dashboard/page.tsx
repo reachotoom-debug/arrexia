@@ -23,10 +23,8 @@ export default async function DashboardPage({
   params,
   searchParams,
 }: DashboardPageProps) {
-  const user = await requireUser();
-  const resolvedParams = await params;
-  const { workspace } = await requireWorkspace(resolvedParams.workspaceId);
-  const workspaceId = workspace.id;
+  const { workspaceId } = await params;
+  const { workspace } = await requireWorkspace(workspaceId);
 
   const resolvedSearchParams = (await searchParams) || {};
   const viewParam =

@@ -103,7 +103,7 @@ export async function createPayment(
 ) {
   // Validate user and workspace access at the start
   const { user } = await requireUser();
-  const { workspace } = await requireWorkspace(workspaceId);
+  const { workspaceId: validatedWorkspaceId } = await requireWorkspace(workspaceId);
 
   const parsed = PaymentFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
@@ -208,7 +208,7 @@ export async function createPayment(
   // Audit log failure must never break payment creation
   try {
     await logAuditEvent({
-      workspaceId: workspace.id,
+      workspaceId: validatedWorkspaceId,
       userId: user.id,
       entityType: "payment",
       entityId: data.id,
@@ -241,7 +241,7 @@ export async function updatePayment(
 ) {
   // Validate user and workspace access at the start
   const { user } = await requireUser();
-  const { workspace } = await requireWorkspace(workspaceId);
+  const { workspaceId: validatedWorkspaceId } = await requireWorkspace(workspaceId);
 
   const parsed = PaymentFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
@@ -410,7 +410,7 @@ export async function updatePayment(
   // Audit log failure must never break payment update
   try {
     await logAuditEvent({
-      workspaceId: workspace.id,
+      workspaceId: validatedWorkspaceId,
       userId: user.id,
       entityType: "payment",
       entityId: paymentId,

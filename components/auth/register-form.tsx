@@ -1,21 +1,74 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, type RegisterFormValues } from "@/lib/schemas/auth";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
-interface RegisterFormProps {
-  onSubmit: (values: RegisterFormValues) => Promise<void> | void;
-}
+export default function RegisterForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextUrl = searchParams.get("next");
 
-export default function RegisterForm({ onSubmit }: RegisterFormProps) {
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
+    setError,
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
   });
+
+  const onSubmit = async (data: RegisterFormValues) => {
+    const supabase = supabaseBrowser();
+    const next = nextUrl || "/start";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    
+    // Try sign up first
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        emailRedirectTo: origin ? `${origin}/auth/callback?next=${encodeURIComponent(next)}` : undefined,
+      },
+    });
+
+    // If user already exists, try sign in instead
+    if (signUpError) {
+      if (signUpError.message.includes("already registered") || signUpError.message.includes("User already registered")) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: data.email,
+          password: data.password,
+        });
+
+        if (signInError) {
+          setError("root", { message: signInError.message || "Failed to sign in" });
+          return;
+        }
+
+        // Sign in successful, redirect
+        router.replace(next);
+        return;
+      }
+
+      setError("root", { message: signUpError.message || "Failed to create account" });
+      return;
+    }
+
+    // Check if session was created immediately (email confirmations off)
+    if (signUpData.session) {
+      // Session created, redirect immediately
+      router.replace(next);
+      return;
+    }
+
+    // Email confirmation required - show success message
+    setError("root", { 
+      message: "Please check your email to confirm your account before signing in.",
+      type: "info"
+    });
+  };
 
   return (
     <div className="flex justify-center">
@@ -29,10 +82,7 @@ export default function RegisterForm({ onSubmit }: RegisterFormProps) {
           </p>
         </div>
 
-        <form
-          onSubmit={handleSubmit((data) => onSubmit(data))}
-          className="space-y-4"
-        >
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Email
@@ -81,6 +131,16 @@ export default function RegisterForm({ onSubmit }: RegisterFormProps) {
               </p>
             )}
           </div>
+
+          {errors.root && (
+            <div className={`rounded-lg px-3 py-2 text-sm ${
+              errors.root.type === "info"
+                ? "bg-blue-50 text-blue-700"
+                : "bg-red-50 text-red-700"
+            }`}>
+              {errors.root.message}
+            </div>
+          )}
 
           <button
             type="submit"

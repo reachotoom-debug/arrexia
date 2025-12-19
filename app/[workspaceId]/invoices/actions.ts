@@ -28,7 +28,7 @@ export async function createInvoice(
 
   // Validate user and workspace access at the start
   const { user } = await requireUser();
-  const { workspace } = await requireWorkspace(workspaceId);
+  const { workspaceId: validatedWorkspaceId } = await requireWorkspace(workspaceId);
 
   try {
     await assertInvoiceCreateAllowed(workspaceId);
@@ -172,7 +172,7 @@ export async function createInvoice(
 
   // 5) Log audit event with user.id and workspace_id
   await logAuditEvent({
-    workspaceId: workspace.id,
+    workspaceId: validatedWorkspaceId,
     userId: user.id,
     entityType: "invoice",
     entityId: invoice.id,
@@ -196,7 +196,7 @@ export async function updateInvoice(
 ) {
   // Validate user and workspace access at the start
   const { user } = await requireUser();
-  const { workspace } = await requireWorkspace(workspaceId);
+  const { workspaceId: validatedWorkspaceId } = await requireWorkspace(workspaceId);
 
   const parsed = InvoiceFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
@@ -354,7 +354,7 @@ export async function updateInvoice(
 
   // Log audit event with user.id and workspace_id
   await logAuditEvent({
-    workspaceId: workspace.id,
+    workspaceId: validatedWorkspaceId,
     userId: user.id,
     entityType: "invoice",
     entityId: invoiceId,

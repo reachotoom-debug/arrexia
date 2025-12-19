@@ -520,10 +520,8 @@ export default async function InvoicesPage({
   params,
   searchParams,
 }: InvoicesPageProps) {
-  const user = await requireUser();
-  const resolvedParams = await params;
-  const { workspace } = await requireWorkspace(resolvedParams.workspaceId);
-  const workspaceId = workspace.id;
+  const { workspaceId } = await params;
+  const { workspace } = await requireWorkspace(workspaceId);
 
   const resolvedSearchParams = (await searchParams) || {};
   const limitCodeParam = Array.isArray(resolvedSearchParams.limit)

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/server";
+import { supabaseServer } from "@/lib/supabase/server";
 import { ensureWorkspaceForUser } from "@/lib/workspaces/ensureWorkspaceForUser";
 import { setWorkspacePlan } from "@/lib/billing/setWorkspacePlan";
 import type { WorkspacePlan } from "@/lib/billing/getWorkspacePlan";
@@ -21,13 +21,22 @@ export default async function StartPage({
   const resolvedSearch = searchParams ? await searchParams : undefined;
   const plan = parsePlan(resolvedSearch);
 
-  try {
-    const { user } = await requireUser();
-    const workspaceId = await ensureWorkspaceForUser(user.id);
-    await setWorkspacePlan(workspaceId, plan);
-    redirect(`/${workspaceId}/dashboard`);
-  } catch {
+  // Check authentication - redirect to register if not authenticated
+  // (We use direct supabase check instead of requireUser because we want to redirect to /register, not /login)
+  const supabase = await supabaseServer();
+  const { data: { user }, error } = await supabase.auth.getUser();
+
+  if (!user || error) {
     const nextUrl = `/start?plan=${plan}`;
     redirect(`/register?next=${encodeURIComponent(nextUrl)}`);
   }
+
+  // User is authenticated, proceed with workspace setup
+  // ensureWorkspaceForUser creates workspace and workspace_members entry if needed
+  const workspaceId = await ensureWorkspaceForUser(user.id);
+  
+  // Ensure workspace_plans row exists
+  await setWorkspacePlan(workspaceId, plan);
+  
+  redirect(`/${workspaceId}/dashboard`);
 }
