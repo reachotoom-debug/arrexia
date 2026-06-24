@@ -1,7 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface DeleteInvoiceModalProps {
   isOpen: boolean;
@@ -19,9 +19,19 @@ export default function DeleteInvoiceModal({
   const [mounted, setMounted] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
+  // Standard pattern for client-side only rendering
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
+
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onCancel();
+    }, 200);
+  }, [onCancel]);
 
   useEffect(() => {
     if (isOpen) {
@@ -37,15 +47,7 @@ export default function DeleteInvoiceModal({
         document.body.style.overflow = "unset";
       };
     }
-  }, [isOpen]);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onCancel();
-    }, 200);
-  };
+  }, [isOpen, handleClose]);
 
   const handleConfirm = () => {
     setIsClosing(true);

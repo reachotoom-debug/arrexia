@@ -8,36 +8,24 @@ export const InvoiceItemSchema = z.object({
     .max(255, "Name is too long"),
   description: z.string().optional(),
   quantity: z
-    .number({
-      required_error: "Quantity is required",
-      invalid_type_error: "Quantity must be a number",
-    })
+    .number("Quantity must be a number")
     .positive("Quantity must be greater than 0"),
   unit_price: z
-    .number({
-      required_error: "Unit price is required",
-      invalid_type_error: "Unit price must be a number",
-    })
+    .number("Unit price must be a number")
     .nonnegative("Unit price cannot be negative"),
   position: z.number().optional(),
 });
 
 export const InvoiceFormSchema = z.object({
   clientId: z
-    .string({
-      required_error: "Client is required",
-    })
+    .string("Client is required")
     .uuid("Invalid client id"),
 
   invoiceNumber: z
-    .string({
-      required_error: "Invoice number is required",
-    })
+    .string("Invoice number is required")
     .regex(/^INV-\d{4}$/, "Invalid invoice format (expected INV-0001)"),
 
-  issueDate: z.string({
-    required_error: "Issue date is required",
-  }),
+  issueDate: z.string("Issue date is required"),
 
   // Due date is optional - server will compute it from issueDate + paymentTerms
   dueDate: z.string().optional(),
@@ -50,8 +38,8 @@ export const InvoiceFormSchema = z.object({
   // payment_state is derived, not user-editable
   // Note: is_overdue is deprecated - use dynamic logic: (due_date < today) AND (outstanding_amount > 0)
   status: z.enum(["draft", "sent", "void"], {
-    required_error: "Status is required",
-  }),
+    message: "Status is required",
+  }).transform((val) => val.toLowerCase() as "draft" | "sent" | "void"),
 
   // Payment terms
   paymentTerms: z.enum([

@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency as formatCurrencyHelper } from "@/lib/format/currency";
 import { AlertTriangle, AlertCircle, TrendingUp, Info } from "lucide-react";
 import type { DashboardSummaryPremium } from "./PremiumKpiRow";
 
@@ -16,7 +16,7 @@ interface DashboardInsightProps {
 
 // Helper formatters
 function formatCurrency(value: number): string {
-  return formatMoney(value, "USD");
+  return formatCurrencyHelper(value, { currency: "USD" });
 }
 
 function formatPct(value: number): string {
@@ -56,8 +56,8 @@ function getDashboardInsight(summary: DashboardSummaryPremium): DashboardInsight
   ) {
     return {
       level: "critical",
-      title: "High-risk exposure is concentrated in your overdue balance.",
-      detail: `${formatCurrency(totals.highRiskExposure)} high-risk overdue across ${(overdueRatio * 100).toFixed(0)}% of outstanding. Prioritize these invoices in Collections mode.`,
+      title: "Most of your outstanding is high-risk.",
+      detail: "Start with these invoices now in Collections Mode.",
     };
   }
 

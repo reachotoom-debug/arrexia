@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { KPI } from "@/app/[workspaceId]/dashboard/_components/KPI";
 import type {
   DashboardSummary,
@@ -100,7 +100,7 @@ export function CollectionsModeTab({
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <KPI
           label="Invoices in view"
           value={filteredAndSorted.length}
@@ -109,7 +109,7 @@ export function CollectionsModeTab({
         />
         <KPI
           label="Outstanding in view"
-          value={formatMoney(worklistOutstanding, "USD")}
+          value={formatCurrency(worklistOutstanding, { currency: "USD" })}
           icon={DollarSign}
           iconBgColor="bg-red-100"
         />
@@ -245,7 +245,7 @@ export function CollectionsModeTab({
                       {item.overdueDays} day{item.overdueDays !== 1 ? "s" : ""}
                     </td>
                     <td className="px-3 py-2 text-right font-medium text-red-600 whitespace-nowrap">
-                      {formatMoney(item.outstanding, "USD")}
+                      {formatCurrency(item.outstanding, { currency: "USD" })}
                     </td>
                     <td className="px-3 py-2">
                       <span className="inline-flex rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-xs font-medium text-red-700 capitalize">

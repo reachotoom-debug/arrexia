@@ -17,6 +17,7 @@ export type Database = {
       activity_logs: {
         Row: {
           action: string
+          actor_user_id: string | null
           created_at: string
           entity_id: string | null
           entity_type: string
@@ -24,9 +25,11 @@ export type Database = {
           metadata: Json
           organization_id: string
           user_id: string | null
+          workspace_id: string | null
         }
         Insert: {
           action: string
+          actor_user_id?: string | null
           created_at?: string
           entity_id?: string | null
           entity_type: string
@@ -34,9 +37,11 @@ export type Database = {
           metadata?: Json
           organization_id: string
           user_id?: string | null
+          workspace_id?: string | null
         }
         Update: {
           action?: string
+          actor_user_id?: string | null
           created_at?: string
           entity_id?: string | null
           entity_type?: string
@@ -44,6 +49,7 @@ export type Database = {
           metadata?: Json
           organization_id?: string
           user_id?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -54,10 +60,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "activity_logs_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "activity_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -65,6 +71,7 @@ export type Database = {
       clients: {
         Row: {
           address: string | null
+          archived_at: string | null
           avatar_url: string | null
           company: string | null
           company_name: string | null
@@ -74,7 +81,9 @@ export type Database = {
           created_by: string | null
           currency: string | null
           email: string | null
+          email_lc: string | null
           id: string
+          is_active: boolean
           name: string
           notes: string | null
           organization_id: string | null
@@ -90,6 +99,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          archived_at?: string | null
           avatar_url?: string | null
           company?: string | null
           company_name?: string | null
@@ -99,7 +109,9 @@ export type Database = {
           created_by?: string | null
           currency?: string | null
           email?: string | null
+          email_lc?: string | null
           id?: string
+          is_active?: boolean
           name: string
           notes?: string | null
           organization_id?: string | null
@@ -115,6 +127,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          archived_at?: string | null
           avatar_url?: string | null
           company?: string | null
           company_name?: string | null
@@ -124,7 +137,9 @@ export type Database = {
           created_by?: string | null
           currency?: string | null
           email?: string | null
+          email_lc?: string | null
           id?: string
+          is_active?: boolean
           name?: string
           notes?: string | null
           organization_id?: string | null
@@ -231,6 +246,7 @@ export type Database = {
         Row: {
           body_preview: string | null
           created_at: string
+          delivery_method: string | null
           error_message: string | null
           id: string
           invoice_id: string
@@ -243,6 +259,7 @@ export type Database = {
         Insert: {
           body_preview?: string | null
           created_at?: string
+          delivery_method?: string | null
           error_message?: string | null
           id?: string
           invoice_id: string
@@ -255,6 +272,7 @@ export type Database = {
         Update: {
           body_preview?: string | null
           created_at?: string
+          delivery_method?: string | null
           error_message?: string | null
           id?: string
           invoice_id?: string
@@ -397,6 +415,7 @@ export type Database = {
       invoices: {
         Row: {
           amount: number
+          archived_at: string | null
           client_id: string
           created_at: string
           currency: string
@@ -409,10 +428,8 @@ export type Database = {
           issue_date: string
           notes: string | null
           organization_id: string
-          outstanding_amount: number | null
           paid_date: string | null
           payment_link: string | null
-          payment_state: string | null
           payment_terms: string | null
           payment_terms_days: number | null
           pdf_url: string | null
@@ -421,12 +438,13 @@ export type Database = {
           subtotal: number | null
           tax_amount: number | null
           tax_percent: number | null
-          total_paid: number | null
+          total_paid: number
           updated_at: string
-          workspace_id: string | null
+          workspace_id: string
         }
         Insert: {
           amount?: number
+          archived_at?: string | null
           client_id: string
           created_at?: string
           currency: string
@@ -439,10 +457,8 @@ export type Database = {
           issue_date: string
           notes?: string | null
           organization_id: string
-          outstanding_amount?: number | null
           paid_date?: string | null
           payment_link?: string | null
-          payment_state?: string | null
           payment_terms?: string | null
           payment_terms_days?: number | null
           pdf_url?: string | null
@@ -451,12 +467,13 @@ export type Database = {
           subtotal?: number | null
           tax_amount?: number | null
           tax_percent?: number | null
-          total_paid?: number | null
+          total_paid?: number
           updated_at?: string
-          workspace_id?: string | null
+          workspace_id: string
         }
         Update: {
           amount?: number
+          archived_at?: string | null
           client_id?: string
           created_at?: string
           currency?: string
@@ -469,10 +486,8 @@ export type Database = {
           issue_date?: string
           notes?: string | null
           organization_id?: string
-          outstanding_amount?: number | null
           paid_date?: string | null
           payment_link?: string | null
-          payment_state?: string | null
           payment_terms?: string | null
           payment_terms_days?: number | null
           pdf_url?: string | null
@@ -481,9 +496,9 @@ export type Database = {
           subtotal?: number | null
           tax_amount?: number | null
           tax_percent?: number | null
-          total_paid?: number | null
+          total_paid?: number
           updated_at?: string
-          workspace_id?: string | null
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -499,6 +514,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "payment_eligible_clients"
+            referencedColumns: ["client_id"]
           },
           {
             foreignKeyName: "invoices_organization_id_fkey"
@@ -628,6 +650,7 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          archived_at: string | null
           client_id: string
           created_at: string
           currency: string
@@ -644,10 +667,11 @@ export type Database = {
           transaction_fee: number
           transaction_id: string | null
           updated_at: string
-          workspace_id: string | null
+          workspace_id: string
         }
         Insert: {
           amount: number
+          archived_at?: string | null
           client_id: string
           created_at?: string
           currency: string
@@ -664,10 +688,11 @@ export type Database = {
           transaction_fee?: number
           transaction_id?: string | null
           updated_at?: string
-          workspace_id?: string | null
+          workspace_id: string
         }
         Update: {
           amount?: number
+          archived_at?: string | null
           client_id?: string
           created_at?: string
           currency?: string
@@ -684,7 +709,7 @@ export type Database = {
           transaction_fee?: number
           transaction_id?: string | null
           updated_at?: string
-          workspace_id?: string | null
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -700,6 +725,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "payment_eligible_clients"
+            referencedColumns: ["client_id"]
           },
           {
             foreignKeyName: "payments_invoice_id_fkey"
@@ -1025,6 +1057,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "reminders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "payment_eligible_clients"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "reminders_invoice_id_fkey"
             columns: ["invoice_id"]
             isOneToOne: false
@@ -1086,6 +1125,9 @@ export type Database = {
         Row: {
           auto_send_reminders: boolean
           auto_thank_you: boolean
+          branding_business_address: string | null
+          branding_business_legal_name: string | null
+          branding_tax_id: string | null
           business_address_line1: string | null
           business_address_line2: string | null
           business_city: string | null
@@ -1105,8 +1147,17 @@ export type Database = {
           from_email: string | null
           from_name: string | null
           invoice_prefix: string
+          invoice_thank_you_note: string | null
           language: string
           logo_url: string | null
+          payment_bank_account_name: string | null
+          payment_bank_account_number: string | null
+          payment_bank_iban: string | null
+          payment_bank_name: string | null
+          payment_bank_swift: string | null
+          payment_other_instructions: string | null
+          payment_paypal_handle: string | null
+          payment_stripe_descriptor: string | null
           provider_api_key: string | null
           reminder_after_days: number
           reminder_before_days: number
@@ -1122,6 +1173,9 @@ export type Database = {
         Insert: {
           auto_send_reminders?: boolean
           auto_thank_you?: boolean
+          branding_business_address?: string | null
+          branding_business_legal_name?: string | null
+          branding_tax_id?: string | null
           business_address_line1?: string | null
           business_address_line2?: string | null
           business_city?: string | null
@@ -1141,8 +1195,17 @@ export type Database = {
           from_email?: string | null
           from_name?: string | null
           invoice_prefix?: string
+          invoice_thank_you_note?: string | null
           language?: string
           logo_url?: string | null
+          payment_bank_account_name?: string | null
+          payment_bank_account_number?: string | null
+          payment_bank_iban?: string | null
+          payment_bank_name?: string | null
+          payment_bank_swift?: string | null
+          payment_other_instructions?: string | null
+          payment_paypal_handle?: string | null
+          payment_stripe_descriptor?: string | null
           provider_api_key?: string | null
           reminder_after_days?: number
           reminder_before_days?: number
@@ -1158,6 +1221,9 @@ export type Database = {
         Update: {
           auto_send_reminders?: boolean
           auto_thank_you?: boolean
+          branding_business_address?: string | null
+          branding_business_legal_name?: string | null
+          branding_tax_id?: string | null
           business_address_line1?: string | null
           business_address_line2?: string | null
           business_city?: string | null
@@ -1177,8 +1243,17 @@ export type Database = {
           from_email?: string | null
           from_name?: string | null
           invoice_prefix?: string
+          invoice_thank_you_note?: string | null
           language?: string
           logo_url?: string | null
+          payment_bank_account_name?: string | null
+          payment_bank_account_number?: string | null
+          payment_bank_iban?: string | null
+          payment_bank_name?: string | null
+          payment_bank_swift?: string | null
+          payment_other_instructions?: string | null
+          payment_paypal_handle?: string | null
+          payment_stripe_descriptor?: string | null
           provider_api_key?: string | null
           reminder_after_days?: number
           reminder_before_days?: number
@@ -1408,18 +1483,21 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          organization_id: string
           profile_image_url: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          organization_id: string
           profile_image_url?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          organization_id?: string
           profile_image_url?: string | null
         }
         Relationships: []
@@ -1454,9 +1532,10 @@ export type Database = {
           client_name: string | null
           currency: string | null
           display_status: string | null
+          due_date: string | null
           invoice_id: string | null
           invoice_number: string | null
-          is_overdue: boolean | null
+          issue_date: string | null
           outstanding: number | null
           overdue_days: number | null
           paid: number | null
@@ -1479,12 +1558,22 @@ export type Database = {
             referencedRelation: "clients"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "payment_eligible_clients"
+            referencedColumns: ["client_id"]
+          },
         ]
       }
       invoices_view: {
         Row: {
+          archived_at: string | null
           base_status: string | null
+          client_archived_at: string | null
           client_id: string | null
+          client_is_active: boolean | null
           client_name: string | null
           currency: string | null
           display_status: string | null
@@ -1497,11 +1586,9 @@ export type Database = {
           outstanding: number | null
           overdue_days: number | null
           paid: number | null
-          paid_amount: number | null
           po_number: string | null
           risk_level: string | null
           total: number | null
-          total_amount: number | null
           workspace_id: string | null
         }
         Relationships: [
@@ -1518,6 +1605,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "payment_eligible_clients"
+            referencedColumns: ["client_id"]
           },
         ]
       }
@@ -1557,6 +1651,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "payment_eligible_clients"
+            referencedColumns: ["client_id"]
           },
           {
             foreignKeyName: "invoices_organization_id_fkey"
@@ -1607,6 +1708,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "payment_eligible_clients"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "invoices_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -1615,25 +1723,52 @@ export type Database = {
           },
         ]
       }
-      payments_view: {
+      payment_eligible_clients: {
+        Row: {
+          archived_at: string | null
+          client_id: string | null
+          email: string | null
+          is_active: boolean | null
+          name: string | null
+          open_invoices_count: number | null
+          total_outstanding: number | null
+          whatsapp: string | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments_orphans: {
         Row: {
           amount: number | null
-          client_name: string | null
           created_at: string | null
-          currency: string | null
           id: string | null
           invoice_id: string | null
-          invoice_number: string | null
-          is_failed: boolean | null
-          method: string | null
-          notes: string | null
-          paid_at: string | null
           payment_date: string | null
-          payment_provider: string | null
-          status: string | null
-          transaction_id: string | null
-          updated_at: string | null
           workspace_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          id?: string | null
+          invoice_id?: string | null
+          payment_date?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          id?: string | null
+          invoice_id?: string | null
+          payment_date?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -1680,15 +1815,206 @@ export type Database = {
           },
         ]
       }
+      payments_view: {
+        Row: {
+          amount: number | null
+          archived_at: string | null
+          client_id: string | null
+          client_name: string | null
+          created_at: string | null
+          currency: string | null
+          id: string | null
+          invoice_id: string | null
+          invoice_number: string | null
+          is_failed: boolean | null
+          method: string | null
+          net_amount: number | null
+          notes: string | null
+          paid_at: string | null
+          payment_date: string | null
+          payment_provider: string | null
+          proof_url: string | null
+          status: string | null
+          transaction_fee: number | null
+          transaction_id: string | null
+          updated_at: string | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "client_ar_summary"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "payment_eligible_clients"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_risk_view"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices_with_metrics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices_with_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
-      [_ in never]: never
+      import_execute_payments:
+        | {
+            Args: {
+              p_rows: Database["public"]["CompositeTypes"]["payment_import_row"][]
+              p_workspace_id: string
+            }
+            Returns: {
+              action: string
+              error_message: string
+              payment_id: string
+              row_id: number
+            }[]
+          }
+        | {
+            Args: {
+              p_rows: Database["public"]["CompositeTypes"]["payment_import_row"][]
+              p_workspace_id: string
+            }
+            Returns: {
+              action: string
+              error_message: string
+              payment_id: string
+              row_id: number
+            }[]
+          }
+      import_invoices_grouped: {
+        Args: { p_dry_run?: boolean; p_rows: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      import_preview_payments:
+        | {
+            Args: {
+              p_rows: Database["public"]["CompositeTypes"]["payment_import_row"][]
+              p_workspace_id: string
+            }
+            Returns: {
+              amount: number
+              client_id: string
+              currency: string
+              error_message: string
+              invoice_id: string
+              invoice_number: string
+              is_duplicate: boolean
+              is_valid: boolean
+              method: string
+              notes: string
+              payment_date: string
+              payment_provider: string
+              row_id: number
+              status: string
+              transaction_id: string
+            }[]
+          }
+        | {
+            Args: {
+              p_rows: Database["public"]["CompositeTypes"]["payment_import_row"][]
+              p_workspace_id: string
+            }
+            Returns: {
+              amount: number
+              client_id: string
+              currency: string
+              error_message: string
+              invoice_id: string
+              invoice_number: string
+              is_duplicate: boolean
+              is_valid: boolean
+              method: string
+              notes: string
+              payment_date: string
+              payment_provider: string
+              row_id: number
+              status: string
+              transaction_id: string
+            }[]
+          }
+      rpc_import_clients: {
+        Args: { p_rows: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      rpc_import_invoices: {
+        Args: { p_rows: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      rpc_import_payments:
+        | {
+            Args: { p_dry_run: boolean; p_rows: Json; p_workspace_id: string }
+            Returns: Json
+          }
+        | { Args: { p_rows: Json; p_workspace_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
     }
     CompositeTypes: {
-      [_ in never]: never
+      payment_import_row: {
+        row_id: number | null
+        invoice_number: string | null
+        amount: number | null
+        currency: string | null
+        payment_date: string | null
+        method: string | null
+        status: string | null
+        transaction_id: string | null
+        notes: string | null
+        payment_provider: string | null
+      }
     }
   }
 }
@@ -1815,3 +2141,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+export {};

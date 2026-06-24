@@ -9,7 +9,7 @@ interface PaymentsSortableHeaderProps {
   currentSortDir?: string;
   hrefBase: string;
   searchParams: Record<string, string | string[] | undefined>;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }
 
 export function PaymentsSortableHeader({

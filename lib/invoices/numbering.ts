@@ -12,16 +12,17 @@ type SupabaseClientLike = {
 
 /**
  * Generate next invoice number in format INV-0001, INV-0002, ...
- * Scoped per organization_id.
+ * Scoped by workspace_id (includes all invoices in the workspace, e.g. created + imported).
+ * Unique constraint is workspace_id + invoice_number, so the next number is max(INV-####) + 1.
  */
 export async function generateNextInvoiceNumber(
   supabase: SupabaseClientLike,
-  organizationId: string
+  workspaceId: string
 ): Promise<string> {
   const { data, error } = await supabase
     .from("invoices")
     .select("invoice_number")
-    .eq("organization_id", organizationId)
+    .eq("workspace_id", workspaceId)
     .order("invoice_number", { ascending: false })
     .limit(1);
 
@@ -30,7 +31,6 @@ export async function generateNextInvoiceNumber(
   }
 
   const lastNumber: string = data[0].invoice_number || "INV-0000";
-
   const match = lastNumber.match(/^INV-(\d{4})$/);
   if (!match) return "INV-0001";
 

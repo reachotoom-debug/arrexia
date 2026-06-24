@@ -1,11 +1,13 @@
+/* eslint-disable react-hooks/incompatible-library */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { invoiceSchema, type InvoiceFormValues } from "@/lib/schemas/invoice";
 import { currencies } from "@/lib/utils/currencies";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface Client {
   id: string;
@@ -71,15 +73,6 @@ export default function InvoiceForm({
     (sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0),
     0
   );
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
 
   const selectedCurrency = watch("currency") || "USD";
 
@@ -305,7 +298,7 @@ export default function InvoiceForm({
                 <span className="text-sm font-medium text-slate-900">
                   {formatCurrency(
                     (items[index]?.quantity || 0) * (items[index]?.unit_price || 0),
-                    selectedCurrency
+                    { currency: selectedCurrency }
                   )}
                 </span>
               </div>
@@ -348,12 +341,12 @@ export default function InvoiceForm({
               <div className="flex justify-between text-sm text-slate-600">
                 <span>Subtotal:</span>
                 <span className="font-medium text-slate-900">
-                  {formatCurrency(subtotal, selectedCurrency)}
+                  {formatCurrency(subtotal, { currency: selectedCurrency })}
                 </span>
               </div>
               <div className="flex justify-between text-lg font-semibold text-slate-900 pt-2 border-t border-slate-200">
                 <span>Total:</span>
-                <span>{formatCurrency(subtotal, selectedCurrency)}</span>
+                <span>{formatCurrency(subtotal, { currency: selectedCurrency })}</span>
               </div>
             </div>
           </div>

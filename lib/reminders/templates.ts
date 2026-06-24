@@ -1,5 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
-import type { Database } from "@/types/supabase";
+import type { Database } from "@/types/supabase/index";
 
 type ReminderTemplateRow = Database["public"]["Tables"]["reminder_templates"]["Row"];
 

@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { KPI } from "@/app/[workspaceId]/dashboard/_components/KPI";
 import { OverdueAmountChart } from "@/app/[workspaceId]/dashboard/_components/OverdueAmountChart";
 import { OverdueTrendChart } from "@/app/[workspaceId]/dashboard/_components/OverdueTrendChart";
@@ -52,7 +52,7 @@ export function ArFocusTab({
       label: bucket.label,
       key: keyMap[bucket.label] || bucket.label.replace(/[^a-z0-9]/gi, "_"),
       amount: bucket.amount,
-      formattedAmount: formatMoney(bucket.amount, "USD"),
+      formattedAmount: formatCurrency(bucket.amount, { currency: "USD" }),
     };
   });
 
@@ -80,16 +80,16 @@ export function ArFocusTab({
   return (
     <div className="space-y-6">
       {/* Top row: AR-specific KPIs */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <KPI
           label="Overdue Amount"
-          value={formatMoney(summary.overdueAmount, "USD")}
+          value={formatCurrency(summary.overdueAmount, { currency: "USD" })}
           icon={AlertTriangle}
           iconBgColor="bg-red-100"
         />
         <KPI
           label="High-Risk Exposure"
-          value={formatMoney(summary.highRiskExposure, "USD")}
+          value={formatCurrency(summary.highRiskExposure, { currency: "USD" })}
           icon={Target}
           iconBgColor="bg-red-100"
         />
@@ -102,7 +102,7 @@ export function ArFocusTab({
       </div>
 
       {/* Row 1: Risk Overview + Aging Chart */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {/* Smart Risk Overview */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
           <div className="mb-4 flex items-center justify-between">
@@ -114,7 +114,7 @@ export function ArFocusTab({
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
             {/* High risk */}
             <Link
               href={`/${workspaceId}/invoices?view=smart-high-risk`}
@@ -130,9 +130,9 @@ export function ArFocusTab({
                 {(riskClusters.find((r) => r.risk === "high")?.invoiceCount ?? 0) !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-red-900">
-                {formatMoney(
+                {formatCurrency(
                   riskClusters.find((r) => r.risk === "high")?.amount ?? 0,
-                  "USD"
+                  { currency: "USD" }
                 )}
               </div>
             </Link>
@@ -152,9 +152,9 @@ export function ArFocusTab({
                 {(riskClusters.find((r) => r.risk === "medium")?.invoiceCount ?? 0) !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-amber-900">
-                {formatMoney(
+                {formatCurrency(
                   riskClusters.find((r) => r.risk === "medium")?.amount ?? 0,
-                  "USD"
+                  { currency: "USD" }
                 )}
               </div>
             </Link>
@@ -174,9 +174,9 @@ export function ArFocusTab({
                 {(riskClusters.find((r) => r.risk === "low")?.invoiceCount ?? 0) !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-yellow-900">
-                {formatMoney(
+                {formatCurrency(
                   riskClusters.find((r) => r.risk === "low")?.amount ?? 0,
-                  "USD"
+                  { currency: "USD" }
                 )}
               </div>
             </Link>
@@ -188,13 +188,13 @@ export function ArFocusTab({
       </div>
 
       {/* Row 2: Tables */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <TopOverdueClientsTable clients={topOverdueClients} />
         <OverdueInvoicesTable invoices={overdueInvoicesForTable} workspaceId={workspaceId} />
       </div>
 
       {/* Row 3: Charts */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <OverdueTrendChart data={trendChartData} />
         <ReminderPerformanceChart data={reminderPerformance} />
       </div>

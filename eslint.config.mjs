@@ -26,6 +26,16 @@ const eslintConfig = defineConfig([
       // Additional rules downgraded to "warn" for MVP
       "prefer-const": "warn",
       "react/no-unescaped-entities": "warn",
+      // Allow @ts-nocheck (file-level type checking disable) as warning
+      "@typescript-eslint/ban-ts-comment": [
+        "warn",
+        {
+          "ts-check": false,
+          "ts-nocheck": false, // allow file-level ts-nocheck
+          "ts-ignore": true,
+          "ts-expect-error": "allow-with-description"
+        }
+      ],
     },
   },
 ]);

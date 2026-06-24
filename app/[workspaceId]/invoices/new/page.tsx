@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { generateNextInvoiceNumber } from "@/lib/invoices/numbering";
 import { InvoiceForm } from "../_components/InvoiceForm";
 import { type InvoiceFormValues } from "@/lib/invoices/schema";
-import { createInvoice } from "../actions";
+import { createInvoice, getNextInvoiceNumber } from "../actions";
+import { loadWorkspaceSettings } from "@/lib/settings/loadSettings";
 
 interface NewInvoicePageProps {
   params: Promise<{ workspaceId: string }>;
@@ -29,6 +29,8 @@ export default async function NewInvoicePage({
     .from("clients")
     .select("id, name, company")
     .eq("workspace_id", workspaceId)
+    .is("archived_at", null)
+    .eq("is_active", true) // Only show active clients
     .order("name", { ascending: true });
 
   const clients =
@@ -39,22 +41,24 @@ export default async function NewInvoicePage({
       ? clients.find((c) => c.id === initialClientId) ?? null
       : null;
 
+  // Load workspace settings to get default currency
+  const settings = await loadWorkspaceSettings(workspaceId);
+  const defaultCurrency = settings.payments.defaultCurrency || "USD";
+
   let generatedInvoiceNumber = "INV-0001";
   try {
-    generatedInvoiceNumber = await generateNextInvoiceNumber(
-      supabase as any,
-      "05d2d292-d95b-44f4-b774-22f10068124f"
-    );
+    generatedInvoiceNumber = await getNextInvoiceNumber(workspaceId);
   } catch (e) {
     console.error("[NewInvoicePage] failed to generate invoice number", e);
   }
 
   async function handleCreate(values: InvoiceFormValues) {
     "use server";
-    console.log("[handleCreate] server action called");
-    const invoiceId = await createInvoice(workspaceId, values);
-    console.log("[handleCreate] invoice created, redirecting to", invoiceId);
-    redirect(`/${workspaceId}/invoices/${invoiceId}`);
+    const result = await createInvoice(workspaceId, values);
+    if (result && typeof result === "object" && "fieldErrors" in result) {
+      return result;
+    }
+    redirect(`/${workspaceId}/invoices/${result}`);
   }
 
   return (
@@ -66,6 +70,7 @@ export default async function NewInvoicePage({
       workspaceId={workspaceId}
       prefilledClient={prefilledClient}
       initialClientId={initialClientId}
+      currency={defaultCurrency}
     />
   );
 }

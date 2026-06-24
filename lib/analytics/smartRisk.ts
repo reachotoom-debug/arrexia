@@ -19,11 +19,14 @@ export interface RiskBucketSummary {
 /**
  * Get smart-risk buckets for a workspace.
  * 
- * Only includes overdue invoices (status = 'Overdue') with risk_level set.
- * Risk levels from invoices_view:
- * - High: days_overdue >= 30 OR outstanding_amount >= 5000
- * - Medium: days_overdue BETWEEN 8 AND 29
- * - Low: days_overdue BETWEEN 1 AND 7
+ * Only includes overdue invoices (display_status = 'overdue') with risk_level set.
+ * Risk levels from invoices_view (canonical source):
+ * - High: overdue_days >= 60 OR outstanding >= 5000
+ * - Medium: overdue_days BETWEEN 15 AND 59
+ * - Low: overdue_days BETWEEN 1 AND 14
+ * 
+ * Only calculated for overdue invoices (display_status = 'overdue').
+ * Non-overdue (draft, sent, paid, void) => risk_level is NULL.
  * 
  * @param supabase - Supabase client instance
  * @param workspaceId - Workspace ID to filter by
@@ -35,11 +38,12 @@ export async function getSmartRiskBucketsForWorkspace(
 ): Promise<RiskBucketSummary[]> {
   try {
     // Query invoices_view - only overdue invoices with risk_level
+    // NOTE: Use outstanding field (outstanding_amount was dropped)
     const { data: invoices, error } = await supabase
       .from("invoices_view")
-      .select("id, outstanding_amount, risk_level")
+      .select("id, outstanding, risk_level")
       .eq("workspace_id", workspaceId)
-      .eq("status", "Overdue")
+      .eq("display_status", "overdue")
       .not("risk_level", "is", null);
 
     if (error) {
@@ -59,12 +63,12 @@ export async function getSmartRiskBucketsForWorkspace(
     };
 
     for (const inv of invoices) {
-      const outstanding = Number(inv.outstanding_amount ?? 0);
+      const outstanding = Number(inv.outstanding ?? 0);
       const riskLevel = inv.risk_level;
 
       // Only count high, medium, low
       if (riskLevel === "high" || riskLevel === "medium" || riskLevel === "low") {
-        const bucket = buckets[riskLevel];
+        const bucket = buckets[riskLevel as RiskBucket];
         bucket.count += 1;
         bucket.totalOutstanding += outstanding;
       }

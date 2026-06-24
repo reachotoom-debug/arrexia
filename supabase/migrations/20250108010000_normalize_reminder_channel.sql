@@ -7,11 +7,32 @@
 -- to either 'email' or 'whatsapp', removing any 'sms' or invalid values.
 -- ============================================================================
 
-UPDATE public.settings
-SET reminder_channel = 'email'
-WHERE reminder_channel IS NULL
-   OR LOWER(reminder_channel) NOT IN ('email', 'whatsapp');
+DO $$
+BEGIN
+  -- Check if public.settings table exists
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'settings'
+  ) THEN
+    RAISE NOTICE 'Skipping reminder_channel normalization: table public.settings does not exist.';
+    RETURN;
+  END IF;
 
--- Set default for any new rows
-ALTER TABLE public.settings
-  ALTER COLUMN reminder_channel SET DEFAULT 'email';
+  -- Normalize reminder_channel: null/invalid values become 'email'
+  -- Valid values are normalized to lowercase 'email' or 'whatsapp'
+  UPDATE public.settings
+  SET reminder_channel = CASE
+    WHEN LOWER(reminder_channel) = 'whatsapp' THEN 'whatsapp'
+    ELSE 'email'
+  END
+  WHERE reminder_channel IS NULL
+     OR LOWER(reminder_channel) NOT IN ('email', 'whatsapp')
+     OR reminder_channel <> LOWER(reminder_channel);
+
+  -- Set default for any new rows
+  ALTER TABLE public.settings
+    ALTER COLUMN reminder_channel SET DEFAULT 'email';
+
+END $$;

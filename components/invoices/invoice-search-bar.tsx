@@ -15,7 +15,7 @@ export default function InvoiceSearchBar({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(initialSearch);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const handleSearch = (value: string) => {
     setSearch(value);

@@ -15,6 +15,10 @@
 -- - outstanding: max(total_amount - paid_amount, 0)
 -- ============================================================================
 
+-- Drop dependent view first (invoice_risk_view depends on invoices_view)
+DROP VIEW IF EXISTS public.invoice_risk_view;
+
+-- Now drop invoices_view
 DROP VIEW IF EXISTS public.invoices_view;
 
 CREATE VIEW public.invoices_view AS

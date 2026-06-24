@@ -1,12 +1,5 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-
-interface InvoicesPreferencesGateProps {
-  workspaceId: string;
-  searchParams: Record<string, string | string[] | undefined>;
-}
-
 /**
  * InvoicesPreferencesGate - No-op component (no persistence/redirect logic)
  * 
@@ -20,10 +13,7 @@ interface InvoicesPreferencesGateProps {
  * 
  * If persistence is needed in the future, restrict it to pageSize only.
  */
-export function InvoicesPreferencesGate({
-  workspaceId,
-  searchParams,
-}: InvoicesPreferencesGateProps) {
+export function InvoicesPreferencesGate() {
   // No-op: Do nothing, let server-side defaults apply
   // This ensures refresh always shows Default View + All status
   return null;

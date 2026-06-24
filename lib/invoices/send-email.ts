@@ -1,256 +1,459 @@
 /**
+
  * Invoice email sending helper
- * Reuses SMTP configuration from workspace_email_settings and nodemailer transport
- * 
- * TODO: Future enhancements:
- * - Support multiple recipients (BCC, CC)
- * - Custom email templates (similar to reminder templates)
- * - WhatsApp delivery option
- * - Delivery status webhooks from email provider
- * - Retry mechanism for failed sends
+
+ * Sends via Resend (central lib/email/sendEmail helper)
+
  */
 
+
+
 import { supabaseServer } from "@/lib/supabase/server";
-import { generateInvoicePdf, type PrintableInvoice } from "./pdf";
-import type { Database } from "@/types/supabase";
 
-// Dynamic import for nodemailer
-let nodemailer: typeof import("nodemailer");
+import { generateInvoicePdf } from "./pdf";
 
-type WorkspaceEmailSettingsRow = Database["public"]["Tables"]["workspace_email_settings"]["Row"];
+import { buildInvoiceBranding } from "@/app/[workspaceId]/invoices/_utils/branding";
+
+import { hydratePrintableInvoice } from "@/lib/invoices/hydratePrintableInvoice";
+
+import { sendEmail } from "@/lib/email/sendEmail";
+import { formatCurrency } from "@/lib/format/currency";
+import { renderInvoiceEmail } from "@/lib/email/templates";
 
 export interface SendInvoiceEmailResult {
   success: boolean;
+
   providerMessageId?: string;
+
   errorMessage?: string;
+
   subject?: string;
+
   bodyPreview?: string;
+
 }
+
+
+
+type EmailClientRow = {
+
+  id: string;
+
+  name: string;
+
+  email: string | null;
+
+  company: string | null;
+
+  country: string | null;
+
+  whatsapp_phone: string | null;
+
+  whatsapp: string | null;
+
+};
+
+
 
 /**
+
  * Send an invoice by email with PDF attachment
- * 
- * @param options - Send options including workspaceId, invoiceId, and recipient email
- * @returns Result object with success status, message ID, and error details
+
  */
+
 export async function sendInvoiceEmail(options: {
+
   workspaceId: string;
+
   invoiceId: string;
+
   toEmail: string;
+
 }): Promise<SendInvoiceEmailResult> {
+
   const { workspaceId, invoiceId, toEmail } = options;
+
   const supabase = await supabaseServer();
 
-  // Dynamically import nodemailer
-  try {
-    nodemailer = await import("nodemailer");
-  } catch (importError) {
-    return {
-      success: false,
-      errorMessage: "nodemailer package is not installed. Please install it with: npm install nodemailer @types/nodemailer",
-    };
-  }
 
-  // 1) Load invoice data (from invoices_view or base table)
-  const { data: invoice, error: invoiceError } = await supabase
-    .from("invoices")
-    .select(`
-      id,
-      workspace_id,
-      invoice_number,
-      issue_date,
-      due_date,
-      currency,
-      notes,
-      subtotal,
-      discount_percent,
-      discount_amount,
-      tax_percent,
-      tax_amount,
-      amount,
-      clients (
+
+  try {
+
+    const { data: invoice, error: invoiceError } = await supabase
+
+      .from("invoices")
+
+      .select(`
+
         id,
-        name,
-        email,
-        company
-      )
-    `)
-    .eq("id", invoiceId)
-    .eq("workspace_id", workspaceId)
-    .single();
 
-  if (invoiceError || !invoice) {
-    return {
-      success: false,
-      errorMessage: `Invoice not found: ${invoiceError?.message || "Unknown error"}`,
-    };
-  }
+        workspace_id,
 
-  // 2) Load workspace data for "From" section
-  const { data: workspace, error: workspaceError } = await supabase
-    .from("workspaces")
-    .select("name, email, phone, address")
-    .eq("id", workspaceId)
-    .maybeSingle();
+        invoice_number,
 
-  if (workspaceError) {
-    console.error("[sendInvoiceEmail] workspace load error:", workspaceError);
-  }
+        issue_date,
 
-  // 3) Load invoice items
-  const { data: items, error: itemsError } = await supabase
-    .from("invoice_items")
-    .select("id, name, description, quantity, unit_price, position")
-    .eq("invoice_id", invoiceId)
-    .order("position", { ascending: true, nullsFirst: false });
+        due_date,
 
-  if (itemsError) {
-    return {
-      success: false,
-      errorMessage: `Failed to load invoice items: ${itemsError.message}`,
-    };
-  }
+        status,
 
-  // 4) Load workspace SMTP settings
-  const { data: emailSettings, error: emailSettingsError } = await supabase
-    .from("workspace_email_settings")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .single();
+        currency,
 
-  if (emailSettingsError || !emailSettings) {
-    return {
-      success: false,
-      errorMessage: "Email settings not configured. Please configure SMTP settings in Settings > Email & SMTP.",
-    };
-  }
+        notes,
 
-  if (!emailSettings.smtp_host || !emailSettings.smtp_port) {
-    return {
-      success: false,
-      errorMessage: "SMTP host and port are required",
-    };
-  }
+        subtotal,
 
-  // 5) Generate invoice PDF
-  const printableInvoice: PrintableInvoice = {
-    id: invoice.id,
-    invoiceNumber: invoice.invoice_number,
-    issueDate: invoice.issue_date,
-    dueDate: invoice.due_date,
-    clientName: invoice.clients?.name || "Client",
-    clientEmail: invoice.clients?.email || null,
-    clientCompany: invoice.clients?.company || null,
-    currency: invoice.currency || "USD",
-    items: (items || []).map((item) => ({
-      name: item.name,
-      description: item.description,
-      quantity: Number(item.quantity),
-      unit_price: Number(item.unit_price),
-    })),
-    notes: invoice.notes || null,
-    workspaceName: workspace?.name || "FlowCollect",
-    workspaceEmail: workspace?.email || null,
-    workspacePhone: workspace?.phone || null,
-    workspaceAddress: workspace?.address || null,
-    subtotal: Number(invoice.subtotal ?? 0),
-    discountPercent: Number(invoice.discount_percent ?? 0),
-    discountAmount: Number(invoice.discount_amount ?? 0),
-    taxPercent: Number(invoice.tax_percent ?? 0),
-    taxAmount: Number(invoice.tax_amount ?? 0),
-    total: Number(invoice.amount ?? 0),
-  };
+        discount_percent,
 
-  let pdfBuffer: Buffer;
-  try {
-    pdfBuffer = await generateInvoicePdf(printableInvoice);
-  } catch (pdfError) {
-    return {
-      success: false,
-      errorMessage: `Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : "Unknown error"}`,
-    };
-  }
+        discount_amount,
 
-  // 6) Create email subject and body
-  const workspaceName = workspace?.name || "FlowCollect";
-  const invoiceNumber = invoice.invoice_number;
-  const subject = `Invoice #${invoiceNumber} from ${workspaceName}`;
-  
-  const clientName = invoice.clients?.name || "Customer";
-  const totalAmount = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: invoice.currency || "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(invoice.amount ?? 0));
+        tax_percent,
 
-  const bodyText = `Dear ${clientName},
+        tax_amount,
 
-Please find attached invoice #${invoiceNumber} for ${totalAmount}.
+        amount,
 
-Invoice Details:
-- Issue Date: ${invoice.issue_date ? new Date(invoice.issue_date).toLocaleDateString() : "N/A"}
-- Due Date: ${invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A"}
-- Total Amount: ${totalAmount}
+        payment_terms,
 
-${invoice.notes ? `Notes: ${invoice.notes}\n\n` : ""}If you have any questions about this invoice, please contact us.
+        payment_terms_days,
 
-Thank you for your business.
+        clients (
 
-${workspaceName}${workspace?.email ? `\n${workspace.email}` : ""}${workspace?.phone ? `\n${workspace.phone}` : ""}`;
+          id,
 
-  const bodyPreview = bodyText.substring(0, 200); // First 200 chars for logging
+          name,
 
-  // 7) Create nodemailer transport
-  const transporter = nodemailer.createTransport({
-    host: emailSettings.smtp_host,
-    port: emailSettings.smtp_port,
-    secure: emailSettings.use_tls ?? true, // true for 465, false for other ports
-    auth: emailSettings.smtp_username && emailSettings.smtp_password
-      ? {
-          user: emailSettings.smtp_username,
-          pass: emailSettings.smtp_password,
-        }
-      : undefined,
-  });
+          email,
 
-  // 8) Send email with PDF attachment
-  let sendError: Error | null = null;
-  let sendSuccess = false;
-  let providerMessageId: string | undefined;
+          company,
 
-  try {
-    const mailOptions = {
-      from: emailSettings.from_email
-        ? emailSettings.from_name
-          ? `${emailSettings.from_name} <${emailSettings.from_email}>`
-          : emailSettings.from_email
-        : undefined,
+          country,
+
+          whatsapp_phone,
+
+          whatsapp
+
+        )
+
+      `)
+
+      .eq("id", invoiceId)
+
+      .eq("workspace_id", workspaceId)
+
+      .single();
+
+
+
+    if (invoiceError || !invoice) {
+
+      return {
+
+        success: false,
+
+        errorMessage: `Invoice not found: ${invoiceError?.message || "Unknown error"}`,
+
+      };
+
+    }
+
+
+
+    const { data: settings, error: settingsError } = await supabase
+
+      .from("settings")
+
+      .select("*")
+
+      .eq("workspace_id", workspaceId)
+
+      .maybeSingle();
+
+
+
+    if (settingsError) {
+
+      console.error("[sendInvoiceEmail] settings load error:", settingsError);
+
+    }
+
+
+
+    const branding = buildInvoiceBranding(settings);
+
+
+
+    const { data: emailSettings } = await supabase
+
+      .from("workspace_email_settings")
+
+      .select("from_name, from_email")
+
+      .eq("workspace_id", workspaceId)
+
+      .maybeSingle();
+
+
+
+    const { data: invoiceView } = await supabase
+
+      .from("invoices_view")
+
+      .select("display_status, paid, outstanding")
+
+      .eq("id", invoiceId)
+
+      .maybeSingle();
+
+
+
+    const { data: payments } = await supabase
+
+      .from("payments")
+
+      .select("amount, status, archived_at")
+
+      .eq("invoice_id", invoiceId)
+
+      .is("archived_at", null);
+
+
+
+    const { data: items, error: itemsError } = await supabase
+
+      .from("invoice_items")
+
+      .select("id, name, description, quantity, unit_price, position")
+
+      .eq("invoice_id", invoiceId)
+
+      .order("position", { ascending: true, nullsFirst: false });
+
+
+
+    if (itemsError) {
+
+      return {
+
+        success: false,
+
+        errorMessage: `Failed to load invoice items: ${itemsError.message}`,
+
+      };
+
+    }
+
+
+
+    const clientData = Array.isArray(invoice.clients)
+
+      ? (invoice.clients[0] as EmailClientRow | undefined)
+
+      : (invoice.clients as EmailClientRow | null);
+
+
+
+    const printableInvoice = hydratePrintableInvoice({
+
+      invoice,
+
+      items: (items || []).map((item) => ({
+
+        name: item.name,
+
+        description: item.description,
+
+        quantity: Number(item.quantity),
+
+        unit_price: Number(item.unit_price),
+
+      })),
+
+      settings,
+
+      client: clientData ?? null,
+
+      displayStatus: invoiceView?.display_status || invoice.status,
+
+      invoiceView,
+
+      payments: payments ?? [],
+
+    });
+
+
+
+    let pdfBuffer: Buffer;
+
+    try {
+
+      pdfBuffer = await generateInvoicePdf(printableInvoice);
+
+      console.info("[sendInvoiceEmail] pdf generated", {
+
+        workspaceId,
+
+        invoiceId,
+
+        bytes: pdfBuffer.length,
+
+      });
+
+    } catch (pdfError) {
+
+      console.error("[sendInvoiceEmail] error", pdfError);
+
+      return {
+
+        success: false,
+
+        errorMessage: `Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : "Unknown error"}`,
+
+      };
+
+    }
+
+
+
+    const workspaceName = branding.fromName;
+    const invoiceNumber = invoice.invoice_number;
+    const clientName = clientData?.name || "Customer";
+    const currency = invoice.currency || "USD";
+
+    const totalAmount = formatCurrency(Number(invoice.amount ?? 0), { currency });
+    const paidAmount =
+      invoiceView?.paid != null && Number(invoiceView.paid) > 0
+        ? formatCurrency(Number(invoiceView.paid), { currency })
+        : null;
+    const outstandingAmount =
+      invoiceView?.outstanding != null && Number(invoiceView.outstanding) > 0
+        ? formatCurrency(Number(invoiceView.outstanding), { currency })
+        : null;
+
+    const { html: bodyHtml, text: bodyText, subject } = renderInvoiceEmail({
+      businessName: workspaceName,
+      clientName,
+      invoiceNumber,
+      issueDate: invoice.issue_date,
+      dueDate: invoice.due_date,
+      totalAmount,
+      amountPaid: paidAmount,
+      outstandingAmount,
+      notes: invoice.notes,
+    });
+
+    const bodyPreview = bodyText.substring(0, 200);
+
+
+
+    const fromName =
+
+      emailSettings?.from_name || settings?.from_name || branding.fromName || "FlowCollect";
+
+    const fromEmail =
+
+      emailSettings?.from_email || settings?.from_email || branding.fromEmail || null;
+
+
+
+    console.info("[sendInvoiceEmail] sending email via Resend", {
+
+      workspaceId,
+
+      invoiceId,
+
+      toEmail,
+
+      invoiceNumber,
+
+    });
+
+
+
+    const sendResult = await sendEmail({
+
       to: toEmail,
+
       subject,
+
+      html: bodyHtml,
+
       text: bodyText,
+
+      fromName,
+
+      fromEmail,
+
       attachments: [
+
         {
+
           filename: `invoice-${invoiceNumber}.pdf`,
+
           content: pdfBuffer,
+
           contentType: "application/pdf",
+
         },
+
       ],
+
+    });
+
+
+
+    console.info("[sendInvoiceEmail] resend result", {
+
+      workspaceId,
+
+      invoiceId,
+
+      success: sendResult.success,
+
+      messageId: sendResult.messageId,
+
+      error: sendResult.error,
+
+    });
+
+
+
+    if (!sendResult.success) {
+
+      console.error("[sendInvoiceEmail] error", sendResult.error);
+
+    }
+
+
+
+    return {
+
+      success: sendResult.success,
+
+      providerMessageId: sendResult.messageId,
+
+      errorMessage: sendResult.error,
+
+      subject,
+
+      bodyPreview,
+
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    sendSuccess = true;
-    providerMessageId = info.messageId;
-  } catch (err) {
-    sendError = err instanceof Error ? err : new Error(String(err));
-    console.error("[sendInvoiceEmail] email send error", err);
+  } catch (error) {
+
+    console.error("[sendInvoiceEmail] error", error);
+
+    return {
+
+      success: false,
+
+      errorMessage: error instanceof Error ? error.message : "Failed to send invoice email",
+
+    };
+
   }
 
-  return {
-    success: sendSuccess,
-    providerMessageId,
-    errorMessage: sendError?.message,
-    subject,
-    bodyPreview,
-  };
 }
+
+

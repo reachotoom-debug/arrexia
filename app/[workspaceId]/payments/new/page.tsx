@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
 import { PaymentForm } from "../_components/PaymentForm";
 import { PaymentFormSchema, type PaymentFormValues } from "@/lib/payments/schema";
 import { createPayment } from "../actions";
-import { getEligibleInvoices } from "../_lib/getEligibleInvoices";
+import { getEligibleClientsForPayments } from "../_lib/eligible";
 
 interface NewPaymentPageProps {
   params: Promise<{ workspaceId: string }>;
@@ -13,40 +12,12 @@ export default async function NewPaymentPage({
   params,
 }: NewPaymentPageProps) {
   const { workspaceId } = await params;
-  const supabase = await supabaseServer();
 
-  const { data: clientsData } = await supabase
-    .from("clients")
-    .select("id, name")
-    .eq("workspace_id", workspaceId);
-
-  const clients =
-    clientsData?.map((c) => ({ id: c.id, name: c.name })) ?? [];
-
-  // Use shared helper to get eligible invoices with proper filters
-  // Returns { invoices: EligibleInvoice[], error?: string }
-  const { invoices: eligibleInvoices, error: invoicesError } = await getEligibleInvoices(workspaceId);
-
-  // Server-side debug log when invoicesError exists
-  if (invoicesError) {
-    console.error("[NewPaymentPage] invoicesError DEBUG:", {
-      workspaceId,
-      clientId: null, // No client filter in initial load
-      invoicesCount: eligibleInvoices.length,
-      error: invoicesError,
-    });
-  }
-
-  // Map to PaymentForm expected format (already includes all needed fields)
-  // Invoice dropdown shows: invoice number + outstanding + currency
-  const invoices = eligibleInvoices.map((inv) => ({
-    id: inv.id,
-    client_id: inv.client_id,
-    invoice_number: inv.invoice_number,
-    status: inv.status,
-    outstanding_amount: inv.outstanding_amount,
-    currency: inv.currency,
-  }));
+  // Load only eligible clients (invoices will be loaded on-demand when client is selected)
+  const eligibleClients = await getEligibleClientsForPayments(workspaceId);
+  
+  // Map to format expected by PaymentForm (id and name only)
+  const clients = eligibleClients.map((c) => ({ id: c.client_id, name: c.name }));
 
   async function handleCreate(formData: FormData) {
     "use server";
@@ -66,7 +37,8 @@ export default async function NewPaymentPage({
 
     const parsed = PaymentFormSchema.safeParse(raw);
     if (!parsed.success) {
-      throw new Error(parsed.error.errors.map((e) => e.message).join("; "));
+      const errorMessage = (parsed.error?.issues ?? []).map((e) => e.message).join("; ") || "Invalid form values";
+      throw new Error(errorMessage);
     }
 
     const result = await createPayment(workspaceId, parsed.data as PaymentFormValues);
@@ -76,48 +48,12 @@ export default async function NewPaymentPage({
     redirect(`/${workspaceId}/payments`);
   }
 
-  const isDev = process.env.NODE_ENV === "development";
-
-  // If no invoices and no error, show empty state instead of error
-  const hasInvoices = invoices.length > 0;
-  const showEmptyState = !hasInvoices && !invoicesError;
+  // Show empty state if no eligible clients (no clients with eligible invoices)
+  const showEmptyState = clients.length === 0;
 
   return (
-    <div className="max-w-2xl mx-auto py-6">
-      {/* Non-blocking warning when invoicesError exists */}
-      {invoicesError && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <svg
-                className="h-5 w-5 text-amber-400"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3 flex-1">
-              <h3 className="text-sm font-medium text-amber-800">
-                Could not load invoices. Check migrations / invoices_view columns.
-              </h3>
-              {isDev && invoicesError && (
-                <div className="mt-2 text-xs">
-                  <p className="font-mono text-amber-700 bg-amber-100 p-2 rounded border border-amber-200 break-all">
-                    {invoicesError}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Empty state if no invoices (not an error) */}
+    <div className="w-full min-w-0">
+      {/* Empty state if no eligible clients */}
       {showEmptyState ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <div className="mb-4 rounded-full bg-slate-100 p-4 inline-block">
@@ -136,21 +72,20 @@ export default async function NewPaymentPage({
             </svg>
           </div>
           <h3 className="text-lg font-semibold text-slate-900 mb-2">
-            No eligible invoices
+            No eligible clients
           </h3>
           <p className="text-sm text-slate-600">
-            There are no invoices available for payment recording. Create an invoice and mark it as "Sent" to record payments.
+            There are no clients with eligible invoices for payment recording. Create an invoice, mark it as "Sent", and ensure the client is active and not archived.
           </p>
         </div>
       ) : (
         <PaymentForm
           mode="create"
           clients={clients}
-          invoices={invoices}
+          invoices={[]}
           action={handleCreate}
           workspaceId={workspaceId}
           cancelUrl={`/${workspaceId}/payments`}
-          invoicesError={invoicesError}
         />
       )}
     </div>

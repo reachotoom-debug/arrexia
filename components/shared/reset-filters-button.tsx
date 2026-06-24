@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { secondaryGhostToolbarClass } from "@/components/ui/cta-styles";
 
 interface ResetFiltersButtonProps {
   basePath: string; // e.g. `/${workspaceId}/invoices` or `/${workspaceId}/clients`
@@ -9,7 +10,7 @@ interface ResetFiltersButtonProps {
 /**
  * Unified "Reset filters" button that clears all search/filter/sort params
  * and navigates to the canonical URL with all defaults explicitly set
- * For clients: status=all&view=default&sort=client_name&dir=asc&page=1&pageSize=10
+ * For clients: status=active&view=default&sort=created_at&dir=desc&page=1&pageSize=10 (matches list defaults + badge logic)
  * For invoices: status=all&view=default&sort=issue_date&dir=desc&page=1&pageSize=10
  */
 export function ResetFiltersButton({ basePath }: ResetFiltersButtonProps) {
@@ -18,15 +19,21 @@ export function ResetFiltersButton({ basePath }: ResetFiltersButtonProps) {
   const handleReset = () => {
     // Build canonical URL with all defaults explicitly set
     if (basePath.includes("/clients")) {
-      // Extract workspaceId from basePath
-      const workspaceId = basePath.split("/")[1];
+      // Match clients list defaults (see clients page redirect): active + default view, no search/displayView in URL.
       const params = new URLSearchParams();
-      params.set("status", "all");
+      params.set("status", "active");
       params.set("view", "default");
-      params.set("sort", "client_name");
-      params.set("dir", "asc");
+      params.set("sort", "created_at");
+      params.set("dir", "desc");
       params.set("page", "1");
       params.set("pageSize", "10");
+      router.push(`${basePath}?${params.toString()}`);
+    } else if (basePath.includes("/reminders")) {
+      // For reminders page: explicitly set view=default&status=all&page=1
+      const params = new URLSearchParams();
+      params.set("view", "default");
+      params.set("status", "all");
+      params.set("page", "1");
       router.push(`${basePath}?${params.toString()}`);
     } else {
       // For other pages (invoices, payments), navigate to base path
@@ -39,7 +46,7 @@ export function ResetFiltersButton({ basePath }: ResetFiltersButtonProps) {
     <button
       type="button"
       onClick={handleReset}
-      className="h-9 rounded-lg border border-slate-200 px-3 text-xs text-slate-600 hover:bg-slate-50"
+      className={secondaryGhostToolbarClass}
     >
       Reset filters
     </button>

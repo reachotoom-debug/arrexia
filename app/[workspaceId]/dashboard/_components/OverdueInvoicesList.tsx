@@ -1,7 +1,13 @@
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { INVOICE_NUMBER_COL_CLASS, OVERDUE_INVOICE_CELL, OVERDUE_INVOICE_HEADER_CELL } from "@/components/tables/invoiceTableColumns";
 import { clsx } from "clsx";
+import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
+import {
+  TABLE_BASE,
+  TABLE_CELL_TEXT_COL,
+  TABLE_MIN_WIDTH_INNER,
+} from "@/components/table/tableShell";
 
 type DashboardOverdueInvoice = {
   id: string;
@@ -84,11 +90,18 @@ export function OverdueInvoicesList({
           No overdue invoices
         </div>
       ) : (
-        <table className="w-full text-sm">
+        <HorizontalScrollArea
+          className="relative w-full min-w-0"
+          viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent"
+        >
+        <div className={TABLE_MIN_WIDTH_INNER}>
+        <table className={TABLE_BASE}>
           <thead>
             <tr className="border-b border-slate-100">
               <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>INVOICE #</th>
-              <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>CLIENT</th>
+              <th className={clsx(TABLE_CELL_TEXT_COL, "align-middle text-xs font-medium text-slate-500 uppercase tracking-wide px-3 py-3 text-left")}>
+                CLIENT
+              </th>
               <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>STATUS</th>
               <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>DUE DATE</th>
               <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>DAYS OVERDUE</th>
@@ -114,7 +127,7 @@ export function OverdueInvoicesList({
                       {invoice.invoiceNumber}
                     </Link>
                   </td>
-                  <td className={clsx(OVERDUE_INVOICE_CELL, "text-slate-800")}>
+                  <td className={clsx(TABLE_CELL_TEXT_COL, "px-3 py-3 align-middle text-sm text-slate-800")}>
                     {invoice.clientName || "—"}
                   </td>
                   <td className={OVERDUE_INVOICE_CELL}>
@@ -124,7 +137,7 @@ export function OverdueInvoicesList({
                       {badge.label}
                     </span>
                   </td>
-                  <td className={clsx(OVERDUE_INVOICE_CELL, "text-slate-700")}>
+                  <td className={clsx(OVERDUE_INVOICE_CELL, "text-slate-700 whitespace-nowrap")}>
                     {dueDate ? formatDate(dueDate) : "—"}
                   </td>
                   <td className={OVERDUE_INVOICE_CELL}>
@@ -133,13 +146,15 @@ export function OverdueInvoicesList({
                     </span>
                   </td>
                   <td className={clsx(OVERDUE_INVOICE_CELL, "text-right font-medium text-slate-900")}>
-                    {formatMoney(invoice.outstanding, "USD")}
+                    {formatCurrency(invoice.outstanding, { currency: "USD" })}
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+        </div>
+        </HorizontalScrollArea>
       )}
     </div>
   );

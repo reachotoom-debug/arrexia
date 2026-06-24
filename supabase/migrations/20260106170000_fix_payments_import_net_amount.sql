@@ -1,0 +1,3 @@
+-- Placeholder migration.
+-- This version already exists on remote (20260106170000).
+-- Kept locally so Supabase CLI migration history matches remote.

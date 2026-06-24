@@ -20,7 +20,6 @@ export function EmailSettingsForm({
 }: EmailSettingsFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [showPassword, setShowPassword] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
 
   const {
@@ -29,13 +28,13 @@ export function EmailSettingsForm({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<EmailSettingsFormValues>({
-    resolver: zodResolver(emailSettingsSchema),
+    resolver: zodResolver(emailSettingsSchema) as any,
     defaultValues: {
       provider: settings.email.provider,
       fromName: settings.email.fromName,
       fromEmail: settings.email.fromEmail,
       smtpHost: settings.email.smtpHost || "",
-      smtpPort: settings.email.smtpPort?.toString() || "",
+      smtpPort: settings.email.smtpPort?.toString() || "" as any,
       smtpUser: settings.email.smtpUser || "",
       smtpPassword: "", // Don't pre-fill password
       smtpUseTls: settings.email.smtpUseTls ?? true,
@@ -49,8 +48,8 @@ export function EmailSettingsForm({
     if (result.success) {
       router.refresh();
       toast({
-        title: "Settings saved",
-        description: "Email settings updated successfully",
+        title: "Email settings saved.",
+        description: "Your email settings were updated.",
       });
     } else {
       toast({
@@ -89,10 +88,8 @@ export function EmailSettingsForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit as any)} className="w-full max-w-5xl">
       <SettingsCard
-        title="Email & Sending"
-        description="Configure how FlowCollect sends reminders and invoices."
         footer={
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
@@ -118,8 +115,9 @@ export function EmailSettingsForm({
           </div>
         }
       >
-        {/* Email Provider Selection */}
+        {/* Email provider */}
         <div>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Email provider</h3>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             Email Provider *
           </label>
@@ -149,7 +147,7 @@ export function EmailSettingsForm({
         </div>
 
         {/* From Name & Email (common for both providers) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               From Name *
@@ -190,7 +188,7 @@ export function EmailSettingsForm({
                 Only required if you use your own SMTP server.
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   SMTP Host
@@ -241,21 +239,13 @@ export function EmailSettingsForm({
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 SMTP Password
               </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  {...register("smtpPassword")}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                  placeholder="Leave blank to keep current password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-2 text-xs text-slate-500 hover:text-slate-700"
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
+              <input
+                type="password"
+                {...register("smtpPassword")}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                placeholder="Leave blank to keep current password"
+                autoComplete="new-password"
+              />
               <p className="mt-1 text-xs text-slate-500">
                 Leave blank to keep the current password
               </p>

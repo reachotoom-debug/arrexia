@@ -20,9 +20,10 @@ CREATE VIEW public.invoices_view AS
 WITH invoice_payments AS (
   -- Calculate paid from payments table
   -- Only count payments with status 'completed', 'paid', or null
+  -- Use net_amount if available, otherwise fallback to amount (handles imported payments with NULL net_amount)
   SELECT
     p.invoice_id,
-    COALESCE(SUM(p.amount), 0) AS paid
+    COALESCE(SUM(COALESCE(p.net_amount, p.amount)), 0) AS paid
   FROM public.payments p
   WHERE (
     p.status IS NULL 

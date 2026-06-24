@@ -5,7 +5,7 @@
 
 import { supabaseServer } from "@/lib/supabase/server";
 import { findApplicableRuleForInvoice } from "./engine";
-import { formatRuleWhenText } from "./engine";
+import { formatRuleWhenText } from "./shared";
 import type { SuggestedReminder } from "./engine";
 
 // Date helper functions (since date-fns may not be installed)
@@ -37,16 +37,21 @@ export async function getSuggestedRemindersForWorkspace(
   const today = startOfDay(new Date());
 
   // Load invoices with outstanding > 0, due_date not null, and relevant statuses
+  // Always exclude archived invoices from reminder candidates
+  // NOTE: Use invoices_view for outstanding field (outstanding_amount was dropped from invoices table)
   const { data: invoices, error: invoicesError } = await supabase
-    .from("invoices")
+    .from("invoices_view")
     .select(`
       id,
       workspace_id,
       client_id,
+      client_name,
+      client_is_active,
+      client_archived_at,
       invoice_number,
-      status,
+      display_status,
       due_date,
-      outstanding_amount,
+      outstanding,
       currency,
       clients (
         id,
@@ -55,9 +60,14 @@ export async function getSuggestedRemindersForWorkspace(
       )
     `)
     .eq("workspace_id", workspaceId)
-    .gt("outstanding_amount", 0)
+    // Reminders eligibility: only invoices with outstanding > 0 and not archived
+    // plus clients must be active & not archived (from invoices_view flags)
+    .is("archived_at", null)
+    .gt("outstanding", 0)
     .not("due_date", "is", null)
-    .in("status", ["sent", "overdue", "partially_paid"]);
+    .eq("client_is_active", true)
+    .is("client_archived_at", null)
+    .in("display_status", ["sent", "overdue", "partially_paid"]);
 
   if (invoicesError) {
     console.error("[getSuggestedRemindersForWorkspace] invoicesError", invoicesError);
@@ -73,14 +83,14 @@ export async function getSuggestedRemindersForWorkspace(
     workspace_id: string;
     client_id: string;
     invoice_number: string;
-    status: string | null;
+    display_status: string | null;
     due_date: string | null;
-    outstanding_amount: number;
+    outstanding: number;
     currency: string | null;
     clients: { id: string; name: string; email: string | null } | { id: string; name: string; email: string | null }[] | null;
   };
   // Compute daysFromDue for each invoice
-  const rowsWithComputed = invoices.map((row: InvoiceWithClient) => {
+  const rowsWithComputed = invoices.map((row: any) => {
     const dueDate = row.due_date ? parseISO(row.due_date) : null;
     const daysFromDue = dueDate ? differenceInCalendarDays(today, dueDate) : null;
     const isOverdue = daysFromDue !== null && daysFromDue > 0;
@@ -96,17 +106,18 @@ export async function getSuggestedRemindersForWorkspace(
   const results: SuggestedReminder[] = [];
 
   for (const inv of rowsWithComputed) {
-    if (!inv.due_date || inv.outstanding_amount <= 0) continue;
+    const outstanding = Number((inv as any).outstanding ?? 0);
+    if (!inv.due_date || outstanding <= 0) continue;
 
     // Find applicable rule for this invoice
     const match = await findApplicableRuleForInvoice(
-      supabase,
+      Promise.resolve(supabase),
       workspaceId,
       {
         id: inv.id,
         due_date: inv.due_date,
-        outstanding_amount: inv.outstanding_amount,
-        status: inv.status,
+        outstanding: outstanding,
+        status: (inv as any).display_status ?? inv.status,
       },
       new Date()
     );
@@ -126,7 +137,7 @@ export async function getSuggestedRemindersForWorkspace(
       clientName: client?.name ?? "Unknown client",
       clientEmail: client?.email ?? null,
       invoiceNumber: inv.invoice_number,
-      amountDue: inv.outstanding_amount,
+      amountDue: outstanding,
       dueDate: inv.due_date,
       daysOverdue: inv.isOverdue ? (inv.daysFromDue ?? 0) : 0,
       daysUntilDue: !inv.isOverdue ? (inv.daysFromDue ? Math.abs(inv.daysFromDue) : null) : null,

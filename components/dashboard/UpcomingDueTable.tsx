@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { INVOICE_NUMBER_COL_CLASS } from "@/components/tables/invoiceTableColumns";
 import { clsx } from "clsx";
 import type { UpcomingDueItem } from "@/app/[workspaceId]/dashboard/_types/dashboard";
@@ -67,10 +67,10 @@ export function UpcomingDueTable({ invoices, workspaceId }: UpcomingDueTableProp
                     {formatDate(invoice.dueDate)}
                   </td>
                   <td className="px-4 py-3 text-right font-medium text-slate-900 whitespace-nowrap">
-                    {formatMoney(invoice.total, "USD")}
+                    {formatCurrency(invoice.total, { currency: "USD" })}
                   </td>
                   <td className="px-4 py-3 text-right font-medium text-slate-900 whitespace-nowrap">
-                    {formatMoney(invoice.outstanding, "USD")}
+                    {formatCurrency(invoice.outstanding, { currency: "USD" })}
                   </td>
                   <td className="px-4 py-3">
                     <span

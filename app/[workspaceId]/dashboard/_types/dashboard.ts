@@ -60,6 +60,10 @@ export interface ActivityItem {
 }
 
 export interface ArFocusData {
+  collectibleOutstanding: number;
+  overdueAmount: number;
+  highRiskExposure: number;
+  overdueInvoicesCount: number;
   topOverdueClients: { clientName: string; overdueAmount: number }[];
   topOverdueClientsHasMore: boolean;
   overdueInvoices: CollectionsWorkItem[];
@@ -118,6 +122,13 @@ export interface ReminderEffectivenessData {
   month: string;
   remindersSent: number;
   paymentsReceived: number;
+}
+
+export interface TopHighRiskClient {
+  clientId: string;
+  clientName: string;
+  overdueAmount: number;
+  maxOverdueDays: number;
 }
 
 export interface DashboardData {

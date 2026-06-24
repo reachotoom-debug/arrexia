@@ -1,4 +1,6 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { INVOICE_VIEW_BASE_FIELDS } from "@/lib/db/invoicesView";
+import { formatCurrency } from "@/lib/format/currency";
 
 /**
  * Type for eligible invoice data used in payment forms
@@ -15,7 +17,7 @@ export type EligibleInvoice = {
   client_id: string | null;
   invoice_number: string;
   status: string | null;
-  outstanding_amount: number;
+  outstanding_amount: number; // Legacy field name - maps from invoices_view.outstanding
 };
 
 /**
@@ -44,21 +46,10 @@ export async function getEligibleInvoices(
 
   // Build query from invoices_view (single source of truth)
   // Rules: Only invoices where base_status NOT IN ('draft','void') AND outstanding > 0
-  // Must load: id, invoice_number, client_id, client_name, due_date, outstanding, total_amount, currency, display_status
   // Never depend on frontend-computed balances - use view columns only
   let query = supabase
     .from("invoices_view")
-    .select(`
-      id,
-      client_id,
-      client_name,
-      invoice_number,
-      due_date,
-      outstanding,
-      total,
-      currency,
-      display_status
-    `)
+    .select(`${INVOICE_VIEW_BASE_FIELDS}, client_name, base_status`)
     .eq("workspace_id", workspaceId)
     .neq("base_status", "draft") // Exclude draft
     .neq("base_status", "void") // Exclude void
@@ -123,12 +114,7 @@ export async function getEligibleInvoices(
       const currency = inv.currency || "USD"; // Get from invoices_view, fallback to USD
       
       // Format label: "INV-XXXX · $N outstanding" (invoice number + outstanding + currency)
-      const formattedOutstanding = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: currency,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(outstanding);
+      const formattedOutstanding = formatCurrency(outstanding, { currency });
       
       return {
         // Stable dropdown shape: invoice number + outstanding + currency
@@ -166,47 +152,15 @@ export async function getEligibleInvoices(
       .single();
 
     if (includedError || !includedInvoice) {
-      // Fallback to invoices table if view fails
-      const { data: invoiceFallback, error: fallbackError } = await supabase
-        .from("invoices")
-        .select("id, client_id, invoice_number, currency, status")
-        .eq("id", includeInvoiceId)
-        .eq("workspace_id", workspaceId)
-        .single();
-
-      if (fallbackError || !invoiceFallback) {
-        console.warn("[getEligibleInvoices] failed to fetch includeInvoiceId", {
-          invoiceId: includeInvoiceId,
-          invoicesViewError: {
-            message: includedError?.message,
-            code: includedError?.code,
-            details: includedError?.details,
-            hint: includedError?.hint,
-          },
-          invoicesTableError: {
-            message: fallbackError?.message,
-            code: fallbackError?.code,
-            details: fallbackError?.details,
-            hint: fallbackError?.hint,
-          },
-        });
-      } else {
-        const invoiceNumber = invoiceFallback.invoice_number ?? "Unknown";
-        const currency = invoiceFallback.currency || "USD";
-        const outstanding = 0; // Assume not eligible (fully paid or otherwise)
-
-        eligible.push({
-          label: `${invoiceNumber} (not eligible)`,
-          value: invoiceFallback.id,
-          currency,
-          outstanding,
-          id: invoiceFallback.id,
-          client_id: invoiceFallback.client_id,
-          invoice_number: invoiceNumber,
-          status: invoiceFallback.status,
-          outstanding_amount: outstanding,
-        });
-      }
+      console.warn("[getEligibleInvoices] failed to fetch includeInvoiceId from invoices_view", {
+        invoiceId: includeInvoiceId,
+        invoicesViewError: {
+          message: includedError?.message,
+          code: includedError?.code,
+          details: includedError?.details,
+          hint: includedError?.hint,
+        },
+      });
     } else {
       // Successfully fetched from invoices_view (currency included)
       // Format label: invoice number + outstanding + currency
@@ -215,12 +169,7 @@ export async function getEligibleInvoices(
       const currency = includedInvoice.currency || "USD";
       const isFullyPaid = outstanding <= 0.01;
       
-      const formattedOutstanding = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: currency,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(outstanding);
+      const formattedOutstanding = formatCurrency(outstanding, { currency });
 
       eligible.push({
         label: isFullyPaid 

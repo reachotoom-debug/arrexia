@@ -1,22 +1,62 @@
-import { requireUser } from "@/lib/auth/server";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import Link from "next/link";
-import { formatMoney } from "@/lib/utils/format-money";
 import { ErrorState, EmptyState } from "@/components/ui/state";
-import { SortableHeader } from "@/components/shared/sortable-header";
-import { ResetSortButton } from "@/components/shared/reset-sort-button";
 import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
 import { InvoicesPreferencesGate } from "./_components/InvoicesPreferencesGate";
 import { InvoicesClientFilterBadge } from "./_components/InvoicesClientFilterBadge";
 import { InvoicesSearchInput } from "./_components/InvoicesSearchInput";
 import { PlanLimitBanner } from "@/components/billing/PlanLimitBanner";
-// Note: invoices_view provides status (capitalized: 'Void', 'Paid', 'Partially Paid', 'Draft', 'Overdue', 'Sent'),
-// is_overdue, days_overdue, and risk_level directly. No need to compute them in TypeScript.
+import { InvoicesTable } from "./_components/InvoicesTable";
+import { InvoicesViewPills } from "./_components/InvoicesViewPills";
+import { InvoicesTableUnarchiveButton } from "./_components/InvoicesTableUnarchiveButton";
+import { ExportCsvButton } from "../_components/ExportCsvButton";
+import { PaginationBar } from "@/components/PaginationBar";
+import { formatCurrency } from "@/lib/format/currency";
+import {
+  CommandBar,
+  CommandBarControls,
+  CommandBarSearch,
+} from "@/components/layout/CommandBar";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { CommandBarFilters } from "@/components/layout/CommandBarFilters";
+import {
+  primaryCtaClass,
+  primaryCtaDisabledClass,
+} from "@/components/ui/cta-styles";
+import { unstable_noStore as noStore } from "next/cache";
+// Note: invoices_view provides status and financial fields directly.
 
 const INVOICE_PAGE_SIZE = 10;
 
-type InvoiceStatusParam = "all" | "draft" | "sent" | "paid" | "partial" | "overdue" | "void";
+// Helper to apply smart view filters to query builder
+type SmartViewQuery<T> = {
+  eq: (column: string, value: unknown) => T;
+  gt: (column: string, value: unknown) => T;
+};
+
+function applySmartViewFilter<T extends SmartViewQuery<T>>(
+  query: T,
+  view: InvoiceListViewParam
+): T {
+  if (view === "default" || !view.startsWith("smart-")) {
+    return query;
+  }
+
+  if (view === "smart-high-risk") {
+    return query.eq("risk_level", "high").eq("display_status", "overdue").gt("outstanding", 0);
+  }
+  if (view === "smart-medium-risk") {
+    return query.eq("risk_level", "medium").eq("display_status", "overdue").gt("outstanding", 0);
+  }
+  if (view === "smart-low-risk") {
+    return query.eq("risk_level", "low").eq("display_status", "overdue").gt("outstanding", 0);
+  }
+
+  return query;
+}
+
+type InvoiceStatusParam = "all" | "draft" | "sent" | "paid" | "partial" | "overdue" | "void" | "archived";
 type InvoiceListViewParam = "default" | "overdue-first" | "highest-outstanding-first" | "smart-high-risk" | "smart-medium-risk" | "smart-low-risk";
 type InvoiceSortKey = "issue_date" | "due_date" | "total" | "outstanding" | "client_name" | "invoice_number";
 type SortDir = "asc" | "desc";
@@ -174,27 +214,19 @@ function buildInvoicesUrl(
 
 // Type for a row from invoices_view
 // NOTE: display_status is the canonical status computed in SQL - always use this field
-// Canonical contract: total, paid, outstanding, currency, is_overdue, po_number, notes
+// Canonical contract for list loading: total, paid, outstanding, display_status, risk_level
 type InvoiceRow = {
   id: string;
-  workspace_id: string;
-  client_id: string | null;
   client_name: string | null;
   invoice_number: string | null;
-  base_status: string;
   issue_date: string | null;
   due_date: string | null;
-  currency: string | null;
-  total: number | null; // Canonical: total (not total_amount)
-  paid: number | null; // Canonical: paid (not paid_amount)
+  total: number | null;
+  paid: number | null;
   outstanding: number | null;
-  display_status: InvoiceStatus; // Canonical status from SQL view
-  is_overdue: boolean | null; // Canonical: is_overdue (not overdue)
-  overdue_days: number | null;
+  display_status: InvoiceStatus;
   risk_level: string | null;
-  po_number: string | null;
-  notes: string | null;
-  [key: string]: unknown;
+  [key: string]: unknown; // kept for archived branch compatibility
 };
 
 /**
@@ -237,32 +269,11 @@ function normalizeStatusParam(raw: string | null): InvoiceStatusParam {
     "partial",
     "overdue",
     "void",
+    "archived",
   ];
   return allowed.includes(value) ? value : "all";
 }
 
-function sortLabel(sort: InvoiceSortKey): string {
-  switch (sort) {
-    case "invoice_number":
-      return "Invoice #";
-    case "client_name":
-      return "Client Name";
-    case "issue_date":
-      return "Issue Date";
-    case "due_date":
-      return "Due Date";
-    case "total":
-      return "Total";
-    case "outstanding":
-      return "Outstanding";
-    default:
-      return "Issue Date";
-  }
-}
-
-function sortArrow(dir: SortDir): "↑" | "↓" {
-  return dir === "asc" ? "↑" : "↓";
-}
 
 interface InvoicesPageProps {
   params: Promise<{ workspaceId: string }>;
@@ -277,6 +288,7 @@ async function loadInvoices(
 ): Promise<{
   invoices: InvoiceRow[];
   totalCount: number;
+  anyInvoicesCount: number;
   page: number;
   pageSize: number;
   view: InvoiceListViewParam;
@@ -287,19 +299,29 @@ async function loadInvoices(
 }> {
   const supabase = await supabaseServer();
 
+  // Get workspace invoice existence count (for empty state logic)
+  // Query invoices_view to check if ANY active invoices exist in workspace
+  const { count: anyInvoicesCount } = await supabase
+    .from("invoices_view")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId);
+  
+  const workspaceInvoiceCount = typeof anyInvoicesCount === "number" ? anyInvoicesCount : 0;
+
   // Parse query parameters with defaults
   const { page, pageSize, status, view, search, sort, dir } = parseInvoicesQuery(searchParams);
+  const rawSort = Array.isArray(searchParams.sort) ? searchParams.sort[0] : searchParams.sort;
+  const hasExplicitSort = Boolean(rawSort && rawSort.trim().length > 0);
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  // Debug log (dev only)
-  if (process.env.NODE_ENV === "development") {
-    console.log("[InvoicesPage] Query params:", {
-      received: searchParams,
-      parsed: { page, pageSize, status, view, search, sort, dir },
-      range: { from, to },
-    });
-  }
+  // ============================================================================
+  // DATA SOURCE SELECTION (Active vs Archived)
+  // ============================================================================
+  // invoices_view is active-only (WHERE archived_at IS NULL) - use for active tabs
+  // Archived tab must query base invoices table with nested selects for client data
+  // ============================================================================
+  const isArchivedFilter = status === "archived";
 
   // Define clear filters
   type BaseStatus = "draft" | "sent" | "void";
@@ -324,166 +346,293 @@ async function loadInvoices(
       displayStatusFilter = "overdue";
       break;
     default:
-      // "all" or anything unknown = no extra filter
+      // "all" or "archived" or anything unknown = no extra filter
       break;
   }
 
-  // Build base query - select all columns from invoices_view using canonical contract
-  let query = supabase
-    .from("invoices_view")
-    .select(
-      "id, workspace_id, client_id, client_name, invoice_number, base_status, issue_date, due_date, currency, total, paid, outstanding, display_status, is_overdue, overdue_days, risk_level, po_number, notes",
-      { count: "exact" }
-    )
-    .eq("workspace_id", workspaceId);
+  let query;
+  let countQuery;
 
-  // Apply status filters
-  if (baseStatusFilter) {
-    query = query.eq("base_status", baseStatusFilter);
+  if (isArchivedFilter) {
+    // ========================================================================
+    // ARCHIVED TAB: Query base invoices table with nested selects
+    // Note: Base table has: id, workspace_id, client_id, invoice_number, status, amount, currency,
+    //       issue_date, due_date, po_number, notes, archived_at
+    // Computed fields (paid, outstanding, display_status, etc.) will be calculated in mapping
+    // ========================================================================
+    query = supabase
+      .from("invoices")
+      .select(
+        `
+        id,
+        workspace_id,
+        client_id,
+        invoice_number,
+        status,
+        amount,
+        issue_date,
+        due_date,
+        currency,
+        po_number,
+        notes,
+        archived_at,
+        clients(name)
+      `,
+        { count: "exact" }
+      )
+      .eq("workspace_id", workspaceId)
+      .not("archived_at", "is", null);
+
+    countQuery = supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .not("archived_at", "is", null);
+  } else {
+    // ========================================================================
+    // ACTIVE TABS: Query invoices_view (includes joined columns)
+    // ========================================================================
+    query = supabase
+      .from("invoices_view")
+      .select(
+        "id, invoice_number, client_name, issue_date, due_date, total, paid, outstanding, display_status, risk_level"
+      )
+      .eq("workspace_id", workspaceId);
+
+    countQuery = supabase
+      .from("invoices_view")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId);
   }
 
-  if (displayStatusFilter) {
-    // Normalize the filter value to snake_case
-    const normalizedFilter = normalizeDisplayStatus(displayStatusFilter);
-    // Convert to capitalized format (e.g., "partially_paid" -> "Partially Paid")
-    const capitalizedFilter = normalizedFilter
-      .split("_")
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-    // Use or() to handle both lowercase snake_case and capitalized space-separated formats from DB
-    query = query.or(`display_status.eq.${normalizedFilter},display_status.eq.${capitalizedFilter}`);
-  }
+  // ============================================================================
+  // HARDENED INVOICE STATUS FILTER RULES (Archive Behavior)
+  // ============================================================================
+  // Rule 1: status=all → archived_at IS NULL (use invoices_view, no status filter)
+  // Rule 2: status=archived → archived_at IS NOT NULL (use base invoices table, NO status filter)
+  // Rule 3: status=draft/sent/paid/partial/overdue/void → archived_at IS NULL AND invoices match selected status
+  //         (use invoices_view with status filter)
+  //
+  // CRITICAL: Archived invoices MUST NEVER leak into non-archived filters
+  // ============================================================================
 
-  // Apply search filter (server-side) - search across invoice_number, po_number, notes, client_name
+  if (!isArchivedFilter) {
+    // ========================================================================
+    // ACTIVE TABS: status === "all" | "draft" | "sent" | "paid" | "partial" | "overdue" | "void"
+    // ========================================================================
+    // invoices_view already excludes archived (WHERE archived_at IS NULL at SQL level)
+    // No need to filter archived_at explicitly - view contract handles it
+
+    // Apply status filters
+    if (baseStatusFilter) {
+      query = query.eq("base_status", baseStatusFilter);
+      countQuery = countQuery.eq("base_status", baseStatusFilter);
+    }
+
+    if (displayStatusFilter) {
+      // Normalize the filter value to snake_case
+      const normalizedFilter = normalizeDisplayStatus(displayStatusFilter);
+      // Convert to capitalized format (e.g., "partially_paid" -> "Partially Paid")
+      const capitalizedFilter = normalizedFilter
+        .split("_")
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+      // Use or() to handle both lowercase snake_case and capitalized space-separated formats from DB
+      query = query.or(`display_status.eq.${normalizedFilter},display_status.eq.${capitalizedFilter}`);
+      countQuery = countQuery.or(`display_status.eq.${normalizedFilter},display_status.eq.${capitalizedFilter}`);
+    }
+  }
+  // Archived tab: No status filter needed - shows all archived invoices regardless of status
+
+  // Apply search filter (server-side)
   if (search) {
     // Escape special characters in search term for PostgREST ILIKE
-    // PostgREST uses % for wildcards and _ for single character, so we need to escape them
     const escapedSearch = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
     const searchPattern = `%${escapedSearch}%`;
-    // Use PostgREST or() syntax for multiple ILIKE conditions
-    query = query.or(
-      `invoice_number.ilike.${searchPattern},client_name.ilike.${searchPattern},po_number.ilike.${searchPattern},notes.ilike.${searchPattern}`
-    );
+    
+    if (isArchivedFilter) {
+      // Archived tab: Search only base columns (invoice_number, po_number, notes)
+      // Note: Can't search nested client fields with ILIKE in PostgREST easily
+      const searchFilter = `invoice_number.ilike.${searchPattern},po_number.ilike.${searchPattern},notes.ilike.${searchPattern}`;
+      query = query.or(searchFilter);
+      countQuery = countQuery.or(searchFilter);
+    } else {
+      // Active tabs: Search across invoice_number, po_number, notes, client_name
+      // invoices_view includes client_name as direct column
+      query = query.or(
+        `invoice_number.ilike.${searchPattern},client_name.ilike.${searchPattern},po_number.ilike.${searchPattern},notes.ilike.${searchPattern}`
+      );
+      countQuery = countQuery.or(
+        `invoice_number.ilike.${searchPattern},client_name.ilike.${searchPattern},po_number.ilike.${searchPattern},notes.ilike.${searchPattern}`
+      );
+    }
   }
 
-  // Apply view-specific ordering and filtering
-  // Note: If view is "default" and sort params exist, use those instead
-  if (view === "default" && sort) {
-    // Apply user-specified sort
-    query = query.order(sort, { ascending: dir === "asc", nullsFirst: false });
-    // Add stable secondary sort by id to avoid row jitter
-    query = query.order("id", { ascending: true });
+  // Apply smart view filters BEFORE ordering (only for active tabs - archived tab doesn't use smart views)
+  if (!isArchivedFilter) {
+    query = applySmartViewFilter(query, view);
+    countQuery = applySmartViewFilter(countQuery, view);
+  }
+
+  // Apply ordering (AFTER all filtering)
+  if (isArchivedFilter) {
+    // ========================================================================
+    // ARCHIVED TAB ORDERING: Use base table columns
+    // ========================================================================
+    if (hasExplicitSort && sort) {
+      // User-specified sort
+      query = query.order(sort, { ascending: dir === "asc", nullsFirst: false });
+      query = query.order("id", { ascending: true }); // Stable secondary sort
+    } else {
+      // Default newest-first (issue_date + invoice_number — avoid created_at/updated_at; not on invoices_view)
+      query = query.order("issue_date", { ascending: false, nullsFirst: false });
+      query = query.order("invoice_number", { ascending: false, nullsFirst: false });
+      query = query.order("id", { ascending: true }); // Stable secondary sort
+    }
   } else {
-    // Apply view-specific ordering
-    switch (view) {
-      case "highest-outstanding-first": {
-        query = query.order("outstanding", { ascending: false, nullsFirst: false });
-        query = query.order("id", { ascending: true }); // Stable secondary sort
-        break;
-      }
+    // ========================================================================
+    // ACTIVE TABS ORDERING: Use invoices_view columns
+    // ========================================================================
+    // Only apply column sort if user explicitly selected it.
+    if (view === "default" && hasExplicitSort && sort) {
+      // Apply user-specified sort
+      query = query.order(sort, { ascending: dir === "asc", nullsFirst: false });
+      // Add stable secondary sort by id to avoid row jitter
+      query = query.order("id", { ascending: true });
+    } else {
+      // Apply view-specific ordering
+      switch (view) {
+        case "highest-outstanding-first": {
+          query = query.order("outstanding", { ascending: false, nullsFirst: false });
+          query = query.order("id", { ascending: true }); // Stable secondary sort
+          break;
+        }
 
-      case "overdue-first": {
-        query = query
-          .order("is_overdue", { ascending: false })      // true first
-          .order("due_date", { ascending: true })         // earlier due dates first
-          .order("issue_date", { ascending: false });     // then by issue date desc
-        query = query.order("id", { ascending: true }); // Stable secondary sort
-        break;
-      }
+        case "overdue-first": {
+          query = query
+            .order("display_status", { ascending: false })  // overdue first by status
+            .order("due_date", { ascending: true })         // earlier due dates first
+            .order("issue_date", { ascending: false });     // then by issue date desc
+          query = query.order("id", { ascending: true }); // Stable secondary sort
+          break;
+        }
 
-      case "smart-high-risk": {
-        query = query
-          .eq("risk_level", "high")
-          .eq("is_overdue", true)
-          .order("outstanding", { ascending: false })
-          .order("overdue_days", { ascending: false });
-        query = query.order("id", { ascending: true }); // Stable secondary sort
-        break;
-      }
+        case "smart-high-risk": {
+          query = query
+            .order("outstanding", { ascending: false })
+            .order("overdue_days", { ascending: false });
+          query = query.order("id", { ascending: true }); // Stable secondary sort
+          break;
+        }
 
-      case "smart-medium-risk": {
-        query = query
-          .eq("risk_level", "medium")
-          .eq("is_overdue", true)
-          .order("overdue_days", { ascending: false })
-          .order("outstanding", { ascending: false });
-        query = query.order("id", { ascending: true }); // Stable secondary sort
-        break;
-      }
+        case "smart-medium-risk": {
+          query = query
+            .order("overdue_days", { ascending: false })
+            .order("outstanding", { ascending: false });
+          query = query.order("id", { ascending: true }); // Stable secondary sort
+          break;
+        }
 
-      case "smart-low-risk": {
-        query = query
-          .eq("risk_level", "low")
-          .eq("is_overdue", true)
-          .order("overdue_days", { ascending: false })
-          .order("outstanding", { ascending: false });
-        query = query.order("id", { ascending: true }); // Stable secondary sort
-        break;
-      }
+        case "smart-low-risk": {
+          query = query
+            .order("overdue_days", { ascending: false })
+            .order("outstanding", { ascending: false });
+          query = query.order("id", { ascending: true }); // Stable secondary sort
+          break;
+        }
 
-      case "default":
-      default: {
-        // Default sort by issue_date descending
-        query = query.order("issue_date", { ascending: false });
-        query = query.order("id", { ascending: true }); // Stable secondary sort
-        break;
+        case "default":
+        default: {
+          // Default view: newest invoices first by issue date.
+          query = query.order("issue_date", { ascending: false, nullsFirst: false });
+          // Tie-breaker when issue_date is identical.
+          query = query.order("invoice_number", { ascending: false, nullsFirst: false });
+          query = query.order("id", { ascending: true }); // Stable secondary sort
+          break;
+        }
       }
     }
   }
 
   // Apply pagination (AFTER all filtering, search, and ordering)
-  // IMPORTANT: All filtering (.eq, .or), search (.or with ilike), and ordering (.order)
-  // must happen BEFORE .range() to ensure sorting/search/filtering apply across ALL pages
-  const { data: invoicesFromView, error, count } = await query.range(from, to);
+  let { data: invoicesFromDb, error } = await query.range(from, to);
 
-  // Debug log (dev only)
-  if (process.env.NODE_ENV === "development") {
-    console.log("[InvoicesPage] Query result:", {
-      count: typeof count === "number" ? count : 0,
-      rowsReturned: invoicesFromView?.length || 0,
-      page,
-      pageSize,
-      totalPages: Math.ceil((typeof count === "number" ? count : 0) / pageSize),
-    });
+  // Get count with same filters (but no ordering/pagination)
+  const { count, error: countError } = await countQuery;
+  
+  // If count query fails, log but don't fail the whole request
+  if (countError) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[InvoicesPage] count query failed:", countError.message);
+    }
   }
 
-  // Error handling - always log full error details with actionable information
+  // Error handling
   if (error) {
-    const errorDetails = {
-      message: error.message || "Unknown error",
-      code: error.code || null,
-      details: (error as any).details || null,
-      hint: (error as any).hint || null,
-    };
-    
-    const selectString = "id, workspace_id, client_id, client_name, invoice_number, base_status, issue_date, due_date, currency, total, paid, outstanding, display_status, is_overdue, overdue_days, risk_level, po_number, notes";
-    
-    // Log error.code, error.message, selectString as required
-    console.error("[InvoicesPage] failed to load invoices (Supabase error)", {
-      code: errorDetails.code,
-      message: errorDetails.message,
-      details: errorDetails.details,
-      hint: errorDetails.hint,
-      selectString,
-      queryInputs: {
-        view,
-        status,
-        search,
-        sort,
-        dir,
-        page,
-        pageSize,
-        workspaceId,
-      },
-    });
-    
-    // DO NOT swallow errors - throw so error boundary can handle
+    if (process.env.NODE_ENV === "development") {
+      console.error("[InvoicesPage] failed to load invoices", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+    }
     throw error;
   }
 
+  // Map DB result into InvoiceRow shape
+  const mappedInvoices: InvoiceRow[] = (invoicesFromDb ?? []).map((invoice: Record<string, unknown>) => {
+    // Extract client_name based on data source
+    let client_name: string | null = null;
+    
+    if (isArchivedFilter) {
+      // Archived tab: Extract from nested clients relation
+      const clientsValue = invoice.clients;
+      const clientsRecord =
+        typeof clientsValue === "object" && clientsValue !== null
+          ? (clientsValue as Record<string, unknown>)
+          : null;
+      client_name = (clientsRecord?.name as string | null | undefined) ?? null;
+      
+      // For archived invoices, derived financial fields are not available from invoices_view,
+      // but base status should still reflect the stored invoice status.
+      const status = (invoice.status as string | null | undefined) ?? "sent";
+      
+      return {
+        id: invoice.id as string,
+        invoice_number: (invoice.invoice_number as string | null | undefined) ?? null,
+        issue_date: (invoice.issue_date as string | null | undefined) ?? null,
+        due_date: (invoice.due_date as string | null | undefined) ?? null,
+        total: null,
+        paid: null,
+        outstanding: null,
+        display_status: normalizeDisplayStatus(status) as InvoiceStatus,
+        risk_level: null,
+        client_name,
+      };
+    } else {
+      // Active tabs: Use direct columns from invoices_view
+      client_name = (invoice.client_name as string | null | undefined) ?? null;
+      
+      return {
+        id: invoice.id as string,
+        invoice_number: (invoice.invoice_number as string | null | undefined) ?? null,
+        issue_date: (invoice.issue_date as string | null | undefined) ?? null,
+        due_date: (invoice.due_date as string | null | undefined) ?? null,
+        total: (invoice.total as number | null | undefined) ?? null,
+        paid: (invoice.paid as number | null | undefined) ?? null,
+        outstanding: (invoice.outstanding as number | null | undefined) ?? null,
+        display_status: invoice.display_status as InvoiceStatus,
+        risk_level: (invoice.risk_level as string | null | undefined) ?? null,
+        client_name,
+      };
+    }
+  });
+
   return {
-    invoices: invoicesFromView ?? [],
+    invoices: mappedInvoices,
     totalCount: typeof count === "number" ? count : 0,
+    anyInvoicesCount: workspaceInvoiceCount,
     page,
     pageSize,
     view,
@@ -502,13 +651,8 @@ const statusFilters = [
   { label: "Partially Paid", value: "partial" },
   { label: "Overdue", value: "overdue" },
   { label: "Void", value: "void" },
+  { label: "Archived", value: "archived" },
 ] as const;
-
-const VIEW_OPTIONS = [
-  { value: "", label: "Default View" },
-  { value: "overdue-first", label: "Overdue First" },
-  { value: "highest-outstanding-first", label: "Highest Outstanding First" },
-];
 
 const SMART_INVOICE_VIEWS = [
   { id: "smart-high-risk", label: "Smart: High risk overdue" },
@@ -516,12 +660,19 @@ const SMART_INVOICE_VIEWS = [
   { id: "smart-low-risk", label: "Smart: Low risk" },
 ];
 
+const INVOICE_VIEW_PRESETS = [
+  { id: "default" as const, label: "Default View" },
+  { id: "overdue-first" as const, label: "Overdue First" },
+  { id: "highest-outstanding-first" as const, label: "Highest Outstanding First" },
+];
+
 export default async function InvoicesPage({
   params,
   searchParams,
 }: InvoicesPageProps) {
+  noStore();
   const { workspaceId } = await params;
-  const { workspace } = await requireWorkspace(workspaceId);
+  await requireWorkspace(workspaceId);
 
   const resolvedSearchParams = (await searchParams) || {};
   const limitCodeParam = Array.isArray(resolvedSearchParams.limit)
@@ -532,14 +683,11 @@ export default async function InvoicesPage({
   let invoiceData;
   try {
     invoiceData = await loadInvoices(workspaceId, resolvedSearchParams);
-  } catch (error) {
+  } catch {
     return (
       <>
-        <InvoicesPreferencesGate
-          workspaceId={workspaceId}
-          searchParams={resolvedSearchParams}
-        />
-        <div className="max-w-5xl mx-auto py-6">
+        <InvoicesPreferencesGate />
+        <div className="w-full min-w-0">
           <div className="p-6">
             <ErrorState
               title="Unable to load invoices"
@@ -551,8 +699,20 @@ export default async function InvoicesPage({
     );
   }
 
-  const { invoices, totalCount, page, view: viewParam, status: statusParam, sort, dir, search: searchTerm } = invoiceData;
+  const {
+    invoices,
+    totalCount,
+    anyInvoicesCount,
+    page,
+    view: viewParam,
+    status: statusParam,
+    search: searchTerm,
+  } = invoiceData;
   const invoiceRows = invoices ?? [];
+
+  // Compute status and basic flags
+  const status = statusParam ?? "all";
+  const isArchivedView = status === "archived";
 
   // Extract clientId for UI
   const rawClientId = Array.isArray(resolvedSearchParams.clientId)
@@ -560,44 +720,26 @@ export default async function InvoicesPage({
     : resolvedSearchParams.clientId;
   const clientId = rawClientId || undefined;
 
-  // Show empty state if no invoices
-  if (invoiceRows.length === 0 && totalCount === 0) {
-    return (
-      <>
-        <InvoicesPreferencesGate
-          workspaceId={workspaceId}
-          searchParams={resolvedSearchParams}
-        />
-        <div className="max-w-5xl mx-auto py-6">
-          <div className="p-6">
-            <EmptyState
-              title="No invoices yet"
-              message="Create your first invoice to start tracking receivables."
-            />
-          </div>
-        </div>
-      </>
-    );
-  }
+  // Has any invoices in this workspace at all (ignoring filters)
+  const hasAnyInvoices = anyInvoicesCount > 0;
 
   // Enrich invoices - use fields directly from invoices_view (canonical contract)
   // No client-side sorting/filtering - all done server-side
   const enrichedInvoices = invoiceRows.map((invoice: InvoiceRow) => {
-    // Use canonical column names: total, paid, outstanding, is_overdue
+    // Use canonical column names: total, paid, outstanding
     const outstanding = Number(invoice.outstanding ?? 0);
     const amount = Number(invoice.total ?? 0);
     const totalPaid = Number(invoice.paid ?? 0);
     
     // Normalize display_status to canonical format (handles both formats from DB)
     const displayStatusNormalized = normalizeDisplayStatus(invoice.display_status || "sent");
-    const daysOverdue = invoice.overdue_days ?? 0;
     const risk = invoice.risk_level || null;
-    const invoiceIsOverdue = invoice.is_overdue ?? false;
+    const invoiceIsOverdue = displayStatusNormalized === "overdue";
     
     // invoice_number and client_name are now available from invoices_view
     const invoiceNumber = invoice.invoice_number ?? null;
     const clientName = invoice.client_name ?? null;
-    const currency = invoice.currency ?? "USD";
+    const currency = "USD";
     
     return {
       ...invoice,
@@ -613,9 +755,8 @@ export default async function InvoicesPage({
       displayStatus: displayStatusNormalized,
       displayStatusNormalized,
       risk_level: risk,
-      days_overdue: daysOverdue,
       risk: risk || "none",
-      daysOverdue,
+      archived_at: null,
     };
   });
 
@@ -634,396 +775,282 @@ export default async function InvoicesPage({
     clientFilterName = firstInvoice.client_name ?? null;
   }
 
-  const getStatusBadge = (status: string) => {
-    const statusLower = status.toLowerCase();
-    if (statusLower === "paid") {
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    } else if (statusLower === "overdue") {
-      return "bg-red-50 text-red-700 border-red-200";
-    } else if (statusLower === "sent") {
-      return "bg-blue-50 text-blue-700 border-blue-200";
-    } else if (statusLower === "partial") {
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    } else if (statusLower === "void") {
-      return "bg-slate-100 text-slate-500 border-slate-200";
-    }
-    return "bg-slate-50 text-slate-700 border-slate-200";
-  };
-
-  const getRiskBadge = (risk: "high" | "medium" | "low" | "none") => {
-    if (risk === "high") {
-      return "bg-red-100 text-red-700 border-red-300";
-    } else if (risk === "medium") {
-      return "bg-orange-100 text-orange-700 border-orange-300";
-    } else if (risk === "low") {
-      return "bg-yellow-100 text-yellow-700 border-yellow-300";
-    }
-    return "";
-  };
-
-  const canPrev = safePage > 1;
-  const canNext = safePage < totalPages;
 
   const isInvoiceLimitReached = limitCodeParam === "PLAN_LIMIT_INVOICES";
 
+  const invoiceFilterSummaryParts: string[] = [];
+  if (viewParam !== "default") {
+    const smart = SMART_INVOICE_VIEWS.find((v) => v.id === viewParam);
+    if (smart) {
+      invoiceFilterSummaryParts.push(smart.label);
+    } else {
+      const preset = INVOICE_VIEW_PRESETS.find((v) => v.id === viewParam);
+      invoiceFilterSummaryParts.push(preset?.label ?? viewParam);
+    }
+  }
+  if (status !== "all") {
+    invoiceFilterSummaryParts.push(
+      statusFilters.find((f) => f.value === status)?.label ?? status
+    );
+  }
+  const invoicesFilterSummary =
+    invoiceFilterSummaryParts.length > 0
+      ? invoiceFilterSummaryParts.join(" · ")
+      : undefined;
+  const activeFilterCount =
+    Number(viewParam !== "default") +
+    Number(status !== "all") +
+    Number(Boolean(clientId));
+
+  const invoiceListEmpty =
+    status === "all" && !hasAnyInvoices
+      ? {
+          title: "No invoices yet",
+          message: "Create your first invoice to start tracking receivables.",
+          actionLabel: "New invoice",
+          actionHref: `/${workspaceId}/invoices/new`,
+        }
+      : isArchivedView
+        ? {
+            title: "No archived invoices",
+            message:
+              "You don't have any archived invoices. Active invoices are shown under the All tabs.",
+            actionLabel: "View active invoices",
+            actionHref: buildInvoicesUrl(workspaceId, resolvedSearchParams, {
+              status: "all",
+            }),
+          }
+        : {
+            title: "No invoices match your filters",
+            message: "Try clearing search or filters to see more invoices.",
+            actionLabel: "Clear filters",
+            actionHref: buildInvoicesUrl(workspaceId, resolvedSearchParams, {
+              status: "all",
+              view: "default",
+              search: "",
+              clientId: undefined,
+            }),
+          };
+  const summaryOutstanding = enrichedInvoices.reduce(
+    (sum, inv) => sum + Number(inv.outstanding ?? 0),
+    0
+  );
+  const summaryOverdueCount = enrichedInvoices.filter(
+    (inv) => inv.displayStatusNormalized === "overdue"
+  ).length;
+
   return (
     <>
-      <InvoicesPreferencesGate
-        workspaceId={workspaceId}
-        searchParams={resolvedSearchParams}
-      />
-      <div className="max-w-5xl mx-auto py-6 space-y-4">
+      <InvoicesPreferencesGate />
+      <InvoicesViewPills>
+      <div className="w-full min-w-0 space-y-4 md:space-y-6">
       {isInvoiceLimitReached ? <PlanLimitBanner code="PLAN_LIMIT_INVOICES" /> : null}
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Invoices</h1>
-          <p className="text-sm text-slate-500">
-            View and manage all invoices for this organization.
-          </p>
-        </div>
-
-        {isInvoiceLimitReached ? (
-          <button
-            className="inline-flex items-center justify-center rounded-lg bg-slate-200 px-3 py-2 text-sm font-medium text-slate-600 shadow-sm"
-            disabled
-            title="Upgrade to create more"
-          >
-            New Invoice
-          </button>
-        ) : (
-          <Link
-            href={`/${workspaceId}/invoices/new`}
-            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-          >
-            New Invoice
-          </Link>
-        )}
-      </div>
-
-      {/* View Presets */}
-      <div className="flex flex-wrap gap-2">
-        {VIEW_OPTIONS.map((opt) => {
-          const isActive = viewParam === opt.value;
-          return (
-            <Link
-              key={opt.value || "default"}
-              href={buildInvoicesUrl(workspaceId, resolvedSearchParams, { 
-                view: (opt.value || "default") as InvoiceListViewParam,
-                status: "all", // Reset status to "all" when changing view
-              })}
-              className={
-                "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition " +
-                (isActive
-                  ? "border-blue-600 bg-blue-50 text-blue-700"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
-              }
-            >
-              {opt.label}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Smart Views */}
-      <div className="flex flex-wrap items-center gap-2 px-4 py-1">
-        <span className="text-xs font-semibold text-slate-500">Smart views</span>
-        <div className="flex flex-wrap gap-2">
-          {SMART_INVOICE_VIEWS.map((v) => {
-            const isActive = viewParam === v.id;
-            const href = buildInvoicesUrl(workspaceId, resolvedSearchParams, { 
-              view: v.id as InvoiceListViewParam,
-              status: "all", // Reset status to "all" when changing view
-            });
-            return (
-              <Link
-                key={v.id}
-                href={href}
-                className={[
-                  "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
-                  isActive
-                    ? "border-amber-500 bg-amber-500 text-white"
-                    : "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-400",
-                ].join(" ")}
+      <CommandBar>
+        <PageHeader
+          title="Invoices"
+          description="View and manage all invoices for this organization."
+          primaryAction={
+            isInvoiceLimitReached ? (
+              <button
+                type="button"
+                className={primaryCtaDisabledClass}
+                disabled
+                title="Upgrade to create more"
               >
-                {v.label}
+                New Invoice
+              </button>
+            ) : (
+              <Link href={`/${workspaceId}/invoices/new`} className={primaryCtaClass}>
+                New Invoice
               </Link>
-            );
-          })}
-        </div>
-      </div>
+            )
+          }
+          headerTrailing={<ExportCsvButton workspaceId={workspaceId} module="invoices" />}
+        />
 
-      {/* Filters + Search */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* Status pills */}
-        <div className="flex flex-wrap gap-2">
-          {statusFilters.map((filter) => {
-            const isActive = statusParam === filter.value;
-            return (
-              <Link
-                key={filter.value}
-                href={buildInvoicesUrl(workspaceId, resolvedSearchParams, { 
-                  status: filter.value as InvoiceStatusParam,
-                })}
-                className={
-                  "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition " +
-                  (isActive
-                    ? "border-blue-600 bg-blue-50 text-blue-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
-                }
-              >
-                {filter.label}
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Search + Reset */}
-        <div className="flex flex-wrap items-center gap-2">
+        <CommandBarSearch>
           <InvoicesSearchInput
             workspaceId={workspaceId}
             initialSearch={searchTerm}
           />
-          <ResetFiltersButton basePath={`/${workspaceId}/invoices`} />
-        </div>
-      </div>
+        </CommandBarSearch>
+
+        <CommandBarControls
+          filters={
+            <CommandBarFilters
+              summary={invoicesFilterSummary}
+              activeCount={activeFilterCount}
+              clearAllHref={`/${workspaceId}/invoices`}
+            >
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-gray-700">
+                    Smart views
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {SMART_INVOICE_VIEWS.map((v) => {
+                      const isActive = viewParam === v.id;
+                      const href = buildInvoicesUrl(workspaceId, resolvedSearchParams, {
+                        view: v.id as InvoiceListViewParam,
+                        status: "all",
+                      });
+                      return (
+                        <Link
+                          key={v.id}
+                          href={href}
+                          className={[
+                            "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
+                            isActive
+                              ? "border-amber-500 bg-amber-500 text-white"
+                              : "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-400",
+                          ].join(" ")}
+                        >
+                          {v.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-gray-700">
+                    View
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {INVOICE_VIEW_PRESETS.map((opt) => {
+                      const isActive = viewParam === opt.id;
+                      return (
+                        <Link
+                          key={opt.id}
+                          href={buildInvoicesUrl(workspaceId, resolvedSearchParams, {
+                            view: opt.id as InvoiceListViewParam,
+                            status: "all",
+                          })}
+                          className={
+                            "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition " +
+                            (isActive
+                              ? "border-blue-600 bg-blue-100 text-blue-800 shadow-sm ring-1 ring-blue-200"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
+                          }
+                        >
+                          {opt.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-gray-700">
+                    Status
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {statusFilters.map((filter) => {
+                      const isActive = status === filter.value;
+                      return (
+                        <Link
+                          key={filter.value}
+                          href={buildInvoicesUrl(workspaceId, resolvedSearchParams, {
+                            status: filter.value as InvoiceStatusParam,
+                          })}
+                          className={
+                            "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition " +
+                            (isActive
+                              ? "border-blue-600 bg-blue-100 text-blue-800 shadow-sm ring-1 ring-blue-200"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
+                          }
+                        >
+                          {filter.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </CommandBarFilters>
+          }
+          filterAdjacentActions={
+            <ResetFiltersButton basePath={`/${workspaceId}/invoices`} />
+          }
+          secondaryActions={
+            isArchivedView ? (
+              <InvoicesTableUnarchiveButton
+                workspaceId={workspaceId}
+                invoices={enrichedInvoices.map((inv) => ({
+                  id: inv.id,
+                  archived_at: inv.archived_at ?? null,
+                }))}
+                searchParams={resolvedSearchParams}
+              />
+            ) : undefined
+          }
+        />
+      </CommandBar>
 
       {/* Client Filter Badge */}
       {clientId && (
         <InvoicesClientFilterBadge
-          clientId={clientId}
           clientName={clientFilterName}
-          workspaceId={workspaceId}
         />
       )}
 
-      {/* Table or Empty State */}
-      {enrichedInvoices.length > 0 ? (
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2 text-xs text-slate-500">
-          <div className="flex items-center gap-2">
-            {viewParam !== "default" ? (
-              <>
-                <span>View:</span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
-                  {VIEW_OPTIONS.find((opt) => opt.value === viewParam)?.label || viewParam}
-                </span>
-              </>
-            ) : (
-              <>
-                <span>Sorted by</span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
-                  {sortLabel(sort)} {sortArrow(dir)}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-        <table className="min-w-full table-auto text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr className="text-xs uppercase tracking-wide text-slate-500">
-              <th className="px-3 py-2 text-left">
-                <SortableHeader
-                  label="Invoice #"
-                  sortKey="invoice_number"
-                  workspaceId={workspaceId}
-                  currentParams={resolvedSearchParams}
-                />
-              </th>
-              <th className="px-3 py-2 text-left">
-                <SortableHeader
-                  label="Client"
-                  sortKey="client_name"
-                  workspaceId={workspaceId}
-                  currentParams={resolvedSearchParams}
-                />
-              </th>
-              <th className="px-3 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-left">
-                <SortableHeader
-                  label="Issue Date"
-                  sortKey="issue_date"
-                  workspaceId={workspaceId}
-                  currentParams={resolvedSearchParams}
-                />
-              </th>
-              <th className="px-3 py-2 text-left">
-                <SortableHeader
-                  label="Due Date"
-                  sortKey="due_date"
-                  workspaceId={workspaceId}
-                  currentParams={resolvedSearchParams}
-                />
-              </th>
-              <th className="px-3 py-2 text-right">
-                <SortableHeader
-                  label="Total"
-                  sortKey="total"
-                  workspaceId={workspaceId}
-                  currentParams={resolvedSearchParams}
-                  align="right"
-                />
-              </th>
-              <th className="px-3 py-2 text-right">Amount Paid</th>
-              <th className="px-3 py-2 text-right">
-                <SortableHeader
-                  label="Outstanding"
-                  sortKey="outstanding"
-                  workspaceId={workspaceId}
-                  currentParams={resolvedSearchParams}
-                  align="right"
-                />
-              </th>
-              <th className="px-3 py-2 text-right">View</th>
-            </tr>
-          </thead>
-          <tbody>
-            {enrichedInvoices.map((inv) => {
-              const currency = inv.currency || "USD";
-              const riskBadgeClass = getRiskBadge(inv.risk as "high" | "medium" | "low" | "none");
-              return (
-                <tr
-                  key={inv.id}
-                  className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
-                >
-                  <td className="px-3 py-2 font-medium text-slate-900">
-                    <div className="flex items-center gap-2">
-                      {inv.invoice_number ?? "—"}
-                      {riskBadgeClass && (
-                        <span
-                          className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${riskBadgeClass}`}
-                          title={`Risk: ${inv.risk}`}
-                        >
-                          {inv.risk === "high" ? "!" : inv.risk === "medium" ? "~" : "•"}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-slate-800">
-                    {inv.client_name ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 align-middle">
-                    {(() => {
-                      // Use normalized status for consistent badge styling and paid ratio
-                      const status = inv.displayStatusNormalized || "sent";
-                      const statusStyles: Record<string, string> = {
-                        draft: "bg-slate-100 text-slate-700",
-                        sent: "bg-blue-100 text-blue-700",
-                        paid: "bg-emerald-100 text-emerald-700",
-                        partially_paid: "bg-amber-100 text-amber-700",
-                        overdue: "bg-red-100 text-red-700",
-                        void: "bg-neutral-100 text-neutral-600",
-                      };
-                      const statusStyle = statusStyles[status] || "bg-slate-100 text-slate-700";
-                      // Format status for display (replace underscore with space, capitalize)
-                      const statusDisplay = status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-                      const totalAmount = inv.total ?? 0;
-                      const amountPaid = inv.totalPaid ?? Math.max(inv.total - (inv.outstanding ?? 0), 0);
-                      const paidRatio = totalAmount > 0 ? Math.round((amountPaid / totalAmount) * 100) : 0;
-                      return (
-                        <div className="flex flex-col gap-1">
-                          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${statusStyle}`}>
-                            {statusDisplay}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">{paidRatio}% paid</span>
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-3 py-2 text-sm text-slate-700">
-                    {inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-sm text-slate-700">
-                    {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-blue-600 text-right">
-                    {formatMoney(inv.total, currency)}
-                  </td>
-                  <td className="px-3 py-2 text-emerald-600 font-medium text-right">
-                    {formatMoney(inv.totalPaid ?? Math.max(inv.total - (inv.outstanding ?? 0), 0), currency)}
-                  </td>
-                  <td className={`px-3 py-2 ${inv.outstanding > 0 ? "text-red-600 text-right" : "text-muted-foreground text-right"}`}>
-                    {formatMoney(Math.abs(inv.outstanding), currency)}
-                  </td>
-                  <td className="px-3 py-2 text-right text-sm">
-                    <Link
-                      href={`/${workspaceId}/invoices/${inv.id}`}
-                      className="text-blue-600 hover:text-blue-700"
-                    >
-                      Open
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-6 gap-y-2 text-sm text-gray-600">
+        <span>{totalCount} invoices</span>
+        <span>
+          Outstanding:{" "}
+          <span className="font-medium text-slate-800">
+            {formatCurrency(summaryOutstanding, { currency: "USD" })}
+          </span>
+        </span>
+        <span>
+          Overdue: <span className="font-medium text-slate-800">{summaryOverdueCount}</span>
+        </span>
       </div>
-      ) : (
-        <div className="rounded-xl border border-slate-200 bg-white">
-          <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-            {/* Icon */}
-            <div className="mb-3 rounded-full bg-muted p-3">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 text-muted-foreground"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 7l1.664 9.148A2 2 0 006.646 18h10.708a2 2 0 001.982-1.852L21 7H3z"
-                />
-              </svg>
+
+        {/* Table or Empty State */}
+        <div>
+          {enrichedInvoices.length > 0 ? (
+            <InvoicesTable
+              invoices={enrichedInvoices.map((inv) => ({
+                id: inv.id,
+                invoice_number: inv.invoice_number ?? null,
+                client_name: inv.client_name ?? null,
+                displayStatusNormalized: inv.displayStatusNormalized,
+                issue_date: inv.issue_date ?? null,
+                due_date: inv.due_date ?? null,
+                total: inv.total,
+                totalPaid: inv.totalPaid,
+                outstanding: inv.outstanding,
+                currency: inv.currency,
+                risk: (inv.risk || "none") as "high" | "medium" | "low" | "none",
+                archived_at: inv.archived_at ?? null,
+              }))}
+              workspaceId={workspaceId}
+              searchParams={resolvedSearchParams}
+              isArchivedView={isArchivedView}
+            />
+          ) : (
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <EmptyState
+              bare
+              title={invoiceListEmpty.title}
+              message={invoiceListEmpty.message}
+              actionLabel={invoiceListEmpty.actionLabel}
+              actionHref={invoiceListEmpty.actionHref}
+            />
             </div>
-
-            {/* Title */}
-            <h3 className="text-base font-semibold text-foreground">
-              No invoices match your filters
-            </h3>
-
-            {/* Subtitle */}
-            <p className="mt-1 text-sm text-muted-foreground">
-              Try clearing search or filters to see more invoices.
-            </p>
-          </div>
+          )}
         </div>
-      )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2 text-xs text-slate-600">
-          <div>
-            Page {safePage} of {totalPages} · {totalCount} invoice{totalCount !== 1 ? "s" : ""}
-          </div>
-          <div className="flex items-center gap-2">
-            {canPrev && (
-              <Link
-                href={buildInvoicesUrl(workspaceId, resolvedSearchParams, { 
-                  page: safePage - 1,
-                })}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-              >
-                Previous
-              </Link>
-            )}
-            {canNext && (
-              <Link
-                href={buildInvoicesUrl(workspaceId, resolvedSearchParams, { 
-                  page: safePage + 1,
-                })}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-              >
-                Next
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
+      <PaginationBar
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalItems={totalCount}
+        itemLabel={`invoice${totalCount !== 1 ? "s" : ""}`}
+        basePath={`/${workspaceId}/invoices`}
+        queryParams={resolvedSearchParams}
+      />
       </div>
+      </InvoicesViewPills>
     </>
   );
 }

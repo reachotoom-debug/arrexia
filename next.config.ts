@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
+  serverExternalPackages: ["@react-pdf/renderer"],
+  env: {
+    NEXT_PUBLIC_ADMIN_PATH: process.env.ADMIN_PATH ?? "/admin",
+  },
   turbopack: {
     root: __dirname,
   },

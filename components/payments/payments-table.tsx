@@ -6,6 +6,8 @@ import { deletePayment } from "@/app/[workspaceId]/payments/actions";
 import PaymentModal from "./payment-modal";
 import { updatePayment } from "@/app/[workspaceId]/payments/actions";
 import { type PaymentFormValues } from "@/lib/schemas/payment";
+import { prettyLabel } from "@/lib/formatters/prettyLabel";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface Payment {
   id: string;
@@ -69,15 +71,6 @@ export default function PaymentsTable({
         setIsDeleting(null);
       }
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "JOD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(amount);
   };
 
   const formatDate = (dateString: string) => {
@@ -161,13 +154,13 @@ export default function PaymentsTable({
                   {payment.invoices?.clients?.name || "-"}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                  {formatCurrency(payment.amount)}
+                  {formatCurrency(payment.amount, { currency: "USD" })}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
                   {formatDate(payment.created_at)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                  {payment.method}
+                  {prettyLabel(payment.method)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span

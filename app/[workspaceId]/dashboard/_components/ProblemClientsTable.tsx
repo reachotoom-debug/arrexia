@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
+import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
+import {
+  TABLE_BASE,
+  TABLE_CELL_TEXT_COL,
+  TABLE_MIN_WIDTH_INNER,
+} from "@/components/table/tableShell";
 
 interface ProblemClientsTableProps {
   clients: Array<{
@@ -25,34 +31,41 @@ export function ProblemClientsTable({ clients, hasMore, workspaceId }: ProblemCl
         <div className="p-6 text-center text-sm text-slate-500">No at-risk clients</div>
       ) : (
         <>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-xs font-medium text-slate-500">
-                <th className="px-4 py-3 text-left">CLIENT</th>
-                <th className="px-4 py-3 text-right">AVG DAYS OVERDUE</th>
-                <th className="px-4 py-3 text-right">OUTSTANDING</th>
-                <th className="px-4 py-3 text-right">INVOICES</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {clients.map((client, idx) => (
-                <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap truncate max-w-[200px]" title={client.clientName}>
-                    {client.clientName}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-red-600 whitespace-nowrap">
-                    {client.avgDaysOverdue}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-red-600 whitespace-nowrap">
-                    {formatMoney(client.outstanding, "USD")}
-                  </td>
-                  <td className="px-4 py-3 text-right text-slate-600 whitespace-nowrap">
-                    {client.invoiceCount}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <HorizontalScrollArea
+            className="relative w-full min-w-0"
+            viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent"
+          >
+            <div className={TABLE_MIN_WIDTH_INNER}>
+              <table className={TABLE_BASE}>
+                <thead>
+                  <tr className="border-b border-slate-100 text-xs font-medium text-slate-500">
+                    <th className={`${TABLE_CELL_TEXT_COL} px-3 py-3 text-left`}>CLIENT</th>
+                    <th className="px-3 py-3 text-right whitespace-nowrap">AVG DAYS OVERDUE</th>
+                    <th className="px-3 py-3 text-right whitespace-nowrap">OUTSTANDING</th>
+                    <th className="px-3 py-3 text-right whitespace-nowrap">INVOICES</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {clients.map((client, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                      <td className={`${TABLE_CELL_TEXT_COL} px-3 py-3 font-medium text-slate-900 break-words`} title={client.clientName}>
+                        {client.clientName}
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-red-600 whitespace-nowrap tabular-nums">
+                        {client.avgDaysOverdue}
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-red-600 whitespace-nowrap tabular-nums">
+                        {formatCurrency(client.outstanding, { currency: "USD" })}
+                      </td>
+                      <td className="px-3 py-3 text-right text-slate-600 whitespace-nowrap tabular-nums">
+                        {client.invoiceCount}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </HorizontalScrollArea>
           {hasMore && (
             <div className="px-4 py-2 border-t border-slate-200 flex justify-end">
               <Link

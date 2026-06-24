@@ -1,14 +1,16 @@
-import { requireWorkspace, requireUser } from "@/lib/auth/server";
+import { requireUser } from "@/lib/auth/server";
 import { loadWorkspaceSettings } from "@/lib/settings/loadSettings";
 import { getCurrentProfile } from "@/lib/profile/server";
-import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { BrandPreview } from "@/components/settings/BrandPreview";
 import { WorkspaceProfileForm } from "./_components/WorkspaceProfileForm";
+import { BrandingInvoiceSettingsForm } from "./_components/BrandingInvoiceSettingsForm";
 import { EmailSettingsForm } from "./_components/EmailSettingsForm";
 import { RemindersSettingsSection } from "./_components/RemindersSettingsSection";
-import { PaymentSettingsForm } from "./_components/PaymentSettingsForm";
 import { AccountSettingsSection } from "./_components/AccountSettingsSection";
 import { BillingPlans } from "./_components/BillingPlans";
+import { SettingsOverview } from "./_components/SettingsOverview";
+import { SettingsSectionChrome } from "./_components/SettingsSectionChrome";
+import { resolveSettingsSection, type SettingsSectionId } from "./_lib/resolveSettingsSection";
 
 interface SettingsPageProps {
   params: Promise<{ workspaceId: string }>;
@@ -17,25 +19,9 @@ interface SettingsPageProps {
 
 export default async function SettingsPage({ params, searchParams }: SettingsPageProps) {
   const { workspaceId } = await params;
-  await requireWorkspace(workspaceId);
   const resolvedSearchParams = await searchParams;
-  const tabParam = Array.isArray(resolvedSearchParams?.tab)
-    ? resolvedSearchParams.tab[0]
-    : resolvedSearchParams?.tab;
-  const initialTab =
-    tabParam === "billing"
-      ? "billing"
-      : tabParam === "payments"
-      ? "payments"
-      : tabParam === "reminders"
-      ? "reminders"
-      : tabParam === "email"
-      ? "email"
-      : tabParam === "account"
-      ? "account"
-      : "workspace";
+  const view = resolveSettingsSection(resolvedSearchParams);
 
-  // Load all settings, profile, and user in parallel
   const [settingsResult, profileResult, userResult] = await Promise.all([
     loadWorkspaceSettings(workspaceId),
     getCurrentProfile(),
@@ -44,53 +30,55 @@ export default async function SettingsPage({ params, searchParams }: SettingsPag
 
   const settings = settingsResult;
   const profile = profileResult.profile;
-  const userId = userResult.user.id;
+
+  if (view === "overview") {
+    return <SettingsOverview workspaceId={workspaceId} />;
+  }
+
+  const section = view as SettingsSectionId;
 
   return (
-    <div className="max-w-5xl mx-auto py-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage workspace profile, email sending, reminders, and payment defaults.
-        </p>
-      </div>
+    <>
+      <SettingsSectionChrome workspaceId={workspaceId} section={section} />
 
-      <BrandPreview
-        workspaceLogoUrl={settings.workspace.logoUrl}
-        fallbackWorkspaceName={settings.workspace.name}
-        userAvatarUrl={profile?.avatar_url ?? null}
-        userEmail={profile?.email ?? userResult.user.email ?? null}
-      />
-
-      <SettingsTabs
-        initialTab={initialTab}
-        workspaceContent={
-          <WorkspaceProfileForm workspaceId={workspaceId} settings={settings} />
-        }
-        emailContent={
-          <EmailSettingsForm workspaceId={workspaceId} settings={settings} />
-        }
-        remindersContent={
-          <RemindersSettingsSection workspaceId={workspaceId} settings={settings} />
-        }
-        paymentsContent={
-          <PaymentSettingsForm workspaceId={workspaceId} settings={settings} />
-        }
-        billingContent={<BillingPlans workspaceId={workspaceId} />}
-        accountContent={
-          <AccountSettingsSection
-            profile={
-              profile
-                ? {
-                    full_name: profile.full_name,
-                    email: profile.email,
-                    avatar_url: profile.avatar_url,
-                  }
-                : null
-            }
+      {section === "workspace" && (
+        <div className="w-full max-w-5xl space-y-8">
+          <BrandPreview
+            workspaceLogoUrl={settings.workspace.logoUrl}
+            fallbackWorkspaceName={settings.workspace.name}
+            userAvatarUrl={profile?.avatar_url ?? null}
+            userEmail={profile?.email ?? userResult.user.email ?? null}
           />
-        }
-      />
-    </div>
+          <WorkspaceProfileForm workspaceId={workspaceId} settings={settings} />
+        </div>
+      )}
+      {section === "branding" && (
+        <BrandingInvoiceSettingsForm workspaceId={workspaceId} settings={settings} />
+      )}
+      {section === "email" && (
+        <EmailSettingsForm workspaceId={workspaceId} settings={settings} />
+      )}
+      {section === "reminders" && (
+        <RemindersSettingsSection workspaceId={workspaceId} settings={settings} />
+      )}
+      {section === "billing" && (
+        <div className="w-full max-w-5xl">
+          <BillingPlans workspaceId={workspaceId} />
+        </div>
+      )}
+      {section === "account" && (
+        <AccountSettingsSection
+          profile={
+            profile
+              ? {
+                  full_name: profile.full_name,
+                  email: profile.email,
+                  avatar_url: profile.avatar_url,
+                }
+              : null
+          }
+        />
+      )}
+    </>
   );
 }

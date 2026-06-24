@@ -1,10 +1,21 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { formatMoney } from "@/lib/utils/format-money";
+import { requireWorkspace } from "@/lib/auth/server";
+import { isSandboxSenderActive, getResendTestRecipientEmail } from "@/lib/email/sendEmail";
+import { formatCurrency } from "@/lib/format/currency";
 import { PAYMENT_TERMS_OPTIONS } from "@/lib/invoices/paymentTerms";
 import { SendInvoiceButton } from "./_components/SendInvoiceButton";
-
-const ORGANIZATION_ID = "05d2d292-d95b-44f4-b774-22f10068124f";
+import { DownloadInvoicePdfButton } from "./_components/DownloadInvoicePdfButton";
+import { ArchivedBanner } from "@/components/ui/archived-banner";
+import { InvoiceArchiveButton } from "./_components/InvoiceArchiveButton";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { buildInvoiceBranding } from "../_utils/branding";
+import { getInvoiceSenderDisplay } from "../_utils/invoiceSenderDisplay";
+import { coerceMoney } from "../_utils/invoiceMoney";
+import { resolvePaymentInstructionLines, getInvoiceDueStatus, shouldShowDueTiming } from "@/lib/invoices/invoiceDisplay";
+import { prettyLabel } from "@/lib/formatters/prettyLabel";
+import { unstable_noStore as noStore } from "next/cache";
 
 interface InvoicePageProps {
   params: Promise<{ workspaceId: string; invoiceId: string }>;
@@ -15,203 +26,200 @@ const isUuid = (value: string): boolean =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 export default async function InvoicePage({ params }: InvoicePageProps) {
+  noStore();
   const { workspaceId, invoiceId } = await params;
+  await requireWorkspace(workspaceId);
+  const sandboxMode = isSandboxSenderActive();
+  const sandboxTestRecipientEmail = getResendTestRecipientEmail();
   const supabase = await supabaseServer();
 
-  // Step 1: Load invoice with explicit columns
-  // MUST filter by both workspace_id and id/invoice_number for proper access control
-  // Support both UUID (id) and invoice_number for backward compatibility
-  let query = supabase
+  // 1) Load invoice (by id or invoice_number), including archived
+  const invoiceSelect = `
+    id,
+    workspace_id,
+    client_id,
+    invoice_number,
+    status,
+    issue_date,
+    due_date,
+    currency,
+    amount,
+    subtotal,
+    discount_percent,
+    discount_amount,
+    tax_percent,
+    tax_amount,
+    payment_terms,
+    payment_terms_days,
+    po_number,
+    notes,
+    created_at,
+    updated_at,
+    archived_at
+  `;
+
+  let invoiceQuery = supabase
     .from("invoices")
-    .select(`
-      id,
-      workspace_id,
-      client_id,
-      invoice_number,
-      status,
-      issue_date,
-      due_date,
-      currency,
-      amount,
-      total_paid,
-      outstanding_amount,
-      subtotal,
-      discount_percent,
-      discount_amount,
-      tax_percent,
-      tax_amount,
-      payment_terms,
-      payment_terms_days,
-      po_number,
-      notes,
-      created_at,
-      updated_at
-    `)
+    .select(invoiceSelect)
     .eq("workspace_id", workspaceId);
 
-  // Use id field if invoiceId is a UUID, otherwise use invoice_number
   if (isUuid(invoiceId)) {
-    query = query.eq("id", invoiceId);
+    invoiceQuery = invoiceQuery.eq("id", invoiceId);
   } else {
-    query = query.eq("invoice_number", invoiceId);
+    invoiceQuery = invoiceQuery.eq("invoice_number", invoiceId);
   }
 
-  const { data: invoice, error: invoiceError } = await query.single();
+  const { data: invoice, error: invoiceError } = await invoiceQuery.maybeSingle();
 
-  if (invoiceError || !invoice) {
-    console.error("[InvoicePage] invoice load error:", {
-      workspaceId,
-      invoiceId,
-      error: invoiceError,
-      message: (invoiceError as any)?.message,
-      code: (invoiceError as any)?.code,
-      details: (invoiceError as any)?.details,
-      hint: (invoiceError as any)?.hint,
-      hasInvoice: !!invoice,
-    });
-    
-    // Provide more specific error message
-    if (invoiceError) {
-      const errorMessage = (invoiceError as any)?.message || "Unknown error";
-      const errorCode = (invoiceError as any)?.code || "unknown";
-      throw new Error(`Failed to load invoice: ${errorMessage} (code: ${errorCode})`);
+  if (invoiceError) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[InvoicePage] failed to load invoice:", invoiceError.message);
     }
-    
-    throw new Error(`Invoice not found: ${invoiceId} in workspace ${workspaceId}`);
+    throw new Error(`Failed to load invoice: ${invoiceError.message}`);
   }
 
-  // Step 2: Load client separately (no nested relations)
-  let client = null;
-  if (invoice.client_id) {
-    const { data: clientData } = await supabase
-      .from("clients")
+  if (!invoice) {
+    notFound();
+  }
+
+  const isArchived = invoice.archived_at !== null;
+  /** Temporarily hidden — clone query/route handling left intact. */
+  const showCloneInvoiceAction = false;
+
+  // 2) Load client and settings in parallel
+  const [clientRes, settingsRes] = await Promise.all([
+    invoice.client_id
+      ? supabase
+          .from("clients")
+          .select(
+            "id, workspace_id, name, email, company, country, country_code, whatsapp_phone, whatsapp, payment_terms, is_active, archived_at"
+          )
+          .eq("workspace_id", workspaceId)
+          .eq("id", invoice.client_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    supabase
+      .from("settings")
       .select("*")
-      .eq("id", invoice.client_id)
-      .single();
-    client = clientData;
-  }
+      .eq("workspace_id", workspaceId)
+      .maybeSingle(),
+  ]);
 
-  // Fetch workspace settings for "From" section
-  const { data: workspaceRow } = await supabase
-    .from("workspaces")
-    .select("name, profile_image_url")
-    .eq("id", workspaceId)
-    .maybeSingle();
+  const client = clientRes.data;
+  const settings = settingsRes.data;
 
-  const { data: settings } = await supabase
-    .from("settings")
-    .select("workspace_display_name, workspace_logo_url, business_email, business_phone, business_address_line1, business_address_line2, business_city, business_state, business_postal_code")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
+  // Build branding from settings (single source of truth for invoice display)
+  const branding = buildInvoiceBranding(settings);
+  const sender = getInvoiceSenderDisplay(settings);
 
-  // Build workspace info from both tables
-  const workspace = workspaceRow ? {
-    name: settings?.workspace_display_name || workspaceRow.name || "Workspace",
-    email: settings?.business_email || null,
-    phone: settings?.business_phone || null,
-    address: [
-      settings?.business_address_line1,
-      settings?.business_address_line2,
-      settings?.business_city,
-      settings?.business_state,
-      settings?.business_postal_code,
-    ].filter(Boolean).join(", ") || null,
-  } : null;
+  // 3) Load items, payments, delivery logs, invoices_view in parallel
+  const [itemsRes, paymentsRes, deliveryLogsRes, invoiceViewRes] =
+    await Promise.all([
+      supabase
+        .from("invoice_items")
+        .select("id, name, description, quantity, unit_price, position")
+        .eq("invoice_id", invoice.id)
+        .order("position", { ascending: true }),
+      supabase
+        .from("payments")
+        .select(
+          "id, payment_date, amount, currency, method, status, transaction_id, notes, payment_provider, created_at, archived_at"
+        )
+        .eq("invoice_id", invoice.id)
+        .is("archived_at", null)
+        .order("payment_date", { ascending: false }),
+      supabase
+        .from("invoice_delivery_logs")
+        .select(
+          "id, workspace_id, invoice_id, recipient_email, status, error_message, delivery_method, created_at"
+        )
+        .eq("invoice_id", invoice.id)
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("invoices_view")
+        .select("paid, outstanding, client_name, display_status, is_overdue, overdue_days")
+        .eq("id", invoice.id)
+        .maybeSingle(),
+    ]);
 
-  // Step 3: Load invoice items separately
-  const { data: itemRows, error: itemsError } = await supabase
-    .from("invoice_items")
-    .select("*")
-    .eq("invoice_id", invoiceId)
-    .order("position", { ascending: true });
+  const items = itemsRes.data ?? [];
+  const payments = paymentsRes.data ?? [];
+  const deliveryLogs = deliveryLogsRes.data ?? [];
+  const invoiceView = invoiceViewRes.data;
 
-  if (itemsError) {
-    console.error("[InvoicePage] invoice_items load error:", {
-      raw: itemsError,
-      message: (itemsError as any)?.message,
-      code: (itemsError as any)?.code,
-    });
-  }
-
-  const items = itemRows ?? [];
-
-  // Step 4: Load payments separately
-  const { data: payments, error: paymentsError } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("invoice_id", invoiceId)
-    .order("payment_date", { ascending: false });
-
-  if (paymentsError) {
-    console.error("[InvoicePage] payments load error:", {
-      raw: paymentsError,
-      message: (paymentsError as any)?.message,
-      code: (paymentsError as any)?.code,
-    });
-  }
-
-  // Step 5: Load invoice delivery logs
-  const { data: deliveryLogs, error: deliveryLogsError } = await supabase
-    .from("invoice_delivery_logs")
-    .select("*")
-    .eq("invoice_id", invoiceId)
-    .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: false });
-
-  const hasRealDeliveryLogsError =
-    deliveryLogsError &&
-    typeof deliveryLogsError === "object" &&
-    Object.keys(deliveryLogsError as any).length > 0;
-
-  if (hasRealDeliveryLogsError) {
-    console.error(
-      "[InvoicePage] delivery logs load error:",
-      deliveryLogsError
-    );
-  }
-
-  const currency = invoice.currency || "USD";
   const lineItems = items;
-  const paymentList = payments ?? [];
-  // Always use safe array, even if query fails
-  const deliveryHistory = deliveryLogs ?? [];
+  const paymentList = payments;
+  const deliveryHistory = deliveryLogs;
 
-  // Use stored money values from database (source of truth)
-  // Do NOT recalculate - use what's stored for consistency with PDF and list views
-  const subtotal = Number(invoice.subtotal ?? 0);
-  const discount = Number(invoice.discount_amount ?? 0);
-  const tax = Number(invoice.tax_amount ?? 0);
-  const total = Number(invoice.amount ?? 0);
-  const paid = Number(invoice.total_paid ?? 0);
-  const outstanding = Number(invoice.outstanding_amount ?? 0);
+  // ---------- BILL TO (final logic) ----------
+  const billToName =
+    invoiceView?.client_name ??
+    client?.name ??
+    "Client";
 
-  // Get percentages for display
-  const discountPercent = Number(invoice.discount_percent ?? 0);
-  const taxPercent = Number(invoice.tax_percent ?? 0);
+  const billToEmail = client?.email ?? null;
+  const billToCompany = client?.company ?? null;
+  const billToCountry = client?.country ?? null;
+  // Fallback: prefer whatsapp_phone (normalized), else whatsapp (raw), else null
+  const rawPhone = client?.whatsapp_phone || client?.whatsapp || null;
+  const billToPhone = rawPhone?.trim() || null;
 
-  // Determine payment status using stored values
-  const paymentStatus =
-    outstanding <= 0
-      ? "paid"
-      : paid > 0
-      ? "partial"
-      : new Date(invoice.due_date) < new Date() && invoice.status !== "paid"
-      ? "overdue"
-      : invoice.status;
+  // Use invoice.currency with settings fallback for all monetary displays
+  const currency = invoice.currency || settings?.default_currency || "USD";
 
-  const statusLabel = (paymentStatus || "").toLowerCase();
-  const statusClass =
-    statusLabel === "paid"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : statusLabel === "overdue"
-      ? "bg-red-50 text-red-700 border-red-200"
-      : statusLabel === "sent"
-      ? "bg-blue-50 text-blue-700 border-blue-200"
-      : statusLabel === "partial"
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : statusLabel === "void"
-      ? "bg-slate-100 text-slate-500 border-slate-200"
-      : "bg-slate-50 text-slate-700 border-slate-200";
+  // Monetary values (use DB as source of truth)
+  const subtotal = coerceMoney(invoice.subtotal);
+  const discount = coerceMoney(invoice.discount_amount);
+  const tax = coerceMoney(invoice.tax_amount);
+  const total = coerceMoney(invoice.amount);
+
+  const paid = coerceMoney(invoiceView?.paid);
+  const outstanding = coerceMoney(invoiceView?.outstanding);
+
+  const paidFromPayments = paymentList
+    .filter(
+      (p) =>
+        p.status === "completed" ||
+        p.status === "paid" ||
+        !p.status
+    )
+    .reduce((sum, p) => sum + coerceMoney(p.amount), 0);
+
+  const displayPaid = invoiceView != null ? paid : paidFromPayments;
+  const displayOutstanding =
+    invoiceView != null ? outstanding : Math.max(total - paidFromPayments, 0);
+
+  const discountPercent = coerceMoney(invoice.discount_percent);
+  const taxPercent = coerceMoney(invoice.tax_percent);
+
+  const moneyOpts = {
+    currency: invoice.currency,
+    fallbackCurrency: settings?.default_currency,
+  } as const;
+
+  // Use invoices_view display status as source of truth for status/overdue logic.
+  const paymentStatus = invoiceView?.display_status || invoice.status || "sent";
+
+  const hasStructuredPaymentDetails = [
+    branding.paymentDetails.bankName,
+    branding.paymentDetails.bankAccountName,
+    branding.paymentDetails.bankAccountNumber,
+    branding.paymentDetails.bankSwift,
+    branding.paymentDetails.bankIban,
+    branding.paymentDetails.paypalHandle,
+    branding.paymentDetails.stripeDescriptor,
+  ].some((v) => !!v?.trim());
+
+  const paymentInstructionLines = resolvePaymentInstructionLines(
+    branding.paymentDetails.otherInstructions,
+    hasStructuredPaymentDetails
+  );
+
+  const dueTiming =
+    invoice.due_date && shouldShowDueTiming(paymentStatus)
+      ? getInvoiceDueStatus(invoice.due_date)
+      : null;
 
   const formatDate = (value: string | null | undefined) => {
     if (!value) return "—";
@@ -241,7 +249,7 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
     }
   };
 
-  // Build timeline events
+  // Timeline events
   const timelineEvents = [
     {
       event: "Invoice created",
@@ -269,18 +277,44 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
     ...paymentList.map((payment) => ({
       event: "Payment recorded",
       date: payment.payment_date || payment.created_at,
-      description: `Payment of ${formatMoney(Number(payment.amount), currency)} recorded`,
+      description: `Payment of ${formatCurrency(
+        coerceMoney(payment.amount),
+        moneyOpts
+      )} recorded`,
     })),
   ]
-    .filter((event) => event.date) // Filter out events with null/undefined dates
+    .filter((event) => event.date)
     .sort((a, b) => {
-      const dateA = a.date ? new Date(a.date).getTime() : 0;
-      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      const dateA = eventDateToMillis(a.date);
+      const dateB = eventDateToMillis(b.date);
       return dateB - dateA;
     });
 
+  function eventDateToMillis(value: string | null | undefined): number {
+    if (!value) return 0;
+    try {
+      return new Date(value).getTime();
+    } catch {
+      return 0;
+    }
+  }
+
   return (
-    <div className="max-w-5xl mx-auto py-6 space-y-6">
+    <div className="mx-auto w-full max-w-5xl min-w-0 space-y-6">
+      {/* Archived Banner */}
+      {isArchived && <ArchivedBanner entityType="invoice" />}
+
+      {/* Header with Logo */}
+      {branding.logoUrl && (
+        <div className="flex justify-start">
+          <img
+            src={branding.logoUrl}
+            alt={sender.name}
+            className="h-12 w-auto object-contain"
+          />
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
@@ -290,90 +324,118 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
           <h1 className="text-2xl font-semibold text-slate-900">
             {invoice.invoice_number}
           </h1>
-          <div className="mt-2 flex items-center gap-2">
-            <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium capitalize ${statusClass}`}
-            >
-              {invoice.status}
-            </span>
-            {paymentStatus !== invoice.status && (
-              <span className="text-xs text-slate-500">
-                ({paymentStatus === "paid" ? "Fully Paid" : paymentStatus === "partial" ? "Partially Paid" : paymentStatus === "overdue" ? "Overdue" : ""})
-              </span>
-            )}
+          <div className="mt-2">
+            <StatusBadge type="invoice" status={paymentStatus || invoice.status || "sent"} />
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/${workspaceId}/invoices/${invoice.id}/edit`}
-            className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Edit Invoice
-          </Link>
-          <Link
-            href={`/${workspaceId}/invoices/new?clone=${invoice.id}`}
-            className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Clone Invoice
-          </Link>
-          <Link
-            href={`/${workspaceId}/invoices/${invoice.id}/pdf`}
-            className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
-          >
-            Download PDF
-          </Link>
-          <SendInvoiceButton
-            workspaceId={workspaceId}
-            invoiceId={invoice.id}
-            clientEmail={client?.email}
-            invoiceNumber={invoice.invoice_number}
+          {!isArchived && (
+            <>
+              <Link
+                href={`/${workspaceId}/invoices/${invoice.id}/edit`}
+                className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Edit Invoice
+              </Link>
+              {showCloneInvoiceAction ? (
+                <Link
+                  href={`/${workspaceId}/invoices/new?clone=${invoice.id}`}
+                  className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Clone Invoice
+                </Link>
+              ) : null}
+              <SendInvoiceButton
+                workspaceId={workspaceId}
+                invoiceId={invoice.id}
+                clientEmail={billToEmail ?? undefined}
+                invoiceNumber={invoice.invoice_number}
+                sandboxMode={sandboxMode}
+                sandboxTestRecipientEmail={sandboxTestRecipientEmail}
+              />
+              <InvoiceArchiveButton
+                workspaceId={workspaceId}
+                invoiceId={invoice.id}
+                isArchived={false}
+              />
+            </>
+          )}
+          {isArchived && (
+            <InvoiceArchiveButton
+              workspaceId={workspaceId}
+              invoiceId={invoice.id}
+              isArchived={true}
+            />
+          )}
+          <DownloadInvoicePdfButton
+            pdfHref={`/${workspaceId}/invoices/${invoice.id}/pdf`}
+            fileName={`invoice-${invoice.invoice_number}.pdf`}
+            className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
           />
         </div>
       </div>
 
       {/* From / Bill To */}
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-1">
-          <h2 className="text-sm font-semibold text-slate-700">From</h2>
-          <p className="text-sm font-medium text-slate-900">
-            {workspace?.name || "FlowCollect"}
-          </p>
-          {workspace?.email && (
-            <p className="text-sm text-slate-500">{workspace.email}</p>
-          )}
-          {workspace?.phone && (
-            <p className="text-sm text-slate-500">{workspace.phone}</p>
-          )}
-          {workspace?.address && (
-            <p className="text-sm text-slate-500">{workspace.address}</p>
-          )}
-          {!workspace && (
-            <p className="text-sm text-slate-400 italic">
-              Workspace information not configured
-            </p>
+        {/* From */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-700 mb-2">From</h2>
+          <p className="text-sm font-medium text-slate-900 mb-2">{sender.name}</p>
+          <div className="space-y-0.5">
+            {sender.email && (
+              <p className="text-sm text-slate-500">{sender.email}</p>
+            )}
+            {sender.phone && (
+              <p className="text-sm text-slate-500">{sender.phone}</p>
+            )}
+            {sender.website && (
+              <p className="text-sm text-slate-500">{sender.website}</p>
+            )}
+            {sender.taxId && (
+              <p className="text-sm text-slate-500">Tax ID: {sender.taxId}</p>
+            )}
+          </div>
+          {(sender.addressLines.length > 0 || sender.location) && (
+            <div className="mt-3 border-t border-slate-100 pt-3 space-y-0.5">
+              {sender.addressLines.map((line, i) => (
+                <p key={`addr-${i}`} className="text-sm text-slate-500">
+                  {line}
+                </p>
+              ))}
+              {sender.location && (
+                <p className="text-sm text-slate-500">{sender.location}</p>
+              )}
+            </div>
           )}
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-1">
-          <h2 className="text-sm font-semibold text-slate-700">Bill To</h2>
-          <p className="text-sm font-medium text-slate-900">
-            {client?.name ?? "Client"}
-          </p>
-          {client?.company && (
-            <p className="text-sm text-slate-700">{client.company}</p>
-          )}
-          {client?.email && (
-            <p className="text-sm text-slate-500">{client.email}</p>
-          )}
-          {client?.country && (
-            <p className="text-sm text-slate-500">{client.country}</p>
-          )}
+        {/* Bill To – read-only */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-700 mb-2">Bill To</h2>
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium text-slate-900">{billToName}</p>
+            {billToCompany && (
+              <p className="text-sm text-slate-700">{billToCompany}</p>
+            )}
+          </div>
+          <div className="mt-1 space-y-0.5">
+            {billToEmail && (
+              <p className="text-sm text-slate-500">{billToEmail}</p>
+            )}
+            {billToPhone && (
+              <p className="text-sm text-slate-500">{billToPhone}</p>
+            )}
+            {billToCountry && (
+              <p className="text-sm text-slate-500">{billToCountry}</p>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Invoice Details & Summary */}
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Invoice Details */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-700 mb-2">
             Invoice Details
@@ -387,6 +449,24 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
               <dt className="text-slate-500">Due Date</dt>
               <dd>{formatDate(invoice.due_date)}</dd>
             </div>
+            <div className="flex justify-between items-center">
+              <dt className="text-slate-500">Status</dt>
+              <dd>
+                <StatusBadge type="invoice" status={paymentStatus || invoice.status || "sent"} />
+              </dd>
+            </div>
+            {dueTiming && (
+              <div className="flex justify-between">
+                <dt className="text-slate-500">Due</dt>
+                <dd
+                  className={
+                    dueTiming.bold ? "font-medium text-red-600" : "text-slate-700"
+                  }
+                >
+                  {dueTiming.line}
+                </dd>
+              </div>
+            )}
             <div className="flex justify-between">
               <dt className="text-slate-500">Payment Terms</dt>
               <dd>
@@ -394,13 +474,16 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
                   const termsOption = PAYMENT_TERMS_OPTIONS.find(
                     (opt) => opt.code === invoice.payment_terms
                   );
-                  let termsLabel = termsOption?.label ?? "Custom";
-                  
-                  if (invoice.payment_terms === "custom" && invoice.payment_terms_days != null) {
-                    termsLabel = `Custom (${invoice.payment_terms_days} days)`;
+                  let label = termsOption?.label ?? "Custom";
+
+                  if (
+                    invoice.payment_terms === "custom" &&
+                    invoice.payment_terms_days != null
+                  ) {
+                    label = `Custom (${invoice.payment_terms_days} days)`;
                   }
-                  
-                  return termsLabel;
+
+                  return label;
                 })()}
               </dd>
             </div>
@@ -417,49 +500,54 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
           </dl>
         </div>
 
+        {/* Summary */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-700 mb-2">Summary</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-2">
+            Summary
+          </h2>
           <dl className="space-y-1 text-sm text-slate-700">
             <div className="flex justify-between">
               <dt className="text-slate-500">Subtotal</dt>
-              <dd>{formatMoney(subtotal, currency)}</dd>
+              <dd>{formatCurrency(subtotal, moneyOpts)}</dd>
             </div>
             {discountPercent > 0 && (
               <div className="flex justify-between">
-                <dt className="text-slate-500">Discount ({discountPercent}%)</dt>
-                <dd>-{formatMoney(discount, currency)}</dd>
+                <dt className="text-slate-500">
+                  Discount ({discountPercent}%)
+                </dt>
+                <dd>-{formatCurrency(discount, moneyOpts)}</dd>
               </div>
             )}
             {taxPercent > 0 && (
               <div className="flex justify-between">
                 <dt className="text-slate-500">Tax ({taxPercent}%)</dt>
-                <dd>{formatMoney(tax, currency)}</dd>
+                <dd>{formatCurrency(tax, moneyOpts)}</dd>
               </div>
             )}
             <div className="mt-2 border-t border-slate-200 pt-2 flex justify-between">
               <dt className="text-slate-700 font-medium">Total</dt>
               <dd className="text-slate-900 font-semibold">
-                {formatMoney(total, currency)}
+                {formatCurrency(total, moneyOpts)}
               </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Amount Paid</dt>
               <dd className="text-emerald-600">
-                {formatMoney(paid, currency)}
+                {formatCurrency(displayPaid, moneyOpts)}
               </dd>
             </div>
             <div className="mt-2 border-t border-slate-200 pt-2 flex justify-between">
               <dt className="text-slate-700 font-medium">Outstanding</dt>
               <dd
                 className={`font-semibold ${
-                  outstanding > 0
+                  displayOutstanding > 0
                     ? "text-red-600"
-                    : outstanding < 0
+                    : displayOutstanding < 0
                     ? "text-emerald-600"
                     : "text-slate-900"
                 }`}
               >
-                {formatMoney(Math.abs(outstanding), currency)}
+                {formatCurrency(Math.abs(displayOutstanding), moneyOpts)}
               </dd>
             </div>
           </dl>
@@ -495,8 +583,9 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
               )}
 
               {lineItems.map((item) => {
-                const amount =
-                  Number(item.quantity) * Number(item.unit_price);
+                const qty = coerceMoney(item.quantity);
+                const unitPrice = coerceMoney(item.unit_price);
+                const amount = qty * unitPrice;
                 return (
                   <tr
                     key={item.id}
@@ -508,12 +597,14 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
                     <td className="px-3 py-2 text-slate-500">
                       {item.description || "—"}
                     </td>
-                    <td className="px-3 py-2 text-right">{item.quantity}</td>
                     <td className="px-3 py-2 text-right">
-                      {formatMoney(Number(item.unit_price), currency)}
+                      {qty}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {formatCurrency(unitPrice, moneyOpts)}
                     </td>
                     <td className="px-3 py-2 text-right font-medium">
-                      {formatMoney(amount, currency)}
+                      {formatCurrency(amount, moneyOpts)}
                     </td>
                   </tr>
                 );
@@ -556,10 +647,10 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
                       )}
                     </td>
                     <td className="px-3 py-2 text-right font-medium text-slate-900">
-                      {formatMoney(Number(payment.amount), currency)}
+                      {formatCurrency(coerceMoney(payment.amount), moneyOpts)}
                     </td>
-                    <td className="px-3 py-2 text-slate-700 capitalize">
-                      {payment.method || "—"}
+                    <td className="px-3 py-2 text-slate-700">
+                      {prettyLabel(payment.method)}
                     </td>
                     <td className="px-3 py-2 text-slate-500 font-mono text-xs">
                       {payment.transaction_id || "—"}
@@ -578,7 +669,9 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
       {/* Notes */}
       {invoice.notes && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-700 mb-1">Notes</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-1">
+            Notes
+          </h2>
           <p className="text-sm text-slate-700 whitespace-pre-line">
             {invoice.notes}
           </p>
@@ -645,7 +738,9 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
             <div key={index} className="flex gap-3 text-sm">
               <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-1.5" />
               <div className="flex-1">
-                <div className="font-medium text-slate-900">{event.event}</div>
+                <div className="font-medium text-slate-900">
+                  {event.event}
+                </div>
                 <div className="text-xs text-slate-500">
                   {formatDateTime(event.date)}
                 </div>
@@ -658,25 +753,56 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
         </div>
       </div>
 
-      {/* Thank you / footer */}
+      {/* Thank you / Payment details */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-700 mb-1">
             Thank you
           </h2>
-          <p className="text-sm text-slate-700">
-            Thank you for your business. Please contact us if you have any
-            questions about this invoice.
+          <p className="text-sm text-slate-700 whitespace-pre-line">
+            {branding.thankYou}
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-700 mb-1">
             Payment details
           </h2>
-          <p className="text-sm text-slate-700">
-            You can add your bank details, payment link, or instructions here
-            later.
-          </p>
+          <div className="text-sm text-slate-700 space-y-1">
+            {branding.hasAnyPaymentDetails ? (
+              <>
+                {branding.paymentDetails.bankName && (
+                  <p>Bank: {branding.paymentDetails.bankName}</p>
+                )}
+                {branding.paymentDetails.bankAccountName && (
+                  <p>Account name: {branding.paymentDetails.bankAccountName}</p>
+                )}
+                {branding.paymentDetails.bankAccountNumber && (
+                  <p>Account number: {branding.paymentDetails.bankAccountNumber}</p>
+                )}
+                {branding.paymentDetails.bankSwift && (
+                  <p>SWIFT: {branding.paymentDetails.bankSwift}</p>
+                )}
+                {branding.paymentDetails.bankIban && (
+                  <p>IBAN: {branding.paymentDetails.bankIban}</p>
+                )}
+                {branding.paymentDetails.paypalHandle && (
+                  <p>PayPal: {branding.paymentDetails.paypalHandle}</p>
+                )}
+                {branding.paymentDetails.stripeDescriptor && (
+                  <p>Statement descriptor: {branding.paymentDetails.stripeDescriptor}</p>
+                )}
+                {paymentInstructionLines.map((line, i) => (
+                  <p key={`pay-inst-${i}`} className="whitespace-pre-line">
+                    {line}
+                  </p>
+                ))}
+              </>
+            ) : (
+              <p className="text-slate-500">
+                You can add your bank details, payment link, or instructions in Settings → Payments &amp; Defaults.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>

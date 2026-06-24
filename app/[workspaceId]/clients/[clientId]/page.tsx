@@ -4,8 +4,11 @@ import Link from "next/link";
 import { formatMoney } from "@/lib/invoices/utils";
 import { getPaymentTermsLabel } from "@/lib/utils/payment-terms";
 import { KPI } from "@/app/[workspaceId]/dashboard/_components/KPI";
-
-const ORGANIZATION_ID = "05d2d292-d95b-44f4-b774-22f10068124f";
+import { ArchivedBanner } from "@/components/ui/archived-banner";
+import { InactiveBanner } from "@/components/ui/inactive-banner";
+import { ToggleClientActive } from "./_components/ToggleClientActive";
+import { getClientState, resolveClientStatus } from "@/lib/clients/state";
+import { ClientInvoicesTable } from "./_components/ClientInvoicesTable";
 
 interface ClientPageProps {
   params: Promise<{ workspaceId: string; clientId: string }>;
@@ -26,37 +29,57 @@ export default async function ClientPage({ params }: ClientPageProps) {
     notFound();
   }
 
-  // Fetch client invoices - use derived fields from database
-  const { data: invoices } = await supabase
-    .from("invoices")
+  // Client state model: Active vs Inactive vs Archived
+  // Inactive: is_active = false AND archived_at IS NULL
+  // Archived: archived_at IS NOT NULL
+  // Active: is_active = true AND archived_at IS NULL
+  const { isArchived, isInactive, isActive } = getClientState(client);
+
+  // Fetch client invoices - use invoices_view to get paid/outstanding (total_paid/outstanding_amount were dropped)
+  // Always exclude archived invoices by default (invoices_view already excludes archived)
+  const { data: invoices, error: invoicesError } = await supabase
+    .from("invoices_view")
     .select(
       `
       id,
       invoice_number,
-      status,
+      base_status,
+      display_status,
       issue_date,
       due_date,
       currency,
-      amount,
-      total_paid,
-      outstanding_amount,
-      payment_state
+      total,
+      paid,
+      outstanding
     `
     )
     .eq("client_id", clientId)
-    .eq("organization_id", ORGANIZATION_ID)
-    .neq("status", "void") // Exclude void invoices from client stats
+    .eq("workspace_id", workspaceId)
+    .neq("base_status", "void") // Exclude void invoices from client stats
     .order("issue_date", { ascending: false });
 
-  // Use derived fields from database
+  // Log invoice query errors for debugging (dev-only)
+  if (invoicesError && process.env.NODE_ENV === "development") {
+    console.error("[ClientPage] Failed to load invoices:", {
+      code: invoicesError.code,
+      message: invoicesError.message,
+      details: invoicesError.details,
+      hint: invoicesError.hint,
+      workspaceId,
+      clientId,
+    });
+  }
+
+  // Use fields from invoices_view (total, paid, outstanding)
   const invoicesWithTotals = (invoices || []).map((invoice) => ({
     ...invoice,
-    total: Number(invoice.amount ?? 0),
-    paid: Number(invoice.total_paid ?? 0),
-    outstanding: Number(invoice.outstanding_amount ?? 0),
+    total: Number(invoice.total ?? 0),
+    paid: Number(invoice.paid ?? 0),
+    outstanding: Number(invoice.outstanding ?? 0),
+    status: invoice.base_status ?? invoice.display_status ?? "sent", // Use base_status or display_status
   }));
 
-  // Calculate metrics - exclude void invoices
+  // Calculate metrics - exclude void invoices (ACTIVE invoices only)
   const totalInvoices = invoicesWithTotals.length;
   const totalBilled = invoicesWithTotals.reduce(
     (sum, inv) => sum + inv.total,
@@ -68,32 +91,14 @@ export default async function ClientPage({ params }: ClientPageProps) {
     0
   );
 
-  const getStatusBadge = (status: string) => {
-    const statusLower = status.toLowerCase();
-    if (statusLower === "paid") {
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    } else if (statusLower === "overdue") {
-      return "bg-red-50 text-red-700 border-red-200";
-    } else if (statusLower === "sent") {
-      return "bg-blue-50 text-blue-700 border-blue-200";
-    } else if (statusLower === "partial") {
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    } else if (statusLower === "void") {
-      return "bg-slate-100 text-slate-500 border-slate-200";
-    }
-    return "bg-slate-50 text-slate-700 border-slate-200";
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
   return (
-    <div className="max-w-5xl mx-auto py-6 space-y-6">
+    <div className="mx-auto w-full max-w-5xl min-w-0 space-y-6">
+      {/* Archived Banner */}
+      {isArchived && <ArchivedBanner entityType="client" />}
+      
+      {/* Inactive Banner */}
+      {isInactive && !isArchived && <InactiveBanner />}
+
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
@@ -103,47 +108,76 @@ export default async function ClientPage({ params }: ClientPageProps) {
           {client.company && (
             <p className="text-sm text-slate-500 mt-1">{client.company}</p>
           )}
-          <div className="mt-2">
-            <span
-              className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium capitalize ${
-                client.status === "active"
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-slate-50 text-slate-700 border-slate-200"
-              }`}
-            >
-              {client.status === "archived" ? "inactive" : "active"}
-            </span>
+          <div className="mt-2 flex items-center gap-2">
+            {/* Status badge: derived from archived_at and is_active, not clients.status */}
+            {(() => {
+              const status = resolveClientStatus(client);
+              return (
+                <span
+                  className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium capitalize ${
+                    status === "archived"
+                      ? "bg-slate-100 text-slate-600 border-slate-300"
+                      : status === "active"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-slate-50 text-slate-700 border-slate-200"
+                  }`}
+                >
+                  {status}
+                </span>
+              );
+            })()}
+            {!isArchived && (
+              <ToggleClientActive
+                workspaceId={workspaceId}
+                clientId={clientId}
+                currentActive={client.is_active}
+              />
+            )}
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/${workspaceId}/clients/${client.id}/edit`}
+            href={`/${workspaceId}/clients/${client.id}/edit?returnTo=${encodeURIComponent(`/${workspaceId}/clients`)}`}
             className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             Edit Client
           </Link>
-          <Link
-            href={`/${workspaceId}/invoices/new?clientId=${client.id}`}
-            className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
-          >
-            New Invoice
-          </Link>
+          {isArchived || isInactive ? (
+            <span
+              className="inline-flex items-center rounded-lg px-3 py-2 text-xs font-medium shadow-sm bg-slate-300 text-slate-500 cursor-not-allowed"
+              aria-disabled={true}
+            >
+              New Invoice
+            </span>
+          ) : (
+            <Link
+              href={`/${workspaceId}/invoices/new?clientId=${client.id}`}
+              className="inline-flex items-center rounded-lg px-3 py-2 text-xs font-medium shadow-sm bg-blue-600 text-white hover:bg-blue-700"
+            >
+              New Invoice
+            </Link>
+          )}
         </div>
       </div>
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPI title="Total Invoices" value={totalInvoices} />
-        <KPI
-          title="Total Billed"
-          value={formatMoney(totalBilled, "USD")}
-        />
-        <KPI title="Total Paid" value={formatMoney(totalPaid, "USD")} />
-        <KPI
-          title="Outstanding Balance"
-          value={formatMoney(outstandingBalance, "USD")}
-        />
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KPI title="Active invoices" value={totalInvoices} />
+          <KPI
+            title="Active billed"
+            value={formatMoney(totalBilled, "USD")}
+          />
+          <KPI title="Active paid" value={formatMoney(totalPaid, "USD")} />
+          <KPI
+            title="Active outstanding"
+            value={formatMoney(outstandingBalance, "USD")}
+          />
+        </div>
+        <p className="text-xs text-slate-500">
+          Archived invoices are hidden by default. Use &apos;Show archived&apos; to view history.
+        </p>
       </div>
 
       {/* Client Info Card */}
@@ -185,7 +219,8 @@ export default async function ClientPage({ params }: ClientPageProps) {
           <div>
             <dt className="text-xs text-slate-500">Status</dt>
             <dd className="text-sm text-slate-900 mt-1 capitalize">
-              {client.status === "archived" ? "inactive" : "active"}
+              {/* Use client state model: archived, inactive, or active */}
+              {isArchived ? "archived" : isActive ? "active" : "inactive"}
             </dd>
           </div>
         </div>
@@ -200,95 +235,25 @@ export default async function ClientPage({ params }: ClientPageProps) {
       </div>
 
       {/* Client Invoices */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Invoices for {client.name}
-          </h2>
-        </div>
-        {invoicesWithTotals.length === 0 ? (
-          <div className="p-6 text-center text-sm text-slate-500">
-            <p className="mb-2">No invoices yet</p>
-            <p className="text-xs text-slate-400 mb-4">
-              Create your first invoice for this client
-            </p>
-            <Link
-              href={`/${workspaceId}/invoices/new?clientId=${client.id}`}
-              className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
-            >
-              New Invoice
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full table-auto text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr className="text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-3 py-2 text-left">Invoice #</th>
-                  <th className="px-3 py-2 text-left">Issue Date</th>
-                  <th className="px-3 py-2 text-left">Due Date</th>
-                  <th className="px-3 py-2 text-right">Total Amount</th>
-                  <th className="px-3 py-2 text-right">Outstanding</th>
-                  <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-right">Open</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoicesWithTotals.map((invoice) => (
-                  <tr
-                    key={invoice.id}
-                    className="border-b border-slate-100 hover:bg-slate-50"
-                  >
-                    <td className="px-3 py-2 font-medium text-slate-900">
-                      {invoice.invoice_number}
-                    </td>
-                    <td className="px-3 py-2 text-sm text-slate-700">
-                      {formatDate(invoice.issue_date)}
-                    </td>
-                    <td className="px-3 py-2 text-sm text-slate-700">
-                      {formatDate(invoice.due_date)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-medium text-slate-900">
-                      {formatMoney(invoice.amount ?? invoice.total ?? 0, invoice.currency || "USD")}
-                    </td>
-                    <td
-                      className={`px-3 py-2 text-right font-medium ${
-                        invoice.outstanding > 0
-                          ? "text-red-600"
-                          : invoice.outstanding < 0
-                          ? "text-emerald-600"
-                          : "text-slate-700"
-                      }`}
-                    >
-                      {formatMoney(
-                        Math.abs(invoice.outstanding),
-                        invoice.currency || "USD"
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${getStatusBadge(
-                          invoice.status
-                        )}`}
-                      >
-                        {invoice.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-right text-sm">
-                      <Link
-                        href={`/${workspaceId}/invoices/${invoice.id}`}
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <ClientInvoicesTable
+        clientId={clientId}
+        workspaceId={workspaceId}
+        initialInvoices={invoicesWithTotals.map((inv) => ({
+          id: inv.id,
+          invoice_number: inv.invoice_number,
+          status: inv.base_status ?? inv.display_status ?? "sent",
+          issue_date: inv.issue_date,
+          due_date: inv.due_date,
+          currency: inv.currency || "USD",
+          amount: inv.total,
+          total_paid: inv.paid,
+          outstanding_amount: inv.outstanding,
+          payment_state: inv.display_status ?? null,
+          archived_at: null, // invoices_view excludes archived invoices
+        }))}
+        isArchived={isArchived}
+        isInactive={isInactive}
+      />
     </div>
   );
 }

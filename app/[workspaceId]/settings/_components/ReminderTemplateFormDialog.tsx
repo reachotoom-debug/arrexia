@@ -21,12 +21,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Pencil } from "lucide-react";
 
 type Mode = "create" | "edit";
 
 interface ReminderTemplateFormDialogProps {
   mode: Mode;
   workspaceId: string;
+  iconOnly?: boolean;
   template?: {
     id: string;
     name: string;
@@ -42,6 +44,7 @@ interface ReminderTemplateFormDialogProps {
 export function ReminderTemplateFormDialog({
   mode,
   workspaceId,
+  iconOnly = false,
   template,
 }: ReminderTemplateFormDialogProps) {
   const router = useRouter();
@@ -54,7 +57,7 @@ export function ReminderTemplateFormDialog({
     formState: { errors, isSubmitting },
     reset,
   } = useForm<ReminderTemplateInput>({
-    resolver: zodResolver(ReminderTemplateSchema),
+    resolver: zodResolver(ReminderTemplateSchema) as any,
     defaultValues: template
       ? {
           name: template.name,
@@ -113,9 +116,22 @@ export function ReminderTemplateFormDialog({
   return (
     <>
       <DialogTrigger asChild onClick={() => setIsOpen(true)}>
-        <Button variant={mode === "create" ? "default" : "outline"} size="sm">
-          {mode === "create" ? "New template" : "Edit"}
-        </Button>
+        {mode === "edit" && iconOnly && template ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label={`Edit reminder template ${template.name}`}
+            title={`Edit reminder template ${template.name}`}
+            className="h-8 w-8"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button variant={mode === "create" ? "default" : "outline"} size="sm">
+            {mode === "create" ? "New template" : "Edit"}
+          </Button>
+        )}
       </DialogTrigger>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent>
@@ -124,7 +140,7 @@ export function ReminderTemplateFormDialog({
             {mode === "create" ? "New reminder template" : "Edit reminder template"}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit as any)} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Name *

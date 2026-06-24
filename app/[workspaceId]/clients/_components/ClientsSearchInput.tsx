@@ -79,7 +79,7 @@ export function ClientsSearchInput({
         }
       }}
       placeholder="Search name, email, company..."
-      className="h-9 min-w-[260px] rounded-lg border border-slate-200 px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+      className="h-10 w-full min-w-0 max-w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 md:max-w-md lg:max-w-[28rem]"
     />
   );
 }

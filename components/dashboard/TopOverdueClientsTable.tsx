@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import type { ClientArRow } from "@/app/[workspaceId]/dashboard/_types/dashboard";
 
 interface TopOverdueClientsTableProps {
@@ -29,7 +29,7 @@ export function TopOverdueClientsTable({ clients }: TopOverdueClientsTableProps)
                   {client.clientName}
                 </td>
                 <td className="px-4 py-3 text-right font-semibold text-red-600 whitespace-nowrap">
-                  {formatMoney(client.overdueAmount, "USD")}
+                  {formatCurrency(client.overdueAmount, { currency: "USD" })}
                 </td>
               </tr>
             ))}

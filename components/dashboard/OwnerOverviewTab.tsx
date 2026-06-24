@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { KPI } from "@/app/[workspaceId]/dashboard/_components/KPI";
 import { RevenueOverviewChart } from "./RevenueOverviewChart";
 import { StatusFunnelChart } from "./StatusFunnelChart";
@@ -69,17 +69,17 @@ export function OwnerOverviewTab({
   return (
     <div className="space-y-6">
       {/* Owner-specific KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <KPI
           label="Total invoiced"
-          value={formatMoney(last30DaysInvoiced, "USD")}
+          value={formatCurrency(last30DaysInvoiced, { currency: "USD" })}
           subtext="Last 30 days"
           icon={FileText}
           iconBgColor="bg-blue-100"
         />
         <KPI
           label="Total collected"
-          value={formatMoney(last30DaysCollected, "USD")}
+          value={formatCurrency(last30DaysCollected, { currency: "USD" })}
           subtext="Last 30 days"
           icon={DollarSign}
           iconBgColor="bg-emerald-100"
@@ -101,13 +101,13 @@ export function OwnerOverviewTab({
       </div>
 
       {/* Row 1: Core Charts */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <RevenueOverviewChart data={revenueChartData} />
         <StatusFunnelChart data={invoiceStatusFunnel} />
       </div>
 
       {/* Row 2: Client Tables */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <BestClientsTable clients={bestClients} />
         <ProblemClientsTable clients={problemClients} />
       </div>

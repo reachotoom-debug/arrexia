@@ -6,6 +6,7 @@ import { deleteReminderTemplate } from "../actions";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertDialog } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 
 interface ReminderTemplateDeleteButtonProps {
   workspaceId: string;
@@ -57,10 +58,13 @@ export function ReminderTemplateDeleteButton({
     <>
       <Button
         variant="outline"
-        size="sm"
+        size="icon"
         onClick={() => setShowDeleteConfirm(true)}
+        aria-label={`Delete reminder template ${templateName}`}
+        title={`Delete reminder template ${templateName}`}
+        className="h-8 w-8 text-red-600 hover:text-red-700"
       >
-        Delete
+        <Trash2 className="h-4 w-4" />
       </Button>
       <AlertDialog
         open={showDeleteConfirm}

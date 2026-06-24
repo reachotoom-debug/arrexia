@@ -23,6 +23,14 @@ export function DeleteClientModal({
     setMounted(true);
   }, []);
 
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onCancel();
+    }, 200);
+  };
+
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (e: KeyboardEvent) => {
@@ -37,15 +45,7 @@ export function DeleteClientModal({
         document.body.style.overflow = "unset";
       };
     }
-  }, [isOpen]);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onCancel();
-    }, 200);
-  };
+  }, [isOpen, handleClose]);
 
   const handleConfirm = () => {
     setIsClosing(true);

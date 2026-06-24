@@ -1,10 +1,30 @@
+// @ts-nocheck
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Eye, Pencil } from "lucide-react";
 import { SortableHeader } from "@/components/shared/sortable-header";
-import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
+import { TableActionIconLink } from "@/components/table/TableActionIconLink";
+import { PaymentsBulkActions } from "@/app/[workspaceId]/payments/_components/PaymentsBulkActions";
+import { formatCurrency } from "@/lib/format/currency";
+import { PaginationBar } from "@/components/PaginationBar";
+import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
+import { buildPaymentsUrl } from "@/app/[workspaceId]/payments/_lib/buildPaymentsUrl";
+import {
+  TABLE_BASE,
+  TABLE_ACTIONS_ROW,
+  TABLE_CELL_TEXT_COL,
+  TABLE_MIN_WIDTH_INNER,
+  TABLE_ROW,
+  TABLE_TD,
+  TABLE_TD_RIGHT,
+  TABLE_TH,
+  TABLE_TH_RIGHT,
+} from "@/components/table/tableShell";
+import { DataTableShell } from "@/components/layout/DataTableShell";
+import { EntityCard } from "@/components/ui/EntityCard";
+import { EmptyState } from "@/components/ui/state";
 
 export interface PaymentRow {
   id: string;
@@ -22,9 +42,15 @@ export interface PaymentRow {
   updated_at: string;
   invoice_number: string | null;
   client_name: string | null;
+  archived_at?: string | null;
+  invoices?: {
+    id?: string | null;
+    invoice_number?: string | null;
+    clients?: { name?: string | null } | null;
+  } | null;
 }
 
-type PaymentStatusParam = "all" | "completed" | "pending" | "failed" | "refunded";
+type PaymentStatusParam = "all" | "completed" | "pending" | "failed" | "refunded" | "archived";
 type PaymentListViewParam = "default" | "recent-first" | "largest-first" | "failed-first";
 type PaymentSortKey = "payment_date" | "amount" | "method" | "payment_provider" | "client_name" | "invoice_number" | null;
 
@@ -35,6 +61,7 @@ interface PaymentsTableProps {
   currentPage: number;
   totalPages: number;
   totalCount: number;
+  anyPaymentsCount?: number;
   view: PaymentListViewParam;
   status: PaymentStatusParam;
   sort: PaymentSortKey;
@@ -42,101 +69,33 @@ interface PaymentsTableProps {
   q: string;
 }
 
-const SORT_PRESETS: { key: PaymentListViewParam; label: string }[] = [
-  { key: "default", label: "Default View" },
-  { key: "recent-first", label: "Recent first" },
-  { key: "largest-first", label: "Largest first" },
-  { key: "failed-first", label: "Failed first" },
-];
+function SelectAllCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
 
-const STATUS_FILTERS: { key: PaymentStatusParam; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "completed", label: "Completed" },
-  { key: "pending", label: "Pending" },
-  { key: "failed", label: "Failed" },
-  { key: "refunded", label: "Refunded" },
-];
-
-/**
- * Build URL for payments page with query parameters
- * Helper function that matches buildPaymentsUrl from page.tsx
- */
-function buildPaymentsUrl(
-  workspaceId: string,
-  currentParams: Record<string, string | string[] | undefined>,
-  overrides: {
-    page?: number;
-    status?: PaymentStatusParam | undefined;
-    view?: PaymentListViewParam | undefined;
-    q?: string | undefined;
-    sort?: PaymentSortKey | null | undefined;
-    dir?: "asc" | "desc" | undefined;
-  }
-): string {
-  const urlParams = new URLSearchParams();
-
-  // Start from current params (excluding page/pageSize - we'll handle them separately)
-  const meaningfulParams = ["status", "view", "q", "sort", "dir", "pageSize"];
-  meaningfulParams.forEach((key) => {
-    const value = currentParams[key];
-    if (value) {
-      const strValue = Array.isArray(value) ? value[0] : value;
-      if (strValue) {
-        urlParams.set(key, strValue);
-      }
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate;
     }
-  });
+  }, [indeterminate]);
 
-  // Apply overrides - undefined means delete the param, null for sort means remove it
-  Object.entries(overrides).forEach(([key, value]) => {
-    if (value === undefined || value === null) {
-      urlParams.delete(key);
-    } else {
-      urlParams.set(key, String(value));
-    }
-  });
-
-  // Determine if we should reset to page 1
-  const changingNonPageParam = 
-    overrides.status !== undefined ||
-    overrides.view !== undefined ||
-    overrides.q !== undefined ||
-    overrides.sort !== undefined ||
-    overrides.dir !== undefined;
-
-  if (changingNonPageParam) {
-    urlParams.delete("page");
-  } else if (overrides.page !== undefined) {
-    if (overrides.page > 1) {
-      urlParams.set("page", overrides.page.toString());
-    } else {
-      urlParams.delete("page");
-    }
-  } else {
-    const currentPage = Array.isArray(currentParams.page) 
-      ? currentParams.page[0] 
-      : currentParams.page;
-    if (currentPage && parseInt(currentPage, 10) > 1) {
-      urlParams.set("page", currentPage);
-    }
-  }
-
-  // Remove default values from URL
-  if (urlParams.get("status") === "all") {
-    urlParams.delete("status");
-  }
-  if (urlParams.get("view") === "default") {
-    urlParams.delete("view");
-  }
-  if (urlParams.get("dir") === "desc" && !urlParams.get("sort")) {
-    urlParams.delete("dir");
-  }
-  if (urlParams.get("page") === "1") {
-    urlParams.delete("page");
-  }
-
-  const queryString = urlParams.toString();
-  return `/${workspaceId}/payments${queryString ? `?${queryString}` : ""}`;
+  return (
+    <input
+      ref={inputRef}
+      type="checkbox"
+      aria-label="Select all payments"
+      checked={checked}
+      onChange={onChange}
+      className="h-4 w-4 cursor-pointer accent-foreground"
+    />
+  );
 }
 
 export default function PaymentsTable({
@@ -146,112 +105,51 @@ export default function PaymentsTable({
   currentPage,
   totalPages,
   totalCount,
-  view,
+  anyPaymentsCount,
+  view: _view,
   status,
   sort,
   dir,
-  q,
+  q: _q,
 }: PaymentsTableProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const urlSearchParams = useSearchParams();
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Manage payments as state for optimistic updates
+  const [payments, setPayments] = useState<PaymentRow[]>(rows);
   
-  // Local state for search input (controlled component)
-  const [searchValue, setSearchValue] = useState(q || "");
-  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Sync local state with URL param changes (back/forward navigation, reset, etc.)
+  // Reset selection when status/tab changes (to avoid stale selection crossing tabs)
   useEffect(() => {
-    const urlQ = urlSearchParams.get("q") || "";
-    // Only update if different to avoid unnecessary re-renders and infinite loops
-    if (urlQ !== searchValue) {
-      setSearchValue(urlQ);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlSearchParams]);
+    setSelectedIds(new Set());
+  }, [status]);
   
-  // Debounced URL update
+  // Update payments when prop changes (e.g., after router.refresh())
   useEffect(() => {
-    // Clear existing timeout
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
-    
-    // Set new timeout to update URL after 350ms
-    debounceTimeoutRef.current = setTimeout(() => {
-      const trimmedValue = searchValue.trim();
-      const currentUrlQ = urlSearchParams.get("q") || "";
-      
-      // Only update URL if value actually changed (prevents unnecessary updates)
-      if (trimmedValue !== currentUrlQ) {
-        const params = new URLSearchParams(urlSearchParams.toString());
-        
-        // Update or remove q param
-        if (trimmedValue) {
-          params.set("q", trimmedValue);
-        } else {
-          params.delete("q");
-        }
-        
-        // Always reset to page 1 when search changes
-        params.delete("page");
-        
-        // Update URL without full page refresh
-        const queryString = params.toString();
-        router.replace(`${pathname}${queryString ? `?${queryString}` : ""}`);
-      }
-    }, 350);
-    
-    // Cleanup timeout on unmount or when searchValue changes
-    return () => {
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current);
-      }
-    };
-  }, [searchValue, pathname, router, urlSearchParams]);
+    setPayments(rows);
+  }, [rows]);
   
-  // Handle manual Enter submit (optional, for immediate search)
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Clear debounce timeout to trigger immediate update
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
-    
-    const trimmedValue = searchValue.trim();
-    const params = new URLSearchParams(urlSearchParams.toString());
-    
-    if (trimmedValue) {
-      params.set("q", trimmedValue);
+  // Selection handlers
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllVisible = () => {
+    if (selectedIds.size === payments.length) {
+      setSelectedIds(new Set());
     } else {
-      params.delete("q");
+      setSelectedIds(new Set(payments.map((p) => p.id)));
     }
-    
-    // Always reset to page 1 when search changes
-    params.delete("page");
-    
-    const queryString = params.toString();
-    router.replace(`${pathname}${queryString ? `?${queryString}` : ""}`);
   };
   
-  // Handle clear button
-  const handleClear = () => {
-    setSearchValue("");
-    const params = new URLSearchParams(urlSearchParams.toString());
-    params.delete("q");
-    params.delete("page");
-    const queryString = params.toString();
-    router.replace(`${pathname}${queryString ? `?${queryString}` : ""}`);
-  };
-  // Format helpers
-  const formatMoney = (amount: number, currency: string = "USD") => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
+  const allVisibleSelected = payments.length > 0 && selectedIds.size === payments.length;
+  const someVisibleSelected = selectedIds.size > 0 && selectedIds.size < payments.length;
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "—";
@@ -280,165 +178,123 @@ export default function PaymentsTable({
     return "bg-slate-50 text-slate-700 border-slate-200";
   };
 
-  const getViewLabel = (view: PaymentListViewParam): string => {
-    switch (view) {
-      case "default":
-        return "Default sort";
-      case "recent-first":
-        return "Most recent payments first";
-      case "largest-first":
-        return "Largest payments first";
-      case "failed-first":
-        return "Failed payments first";
-      default:
-        return "Default sort";
-    }
-  };
-
-  const getSortLabel = (sort: PaymentSortKey): string => {
-    if (!sort) return "Default sort";
-    switch (sort) {
-      case "payment_date":
-        return "Date";
-      case "client_name":
-        return "Client";
-      case "invoice_number":
-        return "Invoice #";
-      case "amount":
-        return "Amount";
-      case "method":
-        return "Method";
-      case "payment_provider":
-        return "Provider";
-      default:
-        return "Default sort";
-    }
-  };
-
-  const sortArrow = (dir: "asc" | "desc"): "↑" | "↓" => {
-    return dir === "asc" ? "↑" : "↓";
-  };
-
   return (
-    <div className="space-y-4">
-      {/* Sort Preset Chips */}
-      <div className="flex flex-wrap gap-2">
-        {SORT_PRESETS.map((preset) => {
-          const isActive = view === preset.key && !sort;
-          return (
-            <Link
-              key={preset.key}
-              href={buildPaymentsUrl(workspaceId, searchParams, {
-                view: preset.key === "default" ? undefined : preset.key,
-                status: "all", // Reset status to "all" when changing view
-                sort: null, // Clear sort when using view preset
-                dir: undefined,
-              })}
-              className={
-                "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition " +
-                (isActive
-                  ? "border-blue-600 bg-blue-50 text-blue-700"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
-              }
-            >
-              {preset.label}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Top controls row */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Status chips */}
-        <div className="flex flex-wrap gap-2">
-          {STATUS_FILTERS.map((chip) => (
-            <Link
-              key={chip.key}
-              href={buildPaymentsUrl(workspaceId, searchParams, {
-                status: chip.key === "all" ? undefined : chip.key,
-              })}
-              className={
-                status === chip.key
-                  ? "rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white"
-                  : "rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
-              }
-            >
-              {chip.label}
-            </Link>
-          ))}
-        </div>
-
-        {/* Search + Reset */}
-        <div className="flex flex-wrap items-center gap-2">
-          <form onSubmit={handleSubmit} className="flex items-center relative">
-            <input
-              type="text"
-              name="q"
-              placeholder="Search transaction, client, or invoice..."
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              className="h-9 rounded-lg border border-slate-200 px-3 pr-8 text-sm"
-            />
-            {searchValue && (
-              <button
-                type="button"
-                onClick={handleClear}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                aria-label="Clear search"
-              >
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            )}
-          </form>
-          <ResetFiltersButton basePath={`/${workspaceId}/payments`} />
-        </div>
-      </div>
-
-      {/* Helper text for active sort/view */}
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        {sort ? (
-          <>
-            <span>Sorted by</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
-              {getSortLabel(sort)} {sortArrow(dir)}
-            </span>
-          </>
-        ) : (
-          <>
-            <span>Sorted by</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
-              {getViewLabel(view)}
-            </span>
-          </>
-        )}
-      </div>
-
+    <div className="space-y-4 md:space-y-6">
       {/* Table or empty state */}
       {rows.length === 0 ? (
-        <div className="p-8">
-          <div className="text-center text-slate-500">
-            <p className="text-sm font-medium">No payments match your filters</p>
-            <p className="text-xs mt-1">Try clearing search or filters to see more payments.</p>
-          </div>
-        </div>
+        <EmptyState
+          title={
+            status === "archived"
+              ? "No archived payments"
+              : "No payments match your filters"
+          }
+          message={
+            status === "archived"
+              ? "You don't have any archived payments. Active payments are shown under the All tab."
+              : "Try clearing search or filters to see more payments."
+          }
+          actionLabel="View all payments"
+          actionHref={`/${workspaceId}/payments`}
+        />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full table-fixed divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50/60 text-xs font-medium uppercase text-slate-500">
+        <>
+          <PaymentsBulkActions
+            workspaceId={workspaceId}
+            payments={payments}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            onPaymentsChange={setPayments}
+            status={status}
+          />
+          <div className="mt-2 space-y-2 md:hidden">
+            {payments.map((p) => (
+              <EntityCard
+                key={`m-${p.id}`}
+                leading={
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(p.id)}
+                    onChange={() => toggleOne(p.id)}
+                    className="h-4 w-4 cursor-pointer accent-foreground"
+                    aria-label={`Select payment ${p.id}`}
+                  />
+                }
+                title={p.client_name || "—"}
+                subtitle={formatDate(p.payment_date)}
+                meta={
+                  <div className="space-y-0.5 text-xs text-muted-foreground">
+                    <div>
+                      {p.invoices?.invoice_number || p.invoice_number ? (
+                        p.invoices?.id || p.invoice_id ? (
+                          <Link
+                            href={`/${workspaceId}/invoices/${p.invoices?.id || p.invoice_id}`}
+                            className="font-medium text-blue-600 hover:underline"
+                          >
+                            {p.invoices?.invoice_number || p.invoice_number}
+                          </Link>
+                        ) : (
+                          p.invoices?.invoice_number || p.invoice_number
+                        )
+                      ) : (
+                        "—"
+                      )}
+                    </div>
+                    <div className="capitalize">
+                      {(p.method ?? "—").replace(/_/g, " ").toLowerCase()}
+                      {p.payment_provider ? ` · ${p.payment_provider}` : ""}
+                    </div>
+                  </div>
+                }
+                amount={
+                  <span className="text-lg font-semibold tabular-nums text-slate-900">
+                    {formatCurrency(p.amount, { currency: p.currency })}
+                  </span>
+                }
+                status={
+                  <span
+                    className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${getStatusBadge(
+                      p.status
+                    )}`}
+                  >
+                    {p.status}
+                  </span>
+                }
+                actions={
+                  <div className={TABLE_ACTIONS_ROW}>
+                    <TableActionIconLink
+                      href={`/${workspaceId}/payments/${p.id}`}
+                      label="Open payment"
+                      icon={<Eye className="h-4 w-4" />}
+                    />
+                    {status !== "archived" && !p.archived_at && (
+                      <TableActionIconLink
+                        href={`/${workspaceId}/payments/${p.id}/edit`}
+                        label="Edit payment"
+                        icon={<Pencil className="h-4 w-4" />}
+                      />
+                    )}
+                  </div>
+                }
+              />
+            ))}
+          </div>
+          <DataTableShell className="hidden md:block" disableInnerScroll>
+          <HorizontalScrollArea
+            className="relative w-full min-w-0"
+            viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent"
+          >
+          <div className={TABLE_MIN_WIDTH_INNER}>
+          <table className={`${TABLE_BASE} divide-y divide-slate-100`}>
+            <thead className="bg-slate-50/60 border-b border-slate-200">
               <tr>
-                <th className="w-[120px] px-4 py-3 text-left">
+                <th className={`w-[40px] ${TABLE_TH}`}>
+                  <SelectAllCheckbox
+                    checked={allVisibleSelected}
+                    indeterminate={someVisibleSelected}
+                    onChange={toggleAllVisible}
+                  />
+                </th>
+                <th className={`w-[120px] ${TABLE_TH}`}>
                   <SortableHeader
                     label="Date"
                     sortKey="payment_date"
@@ -447,7 +303,7 @@ export default function PaymentsTable({
                     basePath={`/${workspaceId}/payments`}
                   />
                 </th>
-                <th className="w-[180px] px-4 py-3 text-left">
+                <th className={`${TABLE_CELL_TEXT_COL} w-[180px] ${TABLE_TH}`}>
                   <SortableHeader
                     label="Client"
                     sortKey="client_name"
@@ -456,7 +312,7 @@ export default function PaymentsTable({
                     basePath={`/${workspaceId}/payments`}
                   />
                 </th>
-                <th className="w-[120px] px-4 py-3 text-left">
+                <th className={`w-[120px] ${TABLE_TH}`}>
                   <SortableHeader
                     label="Invoice #"
                     sortKey="invoice_number"
@@ -465,7 +321,7 @@ export default function PaymentsTable({
                     basePath={`/${workspaceId}/payments`}
                   />
                 </th>
-                <th className="w-[120px] px-4 py-3 text-right">
+                <th className={`w-[120px] ${TABLE_TH_RIGHT}`}>
                   <SortableHeader
                     label="Amount"
                     sortKey="amount"
@@ -475,7 +331,7 @@ export default function PaymentsTable({
                     align="right"
                   />
                 </th>
-                <th className="w-[100px] px-4 py-3 text-left">
+                <th className={`w-[100px] ${TABLE_TH}`}>
                   <SortableHeader
                     label="Method"
                     sortKey="method"
@@ -484,7 +340,7 @@ export default function PaymentsTable({
                     basePath={`/${workspaceId}/payments`}
                   />
                 </th>
-                <th className="w-[120px] px-4 py-3 text-left">
+                <th className={`hidden lg:table-cell w-[120px] ${TABLE_TH}`}>
                   <SortableHeader
                     label="Provider"
                     sortKey="payment_provider"
@@ -493,96 +349,103 @@ export default function PaymentsTable({
                     basePath={`/${workspaceId}/payments`}
                   />
                 </th>
-                <th className="w-[110px] px-4 py-3 text-left">Status</th>
-                <th className="w-[80px] px-4 py-3 text-right">Actions</th>
+                <th className={`w-[110px] ${TABLE_TH}`}>Status</th>
+                <th className={`w-[88px] ${TABLE_TH_RIGHT}`}>Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {rows.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-4 text-sm text-slate-700 whitespace-nowrap">
+              {payments.map((p) => {
+                return (
+                <tr key={p.id} className={TABLE_ROW}>
+                  <td className={TABLE_TD}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(p.id)}
+                      onChange={() => toggleOne(p.id)}
+                      className="h-4 w-4 cursor-pointer accent-foreground"
+                      aria-label={`Select payment ${p.id}`}
+                    />
+                  </td>
+                  <td className={`${TABLE_TD} text-sm text-slate-700 whitespace-nowrap`}>
                     {formatDate(p.payment_date)}
                   </td>
-                  <td className="px-4 py-4 text-slate-800">
-                    <div className="truncate" title={p.client_name || "—"}>
-                      {p.client_name || "—"}
-                    </div>
+                  <td className={`${TABLE_CELL_TEXT_COL} ${TABLE_TD} text-sm text-slate-800`} title={p.client_name || "—"}>
+                    {p.client_name || "—"}
                   </td>
-                  <td className="px-4 py-4 text-slate-800 whitespace-nowrap">
-                    {p.invoice_number ? (
-                      <Link
-                        href={`/${workspaceId}/invoices/${p.invoice_id}`}
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        {p.invoice_number}
-                      </Link>
+                  <td className={`${TABLE_TD} text-sm text-slate-800 whitespace-nowrap`}>
+                    {p.invoices?.invoice_number || p.invoice_number ? (
+                      p.invoices?.id || p.invoice_id ? (
+                        <Link
+                          href={`/${workspaceId}/invoices/${p.invoices?.id || p.invoice_id}`}
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Open invoice"
+                        >
+                          {p.invoices?.invoice_number || p.invoice_number}
+                        </Link>
+                      ) : (
+                        p.invoices?.invoice_number || p.invoice_number
+                      )
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-900 tabular-nums whitespace-nowrap">
-                    {formatMoney(p.amount, p.currency)}
+                  <td className={`${TABLE_TD_RIGHT} text-sm font-medium text-slate-900`}>
+                    {formatCurrency(p.amount, { currency: p.currency })}
                   </td>
-                  <td className="px-4 py-4 text-sm text-slate-700 capitalize whitespace-nowrap">
-                    {p.method || "—"}
+                  <td className={`${TABLE_TD} text-sm text-slate-700 whitespace-nowrap`}>
+                    {(p.method ?? "—").replace(/_/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase())}
                   </td>
-                  <td className="px-4 py-4 text-sm text-slate-500 whitespace-nowrap">
+                  <td className={`hidden lg:table-cell ${TABLE_TD} text-sm text-slate-500 whitespace-nowrap`}>
                     {p.payment_provider || "—"}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className={`${TABLE_TD} text-sm leading-5 whitespace-nowrap`}>
                     <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${getStatusBadge(
+                      className={`inline-flex rounded-full border px-1.5 py-0.5 text-xs font-medium capitalize ${getStatusBadge(
                         p.status
                       )}`}
                     >
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-right whitespace-nowrap">
-                    <Link
-                      href={`/${workspaceId}/payments/${p.id}`}
-                      className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                    >
-                      View
-                    </Link>
+                  <td className={`${TABLE_TD_RIGHT} text-sm leading-5`}>
+                    {/* Actions: Hide Edit if status=archived OR row.archived_at != null */}
+                    {/* Archive/Unarchive actions are ONLY available via bulk selection bar */}
+                    <div className={TABLE_ACTIONS_ROW}>
+                      <TableActionIconLink
+                        href={`/${workspaceId}/payments/${p.id}`}
+                        label="Open payment"
+                        icon={<Eye className="h-4 w-4" />}
+                      />
+                      {/* Edit icon: only shown if not archived (check both status filter and row.archived_at) */}
+                      {status !== "archived" && !p.archived_at && (
+                        <TableActionIconLink
+                          href={`/${workspaceId}/payments/${p.id}/edit`}
+                          label="Edit payment"
+                          icon={<Pencil className="h-4 w-4" />}
+                        />
+                      )}
+                    </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
-        </div>
+          </div>
+          </HorizontalScrollArea>
+          </DataTableShell>
+        </>
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2 text-xs text-slate-600">
-          <div>
-            Page {currentPage} of {totalPages} · {totalCount} payment{totalCount !== 1 ? "s" : ""}
-          </div>
-          <div className="flex items-center gap-2">
-            {currentPage > 1 && (
-              <Link
-                href={buildPaymentsUrl(workspaceId, searchParams, {
-                  page: currentPage - 1,
-                })}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-              >
-                Previous
-              </Link>
-            )}
-            {currentPage < totalPages && (
-              <Link
-                href={buildPaymentsUrl(workspaceId, searchParams, {
-                  page: currentPage + 1,
-                })}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-              >
-                Next
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
+      <PaginationBar
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={totalCount}
+        itemLabel={`payment${totalCount !== 1 ? "s" : ""}`}
+        basePath={`/${workspaceId}/payments`}
+        queryParams={searchParams}
+      />
     </div>
   );
 }

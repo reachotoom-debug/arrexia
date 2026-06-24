@@ -1,14 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ClientsTable } from "./ClientsTable";
-import { ClientsCards } from "./ClientsCards";
-import { ResetSortButton } from "@/components/shared/reset-sort-button";
+import { useSearchParams } from "next/navigation";
+import { ClientsListView } from "./ClientsListView";
+import { ClientsCardView } from "./ClientsCardView";
+import { ClientsViewToggle } from "./ClientsViewToggle";
 
-type ClientsLayout = "list" | "cards";
-
-const DEFAULT_CLIENTS_LAYOUT: ClientsLayout = "list";
-const LAYOUT_STORAGE_KEY = "flowcollect_clients_layout";
+type DisplayView = "list" | "cards";
 
 interface Client {
   id: string;
@@ -18,7 +15,9 @@ interface Client {
   whatsapp: string | null;
   country: string | null;
   payment_terms: number | null;
-  status: string;
+  status: string; // Legacy field, not used for UI status
+  archived_at: string | null;
+  is_active: boolean;
   invoicesCount?: number;
   outstanding?: number;
 }
@@ -29,9 +28,10 @@ interface ClientsContentWrapperProps {
   sortBy?: string;
   sortDir?: string;
   searchParams: Record<string, string | string[] | undefined>;
-  view?: string;
+  view?: string; // View preset (default, highest-outstanding-first, etc.)
   sortLabel: string;
   sortArrow: string;
+  displayView?: DisplayView; // Display view (list or cards)
 }
 
 export function ClientsContentWrapper({
@@ -43,45 +43,13 @@ export function ClientsContentWrapper({
   view,
   sortLabel,
   sortArrow,
+  displayView: initialDisplayView,
 }: ClientsContentWrapperProps) {
-  const [layout, setLayout] = useState<ClientsLayout>(DEFAULT_CLIENTS_LAYOUT);
-
-  // Load layout preference from localStorage on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
-        if (stored === "list" || stored === "cards") {
-          setLayout(stored);
-        }
-      } catch {
-        // ignore localStorage errors
-      }
-    }
-  }, []);
-
-  // Save layout preference to localStorage when it changes
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(LAYOUT_STORAGE_KEY, layout);
-      } catch {
-        // ignore localStorage errors
-      }
-    }
-  }, [layout]);
-
-  const handleReset = () => {
-    // Reset layout to default when reset is clicked
-    setLayout(DEFAULT_CLIENTS_LAYOUT);
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(LAYOUT_STORAGE_KEY);
-      }
-    } catch {
-      // ignore localStorage errors
-    }
-  };
+  const searchParamsObj = useSearchParams();
+  const urlDisplayView = searchParamsObj.get("displayView") as DisplayView | null;
+  const displayView = urlDisplayView === "list" || urlDisplayView === "cards" 
+    ? urlDisplayView 
+    : initialDisplayView || "list";
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -103,47 +71,40 @@ export function ClientsContentWrapper({
             </>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {/* Layout Toggle */}
-          <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-0.5">
-            <button
-              type="button"
-              onClick={() => setLayout("list")}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                layout === "list"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              List
-            </button>
-            <button
-              type="button"
-              onClick={() => setLayout("cards")}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                layout === "cards"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              Cards
-            </button>
-          </div>
+        <div className="hidden items-center gap-2 md:flex">
+          <ClientsViewToggle workspaceId={workspaceId} currentView={displayView} />
         </div>
       </div>
-      {layout === "list" ? (
-        <ClientsTable
-          clients={clients}
-          workspaceId={workspaceId}
-          sortBy={sortBy}
-          sortDir={sortDir}
-          searchParams={searchParams}
-        />
-      ) : (
+      {/* Below md: always cards (URL/list preference applies from md only) */}
+      <div className="md:hidden">
         <div className="p-4">
-          <ClientsCards clients={clients} workspaceId={workspaceId} />
+          <ClientsCardView
+            clients={clients}
+            workspaceId={workspaceId}
+            searchParams={searchParams}
+          />
         </div>
-      )}
+      </div>
+      {/* md+: list vs cards from URL / prefs */}
+      <div className="hidden md:block">
+        {displayView === "list" ? (
+          <ClientsListView
+            clients={clients}
+            workspaceId={workspaceId}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            searchParams={searchParams}
+          />
+        ) : (
+          <div className="p-4">
+            <ClientsCardView
+              clients={clients}
+              workspaceId={workspaceId}
+              searchParams={searchParams}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

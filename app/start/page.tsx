@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { ensureWorkspaceForUser } from "@/lib/workspaces/ensureWorkspaceForUser";
 import { setWorkspacePlan } from "@/lib/billing/setWorkspacePlan";
-import type { WorkspacePlan } from "@/lib/billing/getWorkspacePlan";
+import type { WorkspacePlan } from "@/lib/billing/plans";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>> | undefined;
 
@@ -27,8 +27,7 @@ export default async function StartPage({
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (!user || error) {
-    const nextUrl = `/start?plan=${plan}`;
-    redirect(`/register?next=${encodeURIComponent(nextUrl)}`);
+    redirect("/register");
   }
 
   // User is authenticated, proceed with workspace setup

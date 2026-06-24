@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace, requireUser } from "@/lib/auth/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { ZodError } from "zod";
 import {
   workspaceProfileSchema,
   emailSettingsSchema,
@@ -15,7 +16,12 @@ import {
   ReminderRuleSchema,
 } from "@/lib/reminders/schema";
 import { MAX_AVATAR_FILE_SIZE_BYTES, ALLOWED_AVATAR_MIME_TYPES, DEFAULT_AVATAR_URL } from "@/lib/constants";
-import type { WorkspacePlan } from "@/lib/billing/getWorkspacePlan";
+import {
+  getPlanStorageLimits,
+  isWorkspacePlan,
+  type WorkspacePlan,
+} from "@/lib/billing/plans";
+import { sendEmail } from "@/lib/email/sendEmail";
 
 /**
  * Save workspace profile settings
@@ -51,6 +57,7 @@ export async function saveWorkspaceProfile(
       business_city: parsed.city || null,
       business_state: parsed.state || null,
       business_postal_code: parsed.postalCode || null,
+      timezone: parsed.timezone || null,
       // Keep logo_url for backward compatibility
       logo_url: logoUrlValue,
     };
@@ -95,6 +102,32 @@ export async function saveWorkspaceProfile(
 /**
  * Save email & sending settings
  */
+function normalizeEmailSettingsInput(values: unknown): unknown {
+  if (!values || typeof values !== "object") {
+    return values;
+  }
+
+  const input = values as Record<string, unknown>;
+  const smtpPort = input.smtpPort;
+
+  return {
+    ...input,
+    smtpPort:
+      smtpPort === null || smtpPort === undefined || smtpPort === ""
+        ? ""
+        : smtpPort,
+  };
+}
+
+function formatEmailSettingsError(error: unknown): string {
+  if (error instanceof ZodError) {
+    const messages = error.issues.map((issue) => issue.message).filter(Boolean);
+    return messages.join(". ") || "Invalid email settings";
+  }
+
+  return error instanceof Error ? error.message : "Failed to save email settings";
+}
+
 export async function saveEmailSettings(
   workspaceId: string,
   values: unknown
@@ -102,7 +135,7 @@ export async function saveEmailSettings(
   try {
     await requireWorkspace(workspaceId);
 
-    const parsed = emailSettingsSchema.parse(values);
+    const parsed = emailSettingsSchema.parse(normalizeEmailSettingsInput(values));
     const supabase = await supabaseServer();
 
     // Update settings table with email_provider and from_name/from_email
@@ -124,41 +157,47 @@ export async function saveEmailSettings(
       return { success: false, error: "Failed to update email settings" };
     }
 
-    // If SMTP, update workspace_email_settings table
+    const { data: existing } = await supabase
+      .from("workspace_email_settings")
+      .select("smtp_password, smtp_host, smtp_port, smtp_username, use_tls")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    const emailSettingsUpdate: Record<string, unknown> = {
+      workspace_id: workspaceId,
+      from_name: parsed.fromName || null,
+      from_email: parsed.fromEmail || null,
+    };
+
     if (parsed.provider === "smtp") {
-      // Load existing settings to preserve password if not provided
-      const { data: existing } = await supabase
-        .from("workspace_email_settings")
-        .select("smtp_password")
-        .eq("workspace_id", workspaceId)
-        .maybeSingle();
-
-      const emailSettingsUpdate: any = {
-        workspace_id: workspaceId,
-        smtp_host: parsed.smtpHost || null,
-        smtp_port: parsed.smtpPort || null,
-        smtp_username: parsed.smtpUser || null,
-        use_tls: parsed.smtpUseTls ?? true,
-        from_name: parsed.fromName || null,
-        from_email: parsed.fromEmail || null,
-        // Only update password if provided
-        ...(parsed.smtpPassword
-          ? { smtp_password: parsed.smtpPassword }
-          : existing?.smtp_password
-          ? { smtp_password: existing.smtp_password }
-          : {}),
-      };
-
-      const { error: emailSettingsError } = await supabase
-        .from("workspace_email_settings")
-        .upsert(emailSettingsUpdate, {
-          onConflict: "workspace_id",
-        });
-
-      if (emailSettingsError) {
-        console.error("[Settings] saveEmailSettings emailSettings error", emailSettingsError);
-        return { success: false, error: "Failed to update SMTP settings" };
+      emailSettingsUpdate.smtp_host = parsed.smtpHost || null;
+      emailSettingsUpdate.smtp_port = parsed.smtpPort || null;
+      emailSettingsUpdate.smtp_username = parsed.smtpUser || null;
+      emailSettingsUpdate.use_tls = parsed.smtpUseTls ?? true;
+      if (parsed.smtpPassword) {
+        emailSettingsUpdate.smtp_password = parsed.smtpPassword;
+      } else if (existing?.smtp_password) {
+        emailSettingsUpdate.smtp_password = existing.smtp_password;
       }
+    } else if (existing) {
+      if (existing.smtp_host) emailSettingsUpdate.smtp_host = existing.smtp_host;
+      if (existing.smtp_port) emailSettingsUpdate.smtp_port = existing.smtp_port;
+      if (existing.smtp_username) emailSettingsUpdate.smtp_username = existing.smtp_username;
+      if (existing.smtp_password) emailSettingsUpdate.smtp_password = existing.smtp_password;
+      if (existing.use_tls !== null && existing.use_tls !== undefined) {
+        emailSettingsUpdate.use_tls = existing.use_tls;
+      }
+    }
+
+    const { error: emailSettingsError } = await supabase
+      .from("workspace_email_settings")
+      .upsert(emailSettingsUpdate, {
+        onConflict: "workspace_id",
+      });
+
+    if (emailSettingsError) {
+      console.error("[Settings] saveEmailSettings emailSettings error", emailSettingsError);
+      return { success: false, error: "Failed to update email settings" };
     }
 
     revalidatePath(`/${workspaceId}/settings`);
@@ -167,7 +206,7 @@ export async function saveEmailSettings(
     console.error("[Settings] saveEmailSettings error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to save email settings",
+      error: formatEmailSettingsError(error),
     };
   }
 }
@@ -179,29 +218,50 @@ export async function testEmailSettings(
   workspaceId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { workspace } = await requireWorkspace(workspaceId);
-    const supabase = await supabaseServer();
+    const { user } = await requireWorkspace(workspaceId);
 
-    // Load email settings
-    const { data: emailSettings } = await supabase
-      .from("workspace_email_settings")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .maybeSingle();
-
-    if (!emailSettings || !emailSettings.from_email) {
+    if (!user.email) {
       return {
         success: false,
-        error: "Email settings not configured. Please configure email settings first.",
+        error: "Your account has no email address.",
       };
     }
 
-    // For now, return a message that test email is not yet implemented
-    // In the future, this would send a test email to from_email using the existing email sending infrastructure
-    return {
-      success: false,
-      error: "Test email functionality not yet implemented. Please test by sending a reminder.",
-    };
+    const supabase = await supabaseServer();
+
+    const { data: settings } = await supabase
+      .from("settings")
+      .select("from_name, from_email")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    const { data: emailSettings } = await supabase
+      .from("workspace_email_settings")
+      .select("from_name, from_email")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    const fromName =
+      emailSettings?.from_name || settings?.from_name || "FlowCollect";
+    const fromEmail = emailSettings?.from_email || settings?.from_email || null;
+
+    const result = await sendEmail({
+      to: user.email,
+      subject: "FlowCollect email test",
+      text: "Email delivery is configured for this workspace.",
+      html: "<p>Email delivery is configured for this workspace.</p>",
+      fromName,
+      fromEmail,
+    });
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error || "Failed to send test email",
+      };
+    }
+
+    return { success: true };
   } catch (error) {
     console.error("[Settings] testEmailSettings error:", error);
     return {
@@ -215,31 +275,43 @@ export async function setWorkspacePlanAction(formData: FormData) {
   const workspaceId = String(formData.get("workspaceId") || "");
   const plan = String(formData.get("plan") || "");
 
-  if (!workspaceId) throw new Error("Missing workspaceId");
-  if (!["free", "starter", "pro"].includes(plan)) throw new Error("Invalid plan");
+  if (!workspaceId) {
+    return { ok: false, error: "Missing workspaceId" };
+  }
+  if (!isWorkspacePlan(plan)) {
+    return { ok: false, error: "Invalid plan" };
+  }
 
-  const { user } = await requireUser();
+  try {
+    const { user } = await requireUser();
 
-  const admin = supabaseAdmin();
-  const limits =
-    plan === "free"
-      ? { invoice_limit_monthly: 5, client_limit: 5 }
-      : { invoice_limit_monthly: null, client_limit: null };
+    const admin = supabaseAdmin();
+    const limits = getPlanStorageLimits(plan);
 
-  const { error } = await admin
-    .from("workspace_plans")
-    .upsert(
-      {
-        workspace_id: workspaceId,
-        plan: plan as WorkspacePlan,
-        ...limits,
-      },
-      { onConflict: "workspace_id" }
-    );
+    const { error } = await admin
+      .from("workspace_plans")
+      .upsert(
+        {
+          workspace_id: workspaceId,
+          plan: plan as WorkspacePlan,
+          ...limits,
+        },
+        { onConflict: "workspace_id" }
+      );
 
-  if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[setWorkspacePlanAction] Supabase error:", error);
+      return { ok: false, error: error.message };
+    }
 
-  revalidatePath(`/${workspaceId}/settings`);
+    revalidatePath(`/${workspaceId}/settings`);
+    return { ok: true };
+  } catch (error: any) {
+    const digest = String(error?.digest || "");
+    if (digest.includes("NEXT_REDIRECT")) throw error;
+    console.error("[setWorkspacePlanAction] Unexpected error:", error);
+    return { ok: false, error: error?.message || "Failed to update plan" };
+  }
 }
 
 /**
@@ -299,18 +371,49 @@ export async function savePaymentSettings(
     const parsed = paymentSettingsSchema.parse(values);
     const supabase = await supabaseServer();
 
+    // Helper to normalize empty strings to null for DB
+    const toNullable = (value: string | null | undefined) =>
+      value && value.trim().length > 0 ? value.trim() : null;
+
+    const payload = {
+      workspace_id: workspaceId,
+
+      default_currency: parsed.defaultCurrency,
+
+      // Logo – use the correct DB column
+      workspace_logo_url: toNullable(parsed.brandingLogoUrl ?? null),
+
+      // Branding section
+      workspace_display_name: toNullable(parsed.workspaceDisplayName ?? null),
+      branding_business_legal_name: toNullable(parsed.brandingBusinessLegalName ?? null),
+      branding_business_address: toNullable(parsed.brandingBusinessAddress ?? null),
+      branding_tax_id: toNullable(parsed.brandingTaxId ?? null),
+
+      // Business contact – use existing DB columns (NOT branding_ prefixed)
+      business_email: toNullable(parsed.businessEmail ?? null),
+      business_phone: toNullable(parsed.brandingBusinessPhone ?? null),
+      business_website: toNullable(parsed.brandingWebsite ?? null),
+
+      // Payment details
+      payment_bank_name: toNullable(parsed.paymentBankName ?? null),
+      payment_bank_account_name: toNullable(parsed.paymentBankAccountName ?? null),
+      payment_bank_account_number: toNullable(parsed.paymentBankAccountNumber ?? null),
+      payment_bank_swift: toNullable(parsed.paymentBankSwift ?? null),
+      payment_bank_iban: toNullable(parsed.paymentBankIban ?? null),
+      payment_paypal_handle: toNullable(parsed.paymentPaypalHandle ?? null),
+      payment_stripe_descriptor: toNullable(parsed.paymentStripeDescriptor ?? null),
+      payment_other_instructions: toNullable(parsed.paymentOtherInstructions ?? null),
+
+      // Invoice thank-you note
+      invoice_thank_you_note: toNullable(parsed.invoiceThankYouNote ?? null),
+    };
+
+    // DEBUG: Log payload keys to verify no invalid columns are being sent
+    console.log("[Settings] savePaymentSettings payload keys:", Object.keys(payload));
+
     const { error } = await supabase
       .from("settings")
-      .upsert(
-        {
-          workspace_id: workspaceId,
-          default_currency: parsed.defaultCurrency,
-          default_due_days: parsed.defaultPaymentTermsDays,
-        },
-        {
-          onConflict: "workspace_id",
-        }
-      );
+      .upsert(payload, { onConflict: "workspace_id" });
 
     if (error) {
       console.error("[Settings] savePaymentSettings error", error);
@@ -320,6 +423,12 @@ export async function savePaymentSettings(
     revalidatePath(`/${workspaceId}/settings`);
     return { success: true };
   } catch (error) {
+    // Handle Zod validation errors with a user-friendly message
+    if (error instanceof ZodError) {
+      const issues = error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      console.error("[Settings] savePaymentSettings validation error", error.issues);
+      return { success: false, error: `Validation failed: ${issues}` };
+    }
     console.error("[Settings] savePaymentSettings error:", error);
     return {
       success: false,
@@ -819,6 +928,7 @@ export async function updateWorkspaceProfileAction(formData: FormData) {
     phone: (formData.get("phone") as string) || "",
     country: (formData.get("country") as string) || "",
     taxNumber: (formData.get("tax_number") as string) || "",
+    timezone: (formData.get("timezone") as string) || "",
   };
 
   const result = await saveWorkspaceProfile(workspaceId, input);
@@ -878,9 +988,6 @@ export async function updatePaymentSettingsAction(formData: FormData) {
 
   const input = {
     defaultCurrency: (formData.get("default_currency") as string) || "USD",
-    defaultPaymentTermsDays: formData.get("default_due_days")
-      ? parseInt(formData.get("default_due_days") as string, 10)
-      : 30,
   };
 
   const result = await savePaymentSettings(workspaceId, input);

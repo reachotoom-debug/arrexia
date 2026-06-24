@@ -3,19 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useState, useTransition } from "react";
 import {
   PaymentFormSchema,
   type PaymentFormValues,
 } from "@/lib/payments/schema";
-import { formatMoney } from "@/lib/utils/format-money";
+import { formatCurrency } from "@/lib/format/currency";
+import { getInvoicesForPaymentClient } from "../actions";
 
 interface Invoice {
   id: string;
   client_id: string | null;
   invoice_number: string;
   status: string | null;
-  outstanding_amount: number;
+  outstanding_amount: number; // Legacy field name for backward compatibility with PaymentForm
   currency?: string;
 }
 
@@ -28,6 +29,9 @@ interface PaymentFormProps {
   workspaceId: string;
   cancelUrl?: string;
   invoicesError?: string; // Error message from getEligibleInvoices
+  // For edit mode: display client/invoice names (read-only)
+  clientName?: string;
+  invoiceNumber?: string;
 }
 
 export function PaymentForm({
@@ -38,21 +42,26 @@ export function PaymentForm({
   action,
   workspaceId,
   cancelUrl,
-  invoicesError,
+  clientName,
+  invoiceNumber,
 }: PaymentFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
+
+  // State for lazy-loading invoices (create mode only)
+  const [clientInvoices, setClientInvoices] = useState<Invoice[]>(isEdit ? invoices : []);
+  const [isLoadingInvoices, startTransition] = useTransition();
 
   // State to track selected invoice's outstanding amount
   const [selectedInvoiceOutstanding, setSelectedInvoiceOutstanding] = useState<number | null>(null);
 
   const {
     register,
-    handleSubmit,
     watch,
     setValue,
     setError,
     clearErrors,
+    reset,
     formState: { errors },
   } = useForm<PaymentFormValues>({
     resolver: zodResolver(PaymentFormSchema),
@@ -69,30 +78,56 @@ export function PaymentForm({
     },
   });
 
+  // Reset form with initialData when in edit mode (ensures method/provider are preselected)
+  useEffect(() => {
+    if (isEdit && initialData) {
+      reset(initialData);
+    }
+  }, [isEdit, initialData, reset]);
+
   const selectedClientId = watch("clientId");
   const selectedInvoiceId = watch("invoiceId");
   const amount = watch("amount");
-  
-  // Filter invoices by selected client
-  // Note: Invoices are already filtered by getEligibleInvoices (base_status='sent', outstanding>0.01, etc.)
-  // We only need to filter by client here
-  const filteredInvoicesForClient = useMemo(
-    () =>
-      invoices
-        ?.filter((inv) => {
-          // Only show invoices for the selected client
-          if (!selectedClientId) return false;
-          return inv.client_id === selectedClientId;
-        }) ?? [],
-    [invoices, selectedClientId]
-  );
 
-  // Reset invoice when client changes
+  // Lazy-load invoices when client changes (create mode only)
   useEffect(() => {
+    if (isEdit) {
+      // In edit mode, use invoices from props
+      setClientInvoices(invoices);
+      return;
+    }
+
+    // In create mode, clear invoices when client changes
+    setClientInvoices([]);
     setValue("invoiceId", "");
     setSelectedInvoiceOutstanding(null);
     clearErrors("amount");
-  }, [selectedClientId, setValue, clearErrors]);
+
+    if (!selectedClientId) {
+      return;
+    }
+
+    // Load invoices for selected client
+    startTransition(async () => {
+      try {
+        const loadedInvoices = await getInvoicesForPaymentClient({
+          workspaceId,
+          clientId: selectedClientId,
+        });
+        setClientInvoices(loadedInvoices);
+      } catch (err) {
+        console.error("[PaymentForm] failed to load client invoices", err);
+        setClientInvoices([]);
+      }
+    });
+  }, [selectedClientId, workspaceId, isEdit, invoices, setValue, clearErrors]);
+
+  // Use clientInvoices in create mode, invoices from props in edit mode
+  const filteredInvoicesForClient = isEdit
+    ? invoices?.filter((inv) => inv.client_id === selectedClientId) ?? []
+    : clientInvoices;
+
+  const invoice = filteredInvoicesForClient.find((inv) => inv.id === selectedInvoiceId);
 
   // Reset invoice when invoices list becomes empty (don't auto-select)
   useEffect(() => {
@@ -105,20 +140,22 @@ export function PaymentForm({
 
   // Update outstanding amount when invoice is selected
   useEffect(() => {
-    if (selectedInvoiceId) {
-      const invoice = invoices.find((inv) => inv.id === selectedInvoiceId);
-      if (invoice) {
-        const outstanding = invoice.outstanding_amount ?? 0;
-        setSelectedInvoiceOutstanding(outstanding);
-        // Clear amount error when invoice changes
-        clearErrors("amount");
-      } else {
-        setSelectedInvoiceOutstanding(null);
-      }
-    } else {
+    if (!invoice) {
       setSelectedInvoiceOutstanding(null);
+      return;
     }
-  }, [selectedInvoiceId, invoices, clearErrors]);
+
+    const outstanding = invoice.outstanding_amount ?? 0;
+
+    // Only update if the value changed, to avoid infinite loops
+    setSelectedInvoiceOutstanding((prev) =>
+      prev === outstanding ? prev : outstanding
+    );
+
+    // Clear amount error when the invoice actually changes
+    clearErrors("amount");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice?.id, invoice?.outstanding_amount, clearErrors]);
 
   // Validate amount against outstanding (with 0.01 tolerance for floating point precision)
   // Only apply this validation in create mode
@@ -135,7 +172,7 @@ export function PaymentForm({
       if (exceedsOutstanding) {
         setError("amount", {
           type: "manual",
-          message: `Amount cannot exceed outstanding balance of ${formatMoney(selectedInvoiceOutstanding, "USD")}`,
+          message: `Amount cannot exceed outstanding balance of ${formatCurrency(selectedInvoiceOutstanding, { currency: invoice?.currency })}`,
         });
       } else {
         clearErrors("amount");
@@ -146,11 +183,6 @@ export function PaymentForm({
   // Check if form is valid for submission (amount <= outstanding with tolerance)
   // Only apply this validation in create mode; edit mode allows editing existing payments
   const isFormValid = useMemo(() => {
-    // Disable submit if invoices list is empty or there's an error loading invoices
-    if (invoices.length === 0 || invoicesError) {
-      return false;
-    }
-    
     // In edit mode, don't enforce outstanding validation (payment already exists)
     if (isEdit) {
       return amount !== undefined && amount !== null && amount > 0;
@@ -167,10 +199,17 @@ export function PaymentForm({
   return (
     <form
       action={action}
-      className="space-y-6 max-w-2xl mx-auto"
+      className="mx-auto w-full max-w-3xl min-w-0 space-y-6"
     >
+      {/* In edit mode, include hidden fields for clientId/invoiceId to preserve them (server will ignore changes) */}
+      {isEdit && initialData?.clientId && (
+        <input type="hidden" name="clientId" value={initialData.clientId} />
+      )}
+      {isEdit && initialData?.invoiceId && (
+        <input type="hidden" name="invoiceId" value={initialData.invoiceId} />
+      )}
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">
             {isEdit ? "Edit Payment" : "Record Payment"}
@@ -181,7 +220,7 @@ export function PaymentForm({
               : "Record a new payment for an invoice"}
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => {
@@ -209,21 +248,30 @@ export function PaymentForm({
             <label className="block text-xs font-medium text-slate-600 mb-1">
               Client <span className="text-red-500">*</span>
             </label>
-            <select
-              {...register("clientId")}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select client...</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
-            {errors.clientId && (
-              <p className="mt-1 text-xs text-red-600">
-                {errors.clientId.message}
-              </p>
+            {isEdit && clientName ? (
+              <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                {clientName}
+              </div>
+            ) : (
+              <>
+                <select
+                  {...register("clientId")}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select client...</option>
+                  {/* Render all clients from props - no filtering or limiting */}
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.clientId && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {errors.clientId.message}
+                  </p>
+                )}
+              </>
             )}
           </div>
 
@@ -232,38 +280,38 @@ export function PaymentForm({
             <label className="block text-xs font-medium text-slate-600 mb-1">
               Invoice <span className="text-red-500">*</span>
             </label>
-            <select
-              {...register("invoiceId")}
-              disabled={!selectedClientId || !!invoicesError}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
-            >
-              <option value="">
-                {invoicesError
-                  ? "Could not load invoices (query failed)"
-                  : !selectedClientId
-                  ? "Select a client first"
-                  : filteredInvoicesForClient.length === 0
-                  ? "No eligible invoices for this client"
-                  : "Select invoice..."}
-              </option>
-              {filteredInvoicesForClient.map((invoice) => {
-                const currency = invoice.currency || "USD";
-                return (
-                  <option key={invoice.id} value={invoice.id}>
-                    {invoice.invoice_number} · {formatMoney(invoice.outstanding_amount, currency)} outstanding
+            {isEdit && invoiceNumber ? (
+              <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                {invoiceNumber}
+              </div>
+            ) : (
+              <>
+                <select
+                  {...register("invoiceId")}
+                  disabled={!selectedClientId || isLoadingInvoices}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                >
+                  <option value="">
+                    {!selectedClientId
+                      ? "Select a client first"
+                      : isLoadingInvoices
+                      ? "Loading invoices..."
+                      : filteredInvoicesForClient.length === 0
+                      ? "No open invoices for this client"
+                      : "Select invoice..."}
                   </option>
-                );
-              })}
-            </select>
-            {invoicesError && (
-              <p className="mt-1 text-xs text-red-600">
-                Could not load invoices (query failed). Check migrations / invoices_view columns.
-              </p>
-            )}
-            {errors.invoiceId && (
-              <p className="mt-1 text-xs text-red-600">
-                {errors.invoiceId.message}
-              </p>
+                  {filteredInvoicesForClient.map((invoice) => (
+                    <option key={invoice.id} value={invoice.id}>
+                      {invoice.invoice_number} · {formatCurrency(invoice.outstanding_amount, { currency: invoice.currency })} outstanding
+                    </option>
+                  ))}
+                </select>
+                {errors.invoiceId && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {errors.invoiceId.message}
+                  </p>
+                )}
+              </>
             )}
           </div>
 
@@ -273,7 +321,7 @@ export function PaymentForm({
               Amount <span className="text-red-500">*</span>
               {selectedInvoiceOutstanding !== null && (
                 <span className="ml-2 text-xs text-slate-500 font-normal">
-                  (Outstanding: {formatMoney(selectedInvoiceOutstanding, "USD")})
+                  (Outstanding: {formatCurrency(selectedInvoiceOutstanding, { currency: invoice?.currency })})
                 </span>
               )}
             </label>
@@ -319,6 +367,7 @@ export function PaymentForm({
             </label>
             <select
               {...register("method")}
+              value={watch("method") ?? ""}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="cash">Cash</option>

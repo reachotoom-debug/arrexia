@@ -13,6 +13,7 @@ import {
   getInvoiceStatusLabel,
   getInvoiceStatusBadgeClasses,
 } from "@/lib/invoices/status-ui";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface Invoice {
   id: string;
@@ -73,19 +74,10 @@ export default function InvoicesTable({
         await deleteInvoice(workspaceId, deletingInvoice.id);
         setDeletingInvoice(null);
         router.refresh();
-      } catch (error) {
+      } catch {
         alert("Failed to delete invoice");
       }
     }
-  };
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(amount);
   };
 
   const formatDate = (dateString: string) => {
@@ -196,7 +188,7 @@ export default function InvoicesTable({
                   {formatDate(invoice.due_date)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                  {formatCurrency(invoice.amount ?? 0, invoice.currency)}
+                  {formatCurrency(invoice.amount ?? 0, { currency: invoice.currency })}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span

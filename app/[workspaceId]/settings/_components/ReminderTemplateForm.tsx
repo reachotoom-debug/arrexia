@@ -14,7 +14,7 @@ import {
 } from "../actions";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertDialog } from "@/components/ui/alert-dialog";
-import type { Database } from "@/types/supabase";
+import type { Database } from "@/types/supabase/index";
 
 type ReminderTemplateRow = Database["public"]["Tables"]["reminder_templates"]["Row"];
 
@@ -39,7 +39,7 @@ export function ReminderTemplateForm({
     formState: { errors, isSubmitting },
     reset,
   } = useForm<ReminderTemplateInput>({
-    resolver: zodResolver(ReminderTemplateSchema),
+    resolver: zodResolver(ReminderTemplateSchema) as any,
     defaultValues: template
       ? {
           name: template.name,
@@ -164,7 +164,7 @@ export function ReminderTemplateForm({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Name *

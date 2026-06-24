@@ -24,7 +24,7 @@ export default function StatusFilterPills({
 }: StatusFilterPillsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const handleStatusChange = (status: string) => {
     const params = new URLSearchParams(searchParams.toString());

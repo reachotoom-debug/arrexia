@@ -14,27 +14,127 @@ import {
 } from "../actions";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertDialog } from "@/components/ui/alert-dialog";
-import type { Database } from "@/types/supabase";
+import { Button } from "@/components/ui/button";
+import { Pencil, Trash2 } from "lucide-react";
+import type { Database } from "@/types/supabase/index";
 
 type ReminderRuleRow = Database["public"]["Tables"]["reminder_rules"]["Row"];
 type ReminderTemplateRow = Database["public"]["Tables"]["reminder_templates"]["Row"];
+
+/** Normalized timing identity for duplicate checks (aligns form values with DB / legacy rows). */
+type TimingFingerprint = {
+  triggerType: string;
+  offsetDays: number;
+  forStatus: string | null;
+};
+
+function fingerprintFromSubmit(
+  data: Pick<ReminderRuleInput, "triggerType" | "offsetDays" | "forStatus">
+): TimingFingerprint {
+  return {
+    triggerType: data.triggerType,
+    offsetDays:
+      data.triggerType === "on_due" ? 0 : Number(data.offsetDays ?? 0),
+    forStatus: data.forStatus ?? null,
+  };
+}
+
+function fingerprintFromDbRow(r: {
+  trigger_type: string;
+  offset_days: number | null;
+  for_status: string | null;
+}): TimingFingerprint {
+  const offset = r.offset_days ?? 0;
+  const forStatus = r.for_status ?? null;
+
+  if (r.trigger_type === "relative_to_due_date") {
+    if (offset < 0) {
+      return {
+        triggerType: "before_due",
+        offsetDays: Math.abs(offset),
+        forStatus,
+      };
+    }
+    if (offset === 0) {
+      return { triggerType: "on_due", offsetDays: 0, forStatus };
+    }
+    return { triggerType: "after_due", offsetDays: offset, forStatus };
+  }
+
+  if (r.trigger_type === "on_due") {
+    return { triggerType: "on_due", offsetDays: 0, forStatus };
+  }
+  if (r.trigger_type === "before_due") {
+    return {
+      triggerType: "before_due",
+      offsetDays: Math.abs(offset),
+      forStatus,
+    };
+  }
+  if (r.trigger_type === "after_due") {
+    return {
+      triggerType: "after_due",
+      offsetDays: Math.abs(offset),
+      forStatus,
+    };
+  }
+
+  return {
+    triggerType: r.trigger_type,
+    offsetDays: offset,
+    forStatus,
+  };
+}
+
+function fingerprintsEqual(a: TimingFingerprint, b: TimingFingerprint): boolean {
+  return (
+    a.triggerType === b.triggerType &&
+    a.offsetDays === b.offsetDays &&
+    a.forStatus === b.forStatus
+  );
+}
+
+function isDuplicateTiming(
+  submit: Pick<ReminderRuleInput, "triggerType" | "offsetDays" | "forStatus">,
+  existingRules: Array<{
+    id: string;
+    trigger_type: string;
+    offset_days: number | null;
+    for_status: string | null;
+  }>,
+  editingRuleId?: string
+): boolean {
+  const fp = fingerprintFromSubmit(submit);
+  return existingRules.some((r) => {
+    if (editingRuleId && r.id === editingRuleId) return false;
+    return fingerprintsEqual(fp, fingerprintFromDbRow(r));
+  });
+}
 
 interface ReminderRuleFormProps {
   workspaceId: string;
   rule?: ReminderRuleRow;
   templates: ReminderTemplateRow[];
+  /** Used to block creating/editing into a timing that already exists. */
+  existingRules: ReminderRuleRow[];
+  iconOnly?: boolean;
 }
 
 export function ReminderRuleForm({
   workspaceId,
   rule,
   templates,
+  existingRules,
+  iconOnly = false,
 }: ReminderRuleFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [duplicateTimingError, setDuplicateTimingError] = useState<string | null>(
+    null
+  );
 
   const {
     register,
@@ -44,7 +144,7 @@ export function ReminderRuleForm({
     formState: { errors, isSubmitting },
     reset,
   } = useForm<ReminderRuleInput>({
-    resolver: zodResolver(ReminderRuleSchema),
+    resolver: zodResolver(ReminderRuleSchema) as any,
     defaultValues: rule
         ? {
             name: rule.name || "",
@@ -65,6 +165,8 @@ export function ReminderRuleForm({
   });
 
   const triggerType = watch("triggerType");
+  const offsetDaysW = watch("offsetDays");
+  const forStatusW = watch("forStatus");
 
   // Auto-set offsetDays to 0 when triggerType is "on_due"
   useEffect(() => {
@@ -73,6 +175,10 @@ export function ReminderRuleForm({
     }
   }, [triggerType, setValue]);
 
+  useEffect(() => {
+    setDuplicateTimingError(null);
+  }, [triggerType, offsetDaysW, forStatusW]);
+
   const onSubmit = async (data: ReminderRuleInput) => {
     try {
       // Ensure offsetDays is 0 for on_due trigger type
@@ -80,6 +186,18 @@ export function ReminderRuleForm({
         ...data,
         offsetDays: data.triggerType === "on_due" ? 0 : data.offsetDays,
       };
+
+      if (
+        isDuplicateTiming(
+          submitData,
+          existingRules,
+          rule?.id
+        )
+      ) {
+        setDuplicateTimingError("A rule already exists for this timing");
+        return;
+      }
+      setDuplicateTimingError(null);
 
       let result;
       if (rule) {
@@ -165,12 +283,32 @@ export function ReminderRuleForm({
       );
     }
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-      >
-        {rule ? "Edit" : "+ New Rule"}
-      </button>
+      rule && iconOnly ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => {
+            setDuplicateTimingError(null);
+            setIsOpen(true);
+          }}
+          aria-label={`Edit reminder rule ${rule.name}`}
+          title={`Edit reminder rule ${rule.name}`}
+          className="h-8 w-8"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+      ) : (
+        <button
+          onClick={() => {
+            setDuplicateTimingError(null);
+            setIsOpen(true);
+          }}
+          className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+        >
+          {rule ? "Edit" : "+ New Rule"}
+        </button>
+      )
     );
   }
 
@@ -185,6 +323,7 @@ export function ReminderRuleForm({
             <button
               onClick={() => {
                 setIsOpen(false);
+                setDuplicateTimingError(null);
                 reset();
               }}
               className="text-slate-400 hover:text-slate-600"
@@ -193,7 +332,7 @@ export function ReminderRuleForm({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Name *
@@ -302,17 +441,27 @@ export function ReminderRuleForm({
               </label>
             </div>
 
+            {duplicateTimingError && (
+              <p className="text-sm text-red-600" role="alert">
+                {duplicateTimingError}
+              </p>
+            )}
+
             <div className="flex items-center justify-between pt-4 border-t border-slate-200">
               <div>
                 {rule && (
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="icon"
                     onClick={handleDeleteClick}
                     disabled={isDeleting}
-                    className="text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
+                    aria-label={`Delete reminder rule ${rule.name}`}
+                    title={`Delete reminder rule ${rule.name}`}
+                    className="h-8 w-8 text-red-600 hover:text-red-700"
                   >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </button>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 )}
               </div>
               <div className="flex gap-2">
@@ -320,6 +469,7 @@ export function ReminderRuleForm({
                   type="button"
                   onClick={() => {
                     setIsOpen(false);
+                    setDuplicateTimingError(null);
                     reset();
                   }}
                   className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"

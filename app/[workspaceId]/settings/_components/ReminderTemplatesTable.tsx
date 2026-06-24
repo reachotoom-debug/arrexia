@@ -4,7 +4,7 @@ import { ReminderTemplateFormDialog } from "./ReminderTemplateFormDialog";
 import { ReminderTemplateDeleteButton } from "./ReminderTemplateDeleteButton";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import type { Database } from "@/types/supabase";
+import type { Database } from "@/types/supabase/index";
 
 type ReminderTemplateRow = Database["public"]["Tables"]["reminder_templates"]["Row"];
 
@@ -39,6 +39,7 @@ export function ReminderTemplatesTable({
           <p className="mt-1">Create your first template to get started.</p>
         </div>
       ) : (
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -98,6 +99,7 @@ export function ReminderTemplatesTable({
                     <ReminderTemplateFormDialog
                       mode="edit"
                       workspaceId={workspaceId}
+                      iconOnly
                       template={{
                         id: template.id,
                         name: template.name,
@@ -120,6 +122,7 @@ export function ReminderTemplatesTable({
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
     </>
   );

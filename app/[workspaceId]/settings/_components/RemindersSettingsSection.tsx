@@ -1,7 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
-import { ReminderSettingsForm } from "./ReminderSettingsForm";
-import { ReminderTemplatesSection } from "./ReminderTemplatesSection";
-import { ReminderRulesSection } from "./ReminderRulesSection";
+import { RemindersSettingsTabs } from "./RemindersSettingsTabs";
 import type { WorkspaceSettings } from "@/lib/settings/loadSettings";
 
 interface RemindersSettingsSectionProps {
@@ -15,7 +13,6 @@ export async function RemindersSettingsSection({
 }: RemindersSettingsSectionProps) {
   const supabase = await supabaseServer();
 
-  // Load templates and rules for this workspace
   const [templatesResult, rulesResult] = await Promise.all([
     supabase
       .from("reminder_templates")
@@ -34,22 +31,11 @@ export async function RemindersSettingsSection({
   const rules = rulesResult.data ?? [];
 
   return (
-    <div className="space-y-6">
-      {/* Workspace Reminder Settings */}
-      <ReminderSettingsForm workspaceId={workspaceId} settings={settings} />
-
-      {/* Reminder Templates Section */}
-      <ReminderTemplatesSection
-        workspaceId={workspaceId}
-        templates={templates}
-      />
-
-      {/* Reminder Rules Section */}
-      <ReminderRulesSection
-        workspaceId={workspaceId}
-        rules={rules}
-        templates={templates}
-      />
-    </div>
+    <RemindersSettingsTabs
+      workspaceId={workspaceId}
+      settings={settings}
+      templates={templates}
+      rules={rules}
+    />
   );
 }

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/incompatible-library */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,20 +11,27 @@ import {
   type InvoiceItemFormValues,
 } from "@/lib/invoices/schema";
 import { computeInvoiceTotals } from "@/lib/invoices/totals";
-import { formatMoney } from "@/lib/utils/format-money";
-import { calculateDueDate, deriveDaysFromTerms } from "@/lib/invoices/paymentTerms";
+import { formatCurrency } from "@/lib/format/currency";
+import { calculateDueDate } from "@/lib/invoices/paymentTerms";
 
 interface InvoiceFormProps {
   mode: "create" | "edit";
   initialData?: InvoiceFormValues;
   clients: { id: string; name: string; company?: string | null }[];
-  onSubmit: (values: InvoiceFormValues) => Promise<void>;
+  onSubmit: (
+    values: InvoiceFormValues
+  ) => Promise<
+    void | { ok?: boolean; fieldErrors?: { invoice_number?: string } }
+  >;
   generatedInvoiceNumber?: string; // pass from server for create
   workspaceId: string;
   cancelUrl?: string; // e.g. `/${workspaceId}/invoices`
   isPaid?: boolean; // If true, disable line item editing
+  isArchived?: boolean; // If true, disable all form inputs (read-only mode)
   prefilledClient?: { id: string; name: string; company?: string | null } | null;
   initialClientId?: string;
+  /** Invoice currency (for edit mode) or workspace default currency (for create mode) */
+  currency?: string;
 }
 
 export function InvoiceForm({
@@ -35,8 +43,10 @@ export function InvoiceForm({
   workspaceId,
   cancelUrl,
   isPaid = false,
+  isArchived = false,
   prefilledClient,
   initialClientId,
+  currency = "USD",
 }: InvoiceFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -78,6 +88,7 @@ export function InvoiceForm({
     watch,
     formState: { errors, isSubmitting },
     setValue,
+    setError,
   } = useForm<InvoiceFormValues>({
     resolver: zodResolver(InvoiceFormSchema),
     defaultValues,
@@ -136,6 +147,11 @@ export function InvoiceForm({
   };
 
   const submitHandler = async (values: InvoiceFormValues) => {
+    // Prevent submission for archived invoices
+    if (isArchived) {
+      console.warn("[InvoiceForm] Attempted to submit archived invoice - blocked");
+      return;
+    }
     try {
       console.log("[InvoiceForm] submitHandler called with values:", values);
       
@@ -151,14 +167,37 @@ export function InvoiceForm({
         }
       }
 
+      const normalizedItems = values.items.map((item) => ({
+        ...item,
+        quantity: Number(item.quantity ?? 0),
+        // Keep unit_price sourced from user input only; never derive from totals.
+        // Round to 2 decimals for currency storage/display consistency.
+        unit_price: Math.round(Number(item.unit_price ?? 0) * 100) / 100,
+      }));
+
       const finalValues: InvoiceFormValues = {
         ...values,
         status: finalStatus,
+        items: normalizedItems,
       };
 
-      await onSubmit(finalValues);
-      console.log("[InvoiceForm] onSubmit completed successfully");
+      const result = await onSubmit(finalValues);
+      if (
+        result &&
+        typeof result === "object" &&
+        result.fieldErrors?.invoice_number
+      ) {
+        setError("invoiceNumber", {
+          type: "server",
+          message: result.fieldErrors.invoice_number,
+        });
+        return;
+      }
     } catch (error) {
+      // Next.js redirect() throws an error with a digest property
+      const errorWithDigest = error as { digest?: string } | null;
+      const digest = String(errorWithDigest?.digest || "");
+      if (digest.includes("NEXT_REDIRECT")) throw error;
       console.error("[InvoiceForm] submit failed", error);
       // Optionally, later we can add a toast/snackbar.
     }
@@ -167,10 +206,10 @@ export function InvoiceForm({
   return (
     <form
       onSubmit={handleSubmit(submitHandler)}
-      className="space-y-6 max-w-5xl mx-auto"
+      className="mx-auto w-full max-w-6xl min-w-0 space-y-6"
     >
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">
             {isEdit ? "Edit Invoice" : "Create Invoice"}
@@ -179,7 +218,7 @@ export function InvoiceForm({
             Manage invoice details, line items, and totals.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => {
@@ -190,37 +229,41 @@ export function InvoiceForm({
             Cancel
           </button>
           {mode === "edit" ? (
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-              onClick={() => setSubmitMode("default")}
-            >
-              {isSubmitting ? "Saving..." : "Save Changes"}
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
+            !isArchived && (
               <button
                 type="submit"
                 disabled={isSubmitting}
-                onClick={() => setSubmitMode("draft")}
-                className="inline-flex items-center rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-900 disabled:opacity-60"
-              >
-                {isSubmitting && submitMode === "draft"
-                  ? "Saving..."
-                  : "Save as Draft"}
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                onClick={() => setSubmitMode("sent")}
                 className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                onClick={() => setSubmitMode("default")}
               >
-                {isSubmitting && submitMode === "sent"
-                  ? "Sending..."
-                  : "Save & Mark as Sent"}
+                {isSubmitting ? "Saving..." : "Save Changes"}
               </button>
-            </div>
+            )
+          ) : (
+            !isArchived && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  onClick={() => setSubmitMode("draft")}
+                  className="inline-flex items-center rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-900 disabled:opacity-60"
+                >
+                  {isSubmitting && submitMode === "draft"
+                    ? "Saving..."
+                    : "Save as Draft"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  onClick={() => setSubmitMode("sent")}
+                  className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {isSubmitting && submitMode === "sent"
+                    ? "Sending..."
+                    : "Save & Mark as Sent"}
+                </button>
+              </div>
+            )
           )}
         </div>
       </div>
@@ -239,7 +282,11 @@ export function InvoiceForm({
             <input
               {...register("invoiceNumber")}
               readOnly
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+              className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm bg-slate-50 text-slate-700 ${
+                errors.invoiceNumber
+                  ? "border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  : "border-slate-200"
+              }`}
             />
             {errors.invoiceNumber && (
               <p className="mt-1 text-xs text-red-600">
@@ -256,11 +303,14 @@ export function InvoiceForm({
               <input
                 type="date"
                 {...register("issueDate")}
+                disabled={isArchived}
                 onChange={(e) => {
                   register("issueDate").onChange(e);
                   setIsDueDateManuallyEdited(false);
                 }}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                className={`mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${
+                  isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                }`}
               />
               {errors.issueDate && (
                 <p className="mt-1 text-xs text-red-600">
@@ -275,8 +325,11 @@ export function InvoiceForm({
               <input
                 type="date"
                 {...register("dueDate")}
+                disabled={isArchived}
                 onChange={handleDueDateChange}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                className={`mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${
+                  isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                }`}
               />
               {errors.dueDate && (
                 <p className="mt-1 text-xs text-red-600">
@@ -293,11 +346,14 @@ export function InvoiceForm({
               </label>
               <select
                 {...register("paymentTerms")}
+                disabled={isArchived}
                 onChange={(e) => {
                   register("paymentTerms").onChange(e);
                   setIsDueDateManuallyEdited(false);
                 }}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                className={`mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${
+                  isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                }`}
               >
                 <option value="net_7">Net 7</option>
                 <option value="net_15">Net 15</option>
@@ -325,11 +381,14 @@ export function InvoiceForm({
                   {...register("paymentTermsDays", {
                     valueAsNumber: true,
                   })}
+                  disabled={isArchived}
                   onChange={(e) => {
                     register("paymentTermsDays").onChange(e);
                     setIsDueDateManuallyEdited(false);
                   }}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  className={`mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${
+                    isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                  }`}
                   placeholder="Days"
                 />
                 {errors.paymentTermsDays && (
@@ -347,7 +406,10 @@ export function InvoiceForm({
             </label>
             <input
               {...register("poNumber")}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              disabled={isArchived}
+              className={`mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${
+                isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+              }`}
               placeholder="Optional"
             />
           </div>
@@ -359,7 +421,10 @@ export function InvoiceForm({
               </label>
               <select
                 {...register("status")}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                disabled={isArchived}
+                className={`mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${
+                  isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                }`}
               >
                 <option value="draft">Draft</option>
                 <option value="sent">Sent</option>
@@ -393,29 +458,34 @@ export function InvoiceForm({
             <label className="block text-xs font-medium text-slate-600">
               Client
             </label>
-            {prefilledClient ? (
-              // Locked mode: show read-only display
+            {mode === "edit" && prefilledClient ? (
+              // Edit mode: read-only display
               <>
                 <input
                   type="hidden"
                   {...register("clientId")}
                   value={prefilledClient.id}
                 />
-                <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
-                  <div className="font-medium">{prefilledClient.name}</div>
+                <div className="mt-1 space-y-1">
+                  <div className="text-sm font-medium text-slate-900">
+                    {prefilledClient.name}
+                  </div>
                   {prefilledClient.company && (
-                    <div className="text-xs text-slate-500 mt-0.5">
+                    <div className="text-sm text-slate-700">
                       {prefilledClient.company}
                     </div>
                   )}
                 </div>
               </>
             ) : (
-              // Normal mode: full dropdown
+              // Create mode: full dropdown
               <>
                 <select
                   {...register("clientId")}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  disabled={isArchived}
+                  className={`mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${
+                    isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                  }`}
                 >
                   <option value="">Select client...</option>
                   {clients.map((client) => (
@@ -440,8 +510,11 @@ export function InvoiceForm({
             </label>
             <textarea
               {...register("notes")}
+              disabled={isArchived}
               rows={5}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={`mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${
+                isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+              }`}
               placeholder="Optional message shown to client"
             />
             <p className="mt-1 text-xs text-slate-500">
@@ -455,7 +528,7 @@ export function InvoiceForm({
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-700">Line Items</h2>
-          {!isPaid && (
+          {!isPaid && !isArchived && (
             <button
               type="button"
               onClick={() =>
@@ -501,9 +574,9 @@ export function InvoiceForm({
                     <td className="px-3 py-2">
                       <input
                         {...register(`items.${index}.name` as const)}
-                        disabled={isPaid}
+                        disabled={isPaid || isArchived}
                         className={`w-full rounded-lg border border-slate-200 px-2 py-1 text-sm ${
-                          isPaid ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                          isPaid || isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
                         }`}
                         placeholder="e.g. Website hosting"
                       />
@@ -518,9 +591,9 @@ export function InvoiceForm({
                         {...register(
                           `items.${index}.description` as const
                         )}
-                        disabled={isPaid}
+                        disabled={isPaid || isArchived}
                         className={`w-full rounded-lg border border-slate-200 px-2 py-1 text-sm ${
-                          isPaid ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                          isPaid || isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
                         }`}
                         rows={2}
                         placeholder="Optional description"
@@ -533,9 +606,9 @@ export function InvoiceForm({
                         {...register(`items.${index}.quantity` as const, {
                           valueAsNumber: true,
                         })}
-                        disabled={isPaid}
+                        disabled={isPaid || isArchived}
                         className={`w-20 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm ${
-                          isPaid ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                          isPaid || isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
                         }`}
                       />
                       {errors.items?.[index]?.quantity && (
@@ -551,9 +624,9 @@ export function InvoiceForm({
                         {...register(`items.${index}.unit_price` as const, {
                           valueAsNumber: true,
                         })}
-                        disabled={isPaid}
+                        disabled={isPaid || isArchived}
                         className={`w-24 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm ${
-                          isPaid ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                          isPaid || isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
                         }`}
                       />
                       {errors.items?.[index]?.unit_price && (
@@ -564,11 +637,11 @@ export function InvoiceForm({
                     </td>
                     <td className="px-3 py-2 text-right align-middle">
                       <span className="text-sm text-slate-800">
-                        {formatMoney(amount)}
+                        {formatCurrency(amount, { currency })}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right align-middle">
-                      {!isPaid && (
+                      {!isPaid && !isArchived && (
                         <button
                           type="button"
                           onClick={() => remove(index)}
@@ -589,7 +662,7 @@ export function InvoiceForm({
                     colSpan={6}
                     className="px-3 py-4 text-center text-sm text-slate-500"
                   >
-                    No items yet. Click "Add Item" to start.
+                    No items yet. Click Add Item to start.
                   </td>
                 </tr>
               )}
@@ -604,7 +677,7 @@ export function InvoiceForm({
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-600">Subtotal</span>
             <span className="font-medium text-slate-900">
-              {formatMoney(totals.subtotal)}
+              {formatCurrency(totals.subtotal, { currency })}
             </span>
           </div>
 
@@ -625,11 +698,14 @@ export function InvoiceForm({
                 {...register("discountPercent", {
                   valueAsNumber: true,
                 })}
-                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm"
+                disabled={isArchived}
+                className={`w-20 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm ${
+                  isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                }`}
               />
             </div>
             <span className="text-slate-700">
-              -{formatMoney(totals.discountAmount)}
+              -{formatCurrency(totals.discountAmount, { currency })}
             </span>
           </div>
 
@@ -650,18 +726,21 @@ export function InvoiceForm({
                 {...register("taxPercent", {
                   valueAsNumber: true,
                 })}
-                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm"
+                disabled={isArchived}
+                className={`w-20 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm ${
+                  isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
+                }`}
               />
             </div>
             <span className="text-slate-700">
-              +{formatMoney(totals.taxAmount)}
+              +{formatCurrency(totals.taxAmount, { currency })}
             </span>
           </div>
 
           <div className="mt-2 border-t border-slate-200 pt-2 flex items-center justify-between text-sm">
             <span className="text-slate-900 font-semibold">Total</span>
             <span className="text-lg font-semibold text-slate-900">
-              {formatMoney(totals.total)}
+              {formatCurrency(totals.total, { currency })}
             </span>
           </div>
         </div>

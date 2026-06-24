@@ -6,10 +6,7 @@
  */
 
 import { supabaseServer } from "@/lib/supabase/server";
-
-// Default organization ID used throughout the codebase
-// TODO: In the future, map workspace_id to organization_id dynamically
-const DEFAULT_ORGANIZATION_ID = "05d2d292-d95b-44f4-b774-22f10068124f";
+import { getWorkspaceOrganizationId } from "@/lib/workspaces/getWorkspaceOrganizationId";
 
 export type AuditEntityType =
   | "invoice"
@@ -34,18 +31,21 @@ export interface LogAuditOptions {
   entityId: string;
   action: AuditAction | string; // allow extension
   metadata?: Record<string, unknown>;
-  organizationId?: string; // optional override, defaults to DEFAULT_ORGANIZATION_ID
+  organizationId?: string; // optional override; otherwise resolved from workspace
 }
 
 /**
  * Log an audit event to activity_logs table
  * 
- * This function is non-blocking - if logging fails, it logs an error
- * but does not throw, ensuring core user flows continue to work.
+ * This function is non-blocking - if logging fails, it logs a warning
+ * and returns { ok: false } but does not throw, ensuring core user flows continue to work.
+ * 
+ * Uses server-side Supabase client (cookie-based auth) for proper RLS context.
  * 
  * @param options - Audit log options
+ * @returns { ok: true } on success, { ok: false } on failure (non-blocking)
  */
-export async function logAuditEvent(options: LogAuditOptions): Promise<void> {
+export async function logAuditEvent(options: LogAuditOptions): Promise<{ ok: boolean }> {
   try {
     const {
       workspaceId,
@@ -54,15 +54,29 @@ export async function logAuditEvent(options: LogAuditOptions): Promise<void> {
       entityId,
       action,
       metadata = {},
-      organizationId = DEFAULT_ORGANIZATION_ID,
+      organizationId,
     } = options;
 
+    const resolvedOrganizationId =
+      organizationId ?? (await getWorkspaceOrganizationId(workspaceId));
+
+    // Runtime guardrail: workspace_id is required for RLS policies
+    if (!workspaceId) {
+      console.warn("[AuditLog] Missing workspace_id, skipping audit log", {
+        entityType,
+        entityId,
+        action,
+      });
+      return { ok: false };
+    }
+
+    // Use server-side Supabase client (cookie-based auth) for proper RLS context
     const supabase = await supabaseServer();
 
     // Insert into activity_logs table
     // Include workspace_id and actor_user_id explicitly for RLS policies
     const { error } = await supabase.from("activity_logs").insert({
-      organization_id: organizationId,
+      organization_id: resolvedOrganizationId,
       workspace_id: workspaceId, // Required for RLS policy
       actor_user_id: userId, // Use actor_user_id (preferred) or fallback to user_id
       user_id: userId, // Keep for backward compatibility if table still has this column
@@ -73,23 +87,29 @@ export async function logAuditEvent(options: LogAuditOptions): Promise<void> {
     });
 
     if (error) {
-      console.error("[AuditLog] Failed to insert audit log:", {
-        error: error.message,
+      // RLS or missing session errors should be warnings, not errors
+      // This is expected in some scenarios (e.g., cron jobs without user context)
+      console.warn("[AuditLog] Failed to insert audit log:", {
         code: error.code,
+        message: error.message,
         entityType,
         entityId,
         action,
         workspaceId,
       });
+      return { ok: false };
     }
+
+    return { ok: true };
   } catch (error) {
     // Catch any unexpected errors (e.g. network issues, type mismatches)
-    console.error("[AuditLog] Unexpected error during audit logging:", {
+    console.warn("[AuditLog] Unexpected error during audit logging:", {
       error: error instanceof Error ? error.message : String(error),
       entityType: options.entityType,
       entityId: options.entityId,
       action: options.action,
     });
     // Do not rethrow - audit logging should never break user flows
+    return { ok: false };
   }
 }

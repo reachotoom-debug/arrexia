@@ -1,7 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getWorkspaceNavItems } from "./nav";
+import { formatPlanLabel, isUpgradeAvailable, type WorkspacePlan } from "@/lib/billing/plans";
 
 interface SidebarProps {
   workspace: {
@@ -13,7 +16,7 @@ interface SidebarProps {
     full_name?: string | null;
     email: string;
   };
-  plan?: "free" | "pro" | "trial";
+  plan?: WorkspacePlan;
 }
 
 function getInitials(fullName: string | null | undefined, email: string): string {
@@ -34,31 +37,25 @@ function getDisplayName(fullName: string | null | undefined, email: string): str
   return fullName || email || "Account";
 }
 
-const navItems = [
-  { slug: "dashboard", label: "Dashboard" },
-  { slug: "clients", label: "Clients" },
-  { slug: "invoices", label: "Invoices" },
-  { slug: "collections", label: "Collections" },
-  { slug: "payments", label: "Payments" },
-  { slug: "reminders", label: "Reminders" },
-  { slug: "settings", label: "Settings" },
-];
-
 export function Sidebar({ workspace, user, plan = "free" }: SidebarProps) {
   const pathname = usePathname();
   const base = `/${workspace.id}`;
   const displayName = getDisplayName(user.full_name, user.email);
   const initials = getInitials(user.full_name, user.email);
+  const navItems = getWorkspaceNavItems(workspace.id);
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-full">
+    <aside className="w-56 shrink-0 bg-white border-r border-slate-200 flex flex-col h-full">
       {/* FlowCollect Branding */}
-      <div className="px-4 py-4 border-b border-slate-200">
+      <div className="px-3 py-3 border-b border-slate-200">
         <Link href={`${base}/dashboard`} className="flex items-center gap-3">
-          {/* Logo - try to use FC-logo.png, fallback to colored square */}
-          <div className="h-8 w-8 rounded-md bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            FC
-          </div>
+          <Image
+            src="/brand/icon-logo.png"
+            alt=""
+            width={40}
+            height={40}
+            className="h-10 w-10 shrink-0 object-contain"
+          />
           <div className="flex flex-col min-w-0">
             <span className="text-base font-semibold tracking-tight text-slate-900">
               FlowCollect
@@ -71,15 +68,14 @@ export function Sidebar({ workspace, user, plan = "free" }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
-          const href = `${base}/${item.slug}`;
-          const isActive = pathname === href || pathname.startsWith(`${href}/`);
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           
           return (
             <Link
               key={item.slug}
-              href={href}
+              href={item.href}
               className={`block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive
                   ? "bg-blue-50 text-blue-700"
@@ -93,7 +89,7 @@ export function Sidebar({ workspace, user, plan = "free" }: SidebarProps) {
       </nav>
 
       {/* Account Section at Bottom */}
-      <div className="mt-auto border-t border-slate-200 p-4 space-y-3">
+      <div className="mt-auto border-t border-slate-200 p-3 space-y-3">
         {/* User Avatar & Info */}
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
@@ -112,16 +108,17 @@ export function Sidebar({ workspace, user, plan = "free" }: SidebarProps) {
         {/* Plan & Upgrade */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-100">
           <span className="text-xs text-slate-600">
-            Plan: <span className="font-medium capitalize">{plan}</span>
+            Plan:{" "}
+            <span className="font-medium">{formatPlanLabel(plan)}</span>
           </span>
-          {plan !== "pro" && (
+          {isUpgradeAvailable(plan) ? (
             <Link
-              href={`${base}/settings/billing`}
+              href={`${base}/settings?section=billing`}
               className="text-xs text-blue-600 hover:text-blue-700 font-medium"
             >
               Upgrade
             </Link>
-          )}
+          ) : null}
         </div>
       </div>
     </aside>

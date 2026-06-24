@@ -1,13 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/supabase";
+import type { Database } from "@/types/supabase/index";
+import { INVOICE_VIEW_BASE_FIELDS } from "@/lib/db/invoicesView";
 
-type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type ReminderRuleRow = Database["public"]["Tables"]["reminder_rules"]["Row"];
 type MessageTemplateRow = Database["public"]["Tables"]["message_templates"]["Row"];
 
+/** Matches INVOICE_VIEW_BASE_FIELDS select result */
+type InvoiceForReminder = {
+  id: string | null;
+  workspace_id: string | null;
+  client_id: string | null;
+  invoice_number: string | null;
+  issue_date: string | null;
+  due_date: string | null;
+  currency: string | null;
+  total: number | null;
+  paid: number | null;
+  outstanding: number | null;
+  display_status: string | null;
+  archived_at: string | null;
+};
+
 export interface SuggestedReminder {
-  invoice: InvoiceRow;
+  invoice: InvoiceForReminder;
   client: ClientRow;
   daysOverdue: number;
   rule: ReminderRuleRow;
@@ -42,21 +58,14 @@ function calculateDaysOverdue(dueDate: string | null): number {
 }
 
 /**
- * Check if a rule matches the days overdue criteria
+ * Check if a rule matches the days overdue criteria.
+ * offset_days is the trigger day: the rule fires when daysOverdue equals this value.
  */
 function ruleMatchesDaysOverdue(
   rule: ReminderRuleRow,
   daysOverdue: number
 ): boolean {
-  const from = rule.days_overdue_from ?? 0;
-  const to = rule.days_overdue_to;
-  
-  if (to === null) {
-    // No upper bound, just check lower bound
-    return daysOverdue >= from;
-  }
-  
-  return daysOverdue >= from && daysOverdue <= to;
+  return daysOverdue === rule.offset_days;
 }
 
 /**
@@ -129,28 +138,18 @@ export async function getSuggestedReminders(
     }
 
     // Step 3: Load overdue invoices for workspace
+    // Always exclude archived invoices from reminder candidates
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
     
+    // NOTE: Use invoices_view for outstanding field (outstanding_amount was dropped from invoices table)
     const { data: invoices, error: invoicesError } = await supabase
-      .from("invoices")
-      .select(`
-        id,
-        workspace_id,
-        client_id,
-        invoice_number,
-        status,
-        issue_date,
-        due_date,
-        currency,
-        amount,
-        total_paid,
-        outstanding_amount
-      `)
+      .from("invoices_view")
+      .select(INVOICE_VIEW_BASE_FIELDS)
       .eq("workspace_id", workspaceId)
-      .gt("outstanding_amount", 0)
+      .gt("outstanding", 0)
       .lt("due_date", today)
-      .neq("status", "Void")
-      .neq("status", "Draft");
+      .neq("display_status", "void")
+      .neq("display_status", "draft");
 
     if (invoicesError) {
       console.error("[getSuggestedReminders] failed to load invoices:", {
@@ -170,14 +169,15 @@ export async function getSuggestedReminders(
 
     // Step 4: Load clients for those invoices
     const clientIds = [...new Set(invoices.map((inv) => inv.client_id).filter(Boolean))];
-    
+    const clientIdsClean = (clientIds ?? []).filter((id): id is string => typeof id === "string");
+
     let clientsMap: Record<string, ClientRow> = {};
-    
-    if (clientIds.length > 0) {
+
+    if (clientIdsClean.length > 0) {
       const { data: clients, error: clientsError } = await supabase
         .from("clients")
         .select("*")
-        .in("id", clientIds);
+        .in("id", clientIdsClean);
 
       if (clientsError) {
         console.error("[getSuggestedReminders] failed to load clients:", {
@@ -200,7 +200,9 @@ export async function getSuggestedReminders(
     const suggestions: SuggestedReminder[] = [];
 
     for (const invoice of invoices) {
-      const client = clientsMap[invoice.client_id];
+      const clientId = invoice.client_id;
+      if (!clientId) continue;
+      const client = clientsMap[clientId];
       if (!client) continue;
 
       const daysOverdue = calculateDaysOverdue(invoice.due_date);
@@ -211,7 +213,7 @@ export async function getSuggestedReminders(
         invoiceId: invoice.id,
         invoiceNumber: invoice.invoice_number,
         daysOverdue,
-        status: invoice.status,
+        status: invoice.display_status,
       });
 
       // MVP: Use the first active rule for all overdue invoices

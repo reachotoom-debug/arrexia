@@ -24,7 +24,7 @@ export function ReminderSettingsForm({
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<ReminderSettingsFormValues>({
-    resolver: zodResolver(reminderSettingsSchema),
+    resolver: zodResolver(reminderSettingsSchema) as any,
     defaultValues: {
       enableAutomatic: settings.reminders.enableAutomatic,
       afterDueDays: settings.reminders.afterDueDays,
@@ -51,10 +51,8 @@ export function ReminderSettingsForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit as any)} className="w-full max-w-5xl">
       <SettingsCard
-        title="Automatic reminders"
-        description="Control when and how FlowCollect sends reminder emails."
         footer={
           <div className="flex justify-end">
             <button
@@ -67,6 +65,12 @@ export function ReminderSettingsForm({
           </div>
         }
       >
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Automation</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Configure default reminder behavior before template and rule-level overrides.
+          </p>
+        </div>
         <div>
           <label className="flex items-center">
             <input
@@ -83,7 +87,7 @@ export function ReminderSettingsForm({
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Before Due Date (days)

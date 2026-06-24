@@ -1,4 +1,6 @@
+/* eslint-disable react-hooks/incompatible-library */
 "use client";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { workspaceProfileSchema, type WorkspaceProfileFormValues } from "@/lib/schemas/settings";
@@ -6,8 +8,12 @@ import { saveWorkspaceProfile } from "../actions";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { SettingsCard } from "./SettingsCard";
-import { LogoUploader } from "@/components/settings/LogoUploader";
 import type { WorkspaceSettings } from "@/lib/settings/loadSettings";
+import { TIMEZONE_OPTIONS } from "@/lib/timezones";
+import {
+  buildCountrySelectOptions,
+  buildTimezoneSelectOptions,
+} from "../_lib/workspaceLocationOptions";
 
 interface WorkspaceProfileFormProps {
   workspaceId: string;
@@ -27,7 +33,7 @@ export function WorkspaceProfileForm({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<WorkspaceProfileFormValues>({
-    resolver: zodResolver(workspaceProfileSchema),
+    resolver: zodResolver(workspaceProfileSchema) as any,
     defaultValues: {
       name: settings.workspace.name,
       logoUrl: settings.workspace.logoUrl || "",
@@ -41,8 +47,18 @@ export function WorkspaceProfileForm({
       city: settings.workspace.city || "",
       state: settings.workspace.state || "",
       postalCode: settings.workspace.postalCode || "",
+      timezone: settings.timezone || "",
     },
   });
+
+  useEffect(() => {
+    setValue("logoUrl", settings.workspace.logoUrl || "", { shouldValidate: false });
+  }, [settings.workspace.logoUrl, setValue]);
+
+  const watchedCountry = watch("country");
+  const watchedTimezone = watch("timezone");
+  const countrySelectOptions = buildCountrySelectOptions(watchedCountry);
+  const timezoneSelectOptions = buildTimezoneSelectOptions(TIMEZONE_OPTIONS, watchedTimezone);
 
   const onSubmit = async (values: WorkspaceProfileFormValues) => {
     // Ensure all values are strings (not FileList or File objects)
@@ -60,6 +76,7 @@ export function WorkspaceProfileForm({
       city: typeof values.city === "string" ? values.city : "",
       state: typeof values.state === "string" ? values.state : "",
       postalCode: typeof values.postalCode === "string" ? values.postalCode : "",
+      timezone: typeof values.timezone === "string" ? values.timezone : "",
     };
 
     const result = await saveWorkspaceProfile(workspaceId, safeValues);
@@ -79,10 +96,8 @@ export function WorkspaceProfileForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit as any)} className="w-full max-w-5xl">
       <SettingsCard
-        title="Workspace Profile"
-        description="Update your workspace name, logo, and business details."
         footer={
           <div className="flex justify-end">
             <button
@@ -95,11 +110,12 @@ export function WorkspaceProfileForm({
           </div>
         }
       >
-        <div className="space-y-6">
-          {/* Basic Information */}
+        <input type="hidden" {...register("logoUrl")} />
+        <div className="space-y-8">
+          {/* Basic information */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-4">Basic Information</h3>
-            <div className="grid gap-4 md:grid-cols-2">
+            <h3 className="mb-4 text-sm font-semibold text-slate-900">Basic information</h3>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Workspace Name *
@@ -117,27 +133,34 @@ export function WorkspaceProfileForm({
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Logo URL
+                  Timezone
                 </label>
-                <LogoUploader
-                  workspaceId={workspaceId}
-                  value={watch("logoUrl") || null}
-                  onChange={(url) => setValue("logoUrl", url, { shouldValidate: true })}
-                />
+                <select
+                  {...register("timezone")}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                >
+                  <option value="">Select timezone (optional)</option>
+                  {timezoneSelectOptions.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </select>
                 <p className="mt-1 text-xs text-slate-500">
-                  This logo appears on invoices, PDFs, and client-facing emails.
+                  Used for date/time display in the app. Stored as an IANA timezone (e.g.{" "}
+                  <span className="font-mono">Europe/London</span>).
                 </p>
-                {errors.logoUrl && (
-                  <p className="mt-1 text-xs text-red-600">{errors.logoUrl.message}</p>
+                {errors.timezone && (
+                  <p className="mt-1 text-xs text-red-600">{errors.timezone.message}</p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Contact Information */}
+          {/* Contact information */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-4">Contact Information</h3>
-            <div className="grid gap-4 md:grid-cols-2">
+            <h3 className="mb-4 text-sm font-semibold text-slate-900">Contact information</h3>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Email
@@ -185,25 +208,10 @@ export function WorkspaceProfileForm({
             </div>
           </div>
 
-          {/* Business Details */}
+          {/* Tax details */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-4">Business Details</h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Country
-                </label>
-                <input
-                  type="text"
-                  {...register("country")}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                  placeholder="United States"
-                />
-                {errors.country && (
-                  <p className="mt-1 text-xs text-red-600">{errors.country.message}</p>
-                )}
-              </div>
-
+            <h3 className="mb-4 text-sm font-semibold text-slate-900">Tax details</h3>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Tax Number
@@ -223,8 +231,28 @@ export function WorkspaceProfileForm({
 
           {/* Address */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-4">Address</h3>
-            <div className="grid gap-4 md:grid-cols-2">
+            <h3 className="mb-4 text-sm font-semibold text-slate-900">Address</h3>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Country
+                </label>
+                <select
+                  {...register("country")}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                >
+                  <option value="">Select country (optional)</option>
+                  {countrySelectOptions.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                {errors.country && (
+                  <p className="mt-1 text-xs text-red-600">{errors.country.message}</p>
+                )}
+              </div>
+
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Address Line 1
@@ -263,7 +291,7 @@ export function WorkspaceProfileForm({
                   type="text"
                   {...register("city")}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                  placeholder="New York"
+                  placeholder="City in selected country"
                 />
                 {errors.city && (
                   <p className="mt-1 text-xs text-red-600">{errors.city.message}</p>

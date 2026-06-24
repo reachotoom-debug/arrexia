@@ -1,6 +1,6 @@
 import { ReminderTemplatesTable } from "./ReminderTemplatesTable";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import type { Database } from "@/types/supabase";
+import { SettingsCard } from "./SettingsCard";
+import type { Database } from "@/types/supabase/index";
 
 type ReminderTemplateRow = Database["public"]["Tables"]["reminder_templates"]["Row"];
 
@@ -14,16 +14,11 @@ export function ReminderTemplatesSection({
   templates,
 }: ReminderTemplatesSectionProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Reminder templates</CardTitle>
-        <CardDescription>
-          Customize the content FlowCollect sends when reminding clients about invoices.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ReminderTemplatesTable workspaceId={workspaceId} templates={templates} />
-      </CardContent>
-    </Card>
+    <SettingsCard
+      title="Templates"
+      description="Customize the content FlowCollect sends when reminding clients about invoices."
+    >
+      <ReminderTemplatesTable workspaceId={workspaceId} templates={templates} />
+    </SettingsCard>
   );
 }

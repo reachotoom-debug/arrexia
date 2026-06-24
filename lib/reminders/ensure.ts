@@ -1,7 +1,7 @@
 "use server";
 
 import { supabaseServer } from "@/lib/supabase/server";
-import { Database } from "@/types/supabase";
+import { Database } from "@/types/supabase/index";
 
 type Db = Database["public"]["Tables"];
 
@@ -39,12 +39,12 @@ export async function ensureReminderTemplatesForWorkspace(
  */
 export async function ensureReminderRulesForWorkspace(
   workspaceId: string
-): Promise<Pick<ReminderRuleRow, "id" | "label">[]> {
+): Promise<Pick<ReminderRuleRow, "id" | "name">[]> {
   const supabase = await supabaseServer();
 
   const { data, error } = await supabase
     .from("reminder_rules")
-    .select("id, label")
+    .select("id, name")
     .eq("workspace_id", workspaceId);
 
   if (error) {

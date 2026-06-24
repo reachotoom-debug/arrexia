@@ -1,6 +1,8 @@
+import { TableSkeleton } from "@/components/ui/skeletons";
+
 export default function ClientsLoading() {
   return (
-    <div className="max-w-6xl mx-auto py-6 space-y-4">
+    <div className="w-full min-w-0 space-y-4 md:space-y-6">
       {/* Header skeleton */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -17,13 +19,7 @@ export default function ClientsLoading() {
         ))}
       </div>
 
-      {/* Table skeleton */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="h-12 bg-slate-50 border-b border-slate-200" />
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
-          <div key={i} className="h-16 border-b border-slate-100 bg-white animate-pulse" />
-        ))}
-      </div>
+      <TableSkeleton rows={10} columns={8} />
     </div>
   );
 }

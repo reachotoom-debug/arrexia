@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { ValueType } from "recharts/types/component/DefaultTooltipContent";
 
 // Shared chart colors
@@ -28,7 +28,7 @@ export function formatCurrencyAxis(value: number, currency: string = "USD"): str
       minimumFractionDigits: 0,
     }).format(value);
   }
-  return formatMoney(value, currency);
+  return formatCurrency(value, { currency });
 }
 
 // Custom tooltip component
@@ -95,7 +95,7 @@ export function ChartTooltip({
               />
               <span className="text-slate-600">{displayName}:</span>
               <span className="font-semibold text-slate-900">
-                {isCurrency ? formatMoney(value, currency) : value.toLocaleString()}
+                {isCurrency ? formatCurrency(value, { currency }) : value.toLocaleString()}
               </span>
             </div>
           );

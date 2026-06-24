@@ -6,7 +6,7 @@ interface SortableHeaderProps {
   workspaceId: string;
   currentParams?: Record<string, string | string[] | undefined>; // Made optional
   basePath?: string; // e.g. "/{workspaceId}/invoices" or "/{workspaceId}/clients"
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }
 
 export function SortableHeader({
@@ -100,15 +100,16 @@ export function SortableHeader({
   const queryString = params.toString();
   const href = `${resolvedBasePath}${queryString ? `?${queryString}` : ""}`;
   
-  const baseClass = "inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide transition-colors";
-  const colorClass = isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-900";
+  const baseClass =
+    "inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide transition-colors";
+  const colorClass = isActive ? "text-slate-900" : "text-gray-600 hover:text-slate-900";
   const justifyClass = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
   
   return (
     <Link
       href={href}
       className={`${baseClass} ${colorClass} ${justifyClass} ${
-        isActive ? "rounded-full bg-slate-100 px-2 py-1" : ""
+        isActive ? "rounded-md bg-slate-100 px-1.5 py-0.5" : ""
       }`}
     >
       <span>{label}</span>

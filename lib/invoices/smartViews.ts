@@ -27,7 +27,7 @@ export function classifyInvoiceRisk(invoice: {
       status: "sent", // Default status
       amount: outstanding, // Use outstanding as amount for calculation
       due_date: invoice.due_date,
-      outstanding_amount: outstanding,
+      outstanding: outstanding,
     },
   });
 

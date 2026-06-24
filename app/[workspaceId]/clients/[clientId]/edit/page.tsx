@@ -1,17 +1,21 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { ClientForm } from "../../_components/ClientForm";
 import { type ClientFormValues } from "@/lib/clients/schema";
 import { updateClient } from "../../actions";
+import { type ActionResult } from "@/lib/actions/result";
 
 interface EditClientPageProps {
   params: Promise<{ workspaceId: string; clientId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export default async function EditClientPage({
   params,
+  searchParams,
 }: EditClientPageProps) {
   const { workspaceId, clientId } = await params;
+  const resolvedSearchParams = await searchParams;
   const supabase = await supabaseServer();
 
   const { data: client, error } = await supabase
@@ -25,6 +29,12 @@ export default async function EditClientPage({
     notFound();
   }
 
+  // Read returnTo from searchParams, default to clients list
+  const returnTo = Array.isArray(resolvedSearchParams.returnTo)
+    ? resolvedSearchParams.returnTo[0]
+    : resolvedSearchParams.returnTo;
+  const cancelUrl = returnTo || `/${workspaceId}/clients`;
+
   // Map database fields to form values
   const initialData: ClientFormValues = {
     name: client.name,
@@ -37,20 +47,19 @@ export default async function EditClientPage({
     notes: client.notes ?? "",
   };
 
-  async function handleUpdate(values: ClientFormValues) {
+  async function handleUpdate(values: ClientFormValues): Promise<ActionResult> {
     "use server";
-    await updateClient(workspaceId, clientId, values);
-    redirect(`/${workspaceId}/clients/${clientId}`);
+    return await updateClient(workspaceId, clientId, values);
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-6">
+    <div className="mx-auto w-full max-w-2xl min-w-0">
       <ClientForm
         mode="edit"
         initialData={initialData}
         onSubmit={handleUpdate}
         workspaceId={workspaceId}
-        cancelUrl={`/${workspaceId}/clients/${clientId}`}
+        cancelUrl={cancelUrl}
       />
     </div>
   );

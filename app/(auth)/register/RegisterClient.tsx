@@ -1,119 +1,161 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, type RegisterFormValues } from "@/lib/schemas/auth";
+import { AuthBranding } from "@/components/auth/AuthBranding";
+import { AuthCard } from "@/components/auth/AuthCard";
+import { AuthSocialLogin } from "@/components/auth/AuthSocialLogin";
+import {
+  authButtonClass,
+  authFieldLabelClass,
+  authFooterClass,
+  authFormClass,
+  authInputClass,
+} from "@/components/auth/authFormStyles";
+import {
+  analyzeSignUpResponse,
+  getEmailRedirectTo,
+  getSupabaseProjectHost,
+  logSignUpResultDev,
+  SIGNUP_ALREADY_REGISTERED_MESSAGE,
+  SIGNUP_CONFIRMATION_BODY,
+  SIGNUP_CONFIRMATION_HEADING,
+  SIGNUP_READY_TO_SIGN_IN_MESSAGE,
+  type SignUpOutcome,
+} from "@/lib/auth/signUpResult";
+import { useAuthUrlSanitizer } from "@/lib/auth/useAuthUrlSanitizer";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { useState, useEffect } from "react";
+
+type SuccessState = {
+  outcome: SignUpOutcome;
+  email: string;
+};
 
 export function RegisterClient() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const nextUrl = searchParams.get("next");
-
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [successState, setSuccessState] = useState<SuccessState | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setError,
+    setValue,
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
   });
 
-  // Countdown timer for cooldown
-  useEffect(() => {
-    if (cooldownSeconds > 0) {
-      const timer = setInterval(() => {
-        setCooldownSeconds((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+  const prefillEmail = useCallback(
+    (email: string) => {
+      setValue("email", email);
+    },
+    [setValue]
+  );
 
-      return () => clearInterval(timer);
-    }
+  useAuthUrlSanitizer(prefillEmail);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+    console.info("[auth/register] Supabase project:", getSupabaseProjectHost());
+  }, []);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, [cooldownSeconds]);
 
-  // Parse seconds from error message
   const parseCooldownSeconds = (message: string): number => {
     const match = message.match(/after\s+(\d+)\s+seconds?/i);
     return match ? parseInt(match[1]!, 10) : 0;
   };
 
+  const handleResendConfirmation = async () => {
+    if (!successState?.email || isResending || cooldownSeconds > 0) {
+      return;
+    }
+
+    setIsResending(true);
+    setResendMessage(null);
+
+    const supabase = supabaseBrowser();
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const emailRedirectTo = getEmailRedirectTo(origin);
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: successState.email,
+      options: emailRedirectTo ? { emailRedirectTo } : undefined,
+    });
+
+    if (error) {
+      const cooldown = parseCooldownSeconds(error.message);
+      if (cooldown > 0) {
+        setCooldownSeconds(cooldown);
+      }
+      setResendMessage(error.message || "Failed to resend confirmation email.");
+      setIsResending(false);
+      return;
+    }
+
+    setResendMessage("Confirmation email sent again. Please check your inbox.");
+    setIsResending(false);
+  };
+
   const onSubmit = async (data: RegisterFormValues) => {
     if (isLoading || cooldownSeconds > 0) {
-      return; // Prevent double submission
+      return;
     }
 
     setIsLoading(true);
+    setResendMessage(null);
+
     const supabase = supabaseBrowser();
-    const next = nextUrl || "/start";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const emailRedirectTo = getEmailRedirectTo(origin);
 
     try {
-      // Try sign up first
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
-        options: {
-          emailRedirectTo: origin ? `${origin}/auth/callback?next=${encodeURIComponent(next)}` : undefined,
-        },
+        options: emailRedirectTo ? { emailRedirectTo } : undefined,
       });
 
-      // If user already exists, try sign in instead
-      if (signUpError) {
-        if (
-          signUpError.message.includes("already registered") ||
-          signUpError.message.includes("User already registered")
-        ) {
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: data.email,
-            password: data.password,
-          });
+      logSignUpResultDev(signUpData, signUpError);
 
-          if (signInError) {
-            const cooldown = parseCooldownSeconds(signInError.message);
-            if (cooldown > 0) {
-              setCooldownSeconds(cooldown);
-            }
-            setError("root", { message: signInError.message || "Failed to sign in" });
-            setIsLoading(false);
-            return;
-          }
+      const outcome = analyzeSignUpResponse(signUpData, signUpError);
 
-          // Sign in successful, redirect
-          router.replace(next);
-          return;
-        }
-
-        // Check for rate limit cooldown
-        const cooldown = parseCooldownSeconds(signUpError.message);
+      if (outcome.kind === "error") {
+        const cooldown = parseCooldownSeconds(outcome.message);
         if (cooldown > 0) {
           setCooldownSeconds(cooldown);
         }
-
-        setError("root", { message: signUpError.message || "Failed to create account" });
+        setError("root", { message: outcome.message });
         setIsLoading(false);
         return;
       }
 
-      // Check if session was created immediately (email confirmations off)
-      if (signUpData.session) {
-        // Session created, redirect immediately
-        router.replace(next);
-        return;
+      if (outcome.kind === "ready_to_sign_in" && signUpData.session) {
+        await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
       }
 
-      // Email confirmation required - show success state
-      setIsSuccess(true);
+      setSuccessState({ outcome, email: data.email });
       setIsLoading(false);
     } catch (error) {
       setError("root", {
@@ -123,125 +165,135 @@ export function RegisterClient() {
     }
   };
 
-  const isSubmitDisabled = isLoading || cooldownSeconds > 0 || isSuccess;
+  const isSubmitDisabled = isLoading || cooldownSeconds > 0 || successState !== null;
 
-  // Success state - hide form, show message
-  if (isSuccess) {
-    const loginUrl = nextUrl ? `/login?next=${encodeURIComponent(nextUrl)}` : "/login";
+  if (successState) {
+    const { outcome } = successState;
+    const showResend =
+      outcome.kind === "confirmation_sent" || outcome.kind === "already_registered";
+
+    let heading = SIGNUP_CONFIRMATION_HEADING;
+    let body = SIGNUP_CONFIRMATION_BODY;
+
+    if (outcome.kind === "already_registered") {
+      heading = "Unable to create a new account with this email";
+      body = SIGNUP_ALREADY_REGISTERED_MESSAGE;
+    } else if (outcome.kind === "ready_to_sign_in") {
+      heading = "Account created";
+      body = SIGNUP_READY_TO_SIGN_IN_MESSAGE;
+    }
+
     return (
-      <div className="flex justify-center">
-        <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-sm">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              FlowCollect
-            </h1>
-            <p className="text-sm text-slate-500">Cash Solved.</p>
+      <AuthCard>
+        <AuthBranding />
+
+        <div className={authFormClass}>
+          <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            <p className="mb-1 font-medium">{heading}</p>
+            <p className="text-blue-600">{body}</p>
+            {resendMessage ? (
+              <p className="mt-2 text-blue-600">{resendMessage}</p>
+            ) : null}
           </div>
 
-          <div className="space-y-4">
-            <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              <p className="font-medium mb-1">Check your email to confirm your account</p>
-              <p className="text-blue-600">
-                We've sent a confirmation link to your email address. Please click the link to
-                verify your account before signing in.
-              </p>
-            </div>
-
+          {showResend ? (
             <button
               type="button"
-              onClick={() => router.push(loginUrl)}
-              className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+              onClick={handleResendConfirmation}
+              disabled={isResending || cooldownSeconds > 0}
+              className={authButtonClass}
             >
-              Continue to Sign In
+              {isResending
+                ? "Sending..."
+                : cooldownSeconds > 0
+                  ? `Resend in ${cooldownSeconds}s`
+                  : "Resend confirmation email"}
             </button>
-          </div>
+          ) : null}
+
+          <Link href="/login" className={`${authButtonClass} inline-block text-center`}>
+            Back to Sign In
+          </Link>
         </div>
-      </div>
+      </AuthCard>
     );
   }
 
   return (
-    <div className="flex justify-center">
-      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            FlowCollect
-          </h1>
-          <p className="text-sm text-slate-500">Cash Solved.</p>
+    <AuthCard>
+      <AuthBranding />
+
+      <AuthSocialLogin returnTo="/register" disabled={isSubmitDisabled} />
+
+      <form method="post" onSubmit={handleSubmit(onSubmit)} className={authFormClass}>
+        <div>
+          <label className={authFieldLabelClass}>Email</label>
+          <input
+            type="email"
+            {...register("email")}
+            className={authInputClass}
+            placeholder="you@example.com"
+            autoComplete="email"
+            disabled={isSubmitDisabled}
+          />
+          {errors.email && (
+            <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
-            <input
-              type="email"
-              {...register("email")}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
-              placeholder="your@email.com"
-              disabled={isSubmitDisabled}
-            />
-            {errors.email && (
-              <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Password</label>
-            <input
-              type="password"
-              {...register("password")}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
-              placeholder="••••••••"
-              disabled={isSubmitDisabled}
-            />
-            {errors.password && (
-              <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Confirm Password
-            </label>
-            <input
-              type="password"
-              {...register("confirmPassword")}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
-              placeholder="••••••••"
-              disabled={isSubmitDisabled}
-            />
-            {errors.confirmPassword && (
-              <p className="mt-1 text-xs text-red-600">
-                {errors.confirmPassword.message}
-              </p>
-            )}
-          </div>
-
-          {errors.root && (
-            <div
-              className={`rounded-lg px-3 py-2 text-sm ${
-                errors.root.type === "info"
-                  ? "bg-blue-50 text-blue-700"
-                  : "bg-red-50 text-red-700"
-              }`}
-            >
-              {errors.root.message}
-            </div>
-          )}
-
-          <button
-            type="submit"
+        <div>
+          <label className={authFieldLabelClass}>Password</label>
+          <input
+            type="password"
+            {...register("password")}
+            className={authInputClass}
+            placeholder="••••••••"
+            autoComplete="new-password"
             disabled={isSubmitDisabled}
-            className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isLoading
-              ? "Creating account..."
-              : cooldownSeconds > 0
+          />
+          {errors.password && (
+            <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
+          )}
+        </div>
+
+        <div>
+          <label className={authFieldLabelClass}>Confirm Password</label>
+          <input
+            type="password"
+            {...register("confirmPassword")}
+            className={authInputClass}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            disabled={isSubmitDisabled}
+          />
+          {errors.confirmPassword && (
+            <p className="mt-1 text-xs text-red-600">
+              {errors.confirmPassword.message}
+            </p>
+          )}
+        </div>
+
+        {errors.root && (
+          <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {errors.root.message}
+          </div>
+        )}
+
+        <button type="submit" disabled={isSubmitDisabled} className={authButtonClass}>
+          {isLoading
+            ? "Creating account..."
+            : cooldownSeconds > 0
               ? `Try again in ${cooldownSeconds}s`
               : "Create account"}
-          </button>
-        </form>
-      </div>
-    </div>
+        </button>
+      </form>
+
+      <p className={`${authFooterClass} text-slate-600`}>
+        Already have an account?{" "}
+        <Link href="/login" className="font-medium text-blue-600 hover:text-blue-700">
+          Sign in
+        </Link>
+      </p>
+    </AuthCard>
   );
 }

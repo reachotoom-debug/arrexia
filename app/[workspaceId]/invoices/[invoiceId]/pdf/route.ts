@@ -1,118 +1,299 @@
 import { NextResponse } from "next/server";
+
 import { supabaseServer } from "@/lib/supabase/server";
-import { generateInvoicePdf, type PrintableInvoice } from "@/lib/invoices/pdf";
+
+import { generateInvoicePdf } from "@/lib/invoices/pdf";
+
+import { hydratePrintableInvoice } from "@/lib/invoices/hydratePrintableInvoice";
+
+
 
 interface RouteParams {
+
   params: Promise<{ workspaceId: string; invoiceId: string }>;
+
 }
+
+
+
+type ClientRow = {
+
+  id: string;
+
+  name: string;
+
+  email: string | null;
+
+  company: string | null;
+
+  country: string | null;
+
+  country_code: string | null;
+
+  whatsapp_phone: string | null;
+
+  whatsapp: string | null;
+
+};
+
+
 
 export async function GET(req: Request, { params }: RouteParams) {
+
   const { workspaceId, invoiceId } = await params;
+
   const supabase = await supabaseServer();
 
-  // Load workspace info
-  const { data: workspace } = await supabase
-    .from("workspaces")
-    .select("name, email, phone, address")
-    .eq("id", workspaceId)
+
+
+  const { data: settings } = await supabase
+
+    .from("settings")
+
+    .select("*")
+
+    .eq("workspace_id", workspaceId)
+
     .maybeSingle();
 
-  // Load invoice with all money fields
-  // IMPORTANT: Use stored values from database for consistency
+
+
   const { data: invoice, error: invoiceError } = await supabase
+
     .from("invoices")
+
     .select(
+
       `
+
       id,
+
       invoice_number,
+
       issue_date,
+
       due_date,
+
+      status,
+
       currency,
+
       notes,
+
       subtotal,
+
       discount_percent,
+
       discount_amount,
+
       tax_percent,
+
       tax_amount,
+
       amount,
+
+      payment_terms,
+
+      payment_terms_days,
+
       clients (
+
         id,
+
         name,
+
         email,
-        company
+
+        company,
+
+        country,
+
+        country_code,
+
+        whatsapp_phone,
+
+        whatsapp
+
       )
+
     `
+
     )
+
     .eq("id", invoiceId)
+
     .single();
 
+
+
   if (invoiceError || !invoice) {
+
     return NextResponse.json(
+
       { error: "Invoice not found" },
+
       { status: 404 }
+
     );
+
   }
 
-  // Load invoice items
-  const { data: items, error: itemsError } = await supabase
-    .from("invoice_items")
-    .select("id, name, description, quantity, unit_price, position")
-    .eq("invoice_id", invoiceId)
-    .order("position", { ascending: true, nullsFirst: false });
 
-  if (itemsError) {
+
+  const [itemsRes, invoiceViewRes, paymentsRes] = await Promise.all([
+
+    supabase
+
+      .from("invoice_items")
+
+      .select("id, name, description, quantity, unit_price, position")
+
+      .eq("invoice_id", invoiceId)
+
+      .order("position", { ascending: true, nullsFirst: false }),
+
+    supabase
+      .from("invoices_view")
+      .select("display_status, paid, outstanding")
+      .eq("id", invoiceId)
+      .maybeSingle(),
+
+    supabase
+
+      .from("payments")
+
+      .select("amount, status, archived_at")
+
+      .eq("invoice_id", invoiceId)
+
+      .is("archived_at", null),
+
+  ]);
+
+
+
+  if (itemsRes.error) {
+
     return NextResponse.json(
+
       { error: "Failed to load invoice items" },
+
       { status: 500 }
+
     );
+
   }
 
-  // Map to PrintableInvoice with stored money values
-  const printableInvoice: PrintableInvoice = {
-    id: invoice.id,
-    invoiceNumber: invoice.invoice_number,
-    issueDate: invoice.issue_date,
-    dueDate: invoice.due_date,
-    clientName: invoice.clients?.name || "Client",
-    clientEmail: invoice.clients?.email || null,
-    clientCompany: invoice.clients?.company || null,
-    currency: invoice.currency || "USD",
-    items: (items || []).map((item) => ({
+
+
+  const clientData = Array.isArray(invoice.clients)
+
+    ? (invoice.clients[0] as ClientRow | undefined)
+
+    : (invoice.clients as ClientRow | null);
+
+
+
+  const printableInvoice = hydratePrintableInvoice({
+
+    invoice,
+
+    items: (itemsRes.data || []).map((item) => ({
+
       name: item.name,
+
       description: item.description,
+
       quantity: Number(item.quantity),
+
       unit_price: Number(item.unit_price),
+
     })),
-    notes: invoice.notes || null,
-    workspaceName: workspace?.name || "FlowCollect",
-    workspaceEmail: workspace?.email || null,
-    workspacePhone: workspace?.phone || null,
-    workspaceAddress: workspace?.address || null,
-    // Money fields from database (source of truth)
-    subtotal: Number(invoice.subtotal ?? 0),
-    discountPercent: Number(invoice.discount_percent ?? 0),
-    discountAmount: Number(invoice.discount_amount ?? 0),
-    taxPercent: Number(invoice.tax_percent ?? 0),
-    taxAmount: Number(invoice.tax_amount ?? 0),
-    total: Number(invoice.amount ?? 0),
-  };
+
+    settings,
+
+    client: clientData ?? null,
+
+    displayStatus: invoiceViewRes.data?.display_status || invoice.status,
+    invoiceView: invoiceViewRes.data,
+    payments: paymentsRes.data ?? [],
+
+  });
+
+
 
   try {
+
     const pdfBuffer = await generateInvoicePdf(printableInvoice);
 
-    return new NextResponse(pdfBuffer, {
+
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
+    return new NextResponse(pdfBuffer as any, {
+
       status: 200,
+
       headers: {
+
         "Content-Type": "application/pdf",
+
         "Content-Disposition": `attachment; filename="invoice-${invoice.invoice_number}.pdf"`,
+
       },
+
     });
+
   } catch (error) {
-    console.error("Failed to generate PDF:", error);
+
+    const err = error as Error | undefined;
+
+    const message = err?.message || "Unknown PDF generation error";
+
+    const stack = err?.stack || null;
+
+
+
+    console.error("[invoice-pdf] Failed to generate PDF", {
+
+      workspaceId,
+
+      invoiceId,
+
+      message,
+
+      stack,
+
+    });
+
+
+
+    const isDev = process.env.NODE_ENV !== "production";
+
     return NextResponse.json(
-      { error: "Failed to generate PDF" },
+
+      isDev
+
+        ? {
+
+            error: "Failed to generate PDF",
+
+            invoiceId,
+
+            workspaceId,
+
+            message,
+
+          }
+
+        : { error: "Failed to generate PDF" },
+
       { status: 500 }
+
     );
+
   }
+
 }
+
 

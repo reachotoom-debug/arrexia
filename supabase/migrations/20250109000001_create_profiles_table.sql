@@ -9,7 +9,11 @@
 
 -- Create profiles table (safe)
 CREATE TABLE IF NOT EXISTS public.profiles (
-  -- keep your existing column definitions here
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name text,
+  avatar_url text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
 );
 
 -- Create policy: Users can manage their own profile (safe)
@@ -25,8 +29,8 @@ BEGIN
     CREATE POLICY "Users can manage their own profile"
       ON public.profiles
       FOR ALL
-      USING (auth.uid() = id)
-      WITH CHECK (auth.uid() = id);
+      USING (auth.uid() = profiles.id)
+      WITH CHECK (auth.uid() = profiles.id);
   END IF;
 END
 $$;

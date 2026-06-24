@@ -13,7 +13,11 @@
 -- - po_number (optional), notes (optional)
 -- ============================================================================
 
-CREATE OR REPLACE VIEW public.invoices_view AS
+-- Drop dependent views first
+DROP VIEW IF EXISTS public.invoice_risk_view;
+DROP VIEW IF EXISTS public.invoices_view;
+
+CREATE VIEW public.invoices_view AS
 WITH invoice_payments AS (
   -- Calculate paid from payments table (system-calculated)
   -- Only count payments with status 'completed', 'paid', or null

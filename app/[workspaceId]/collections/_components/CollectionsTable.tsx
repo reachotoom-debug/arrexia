@@ -6,13 +6,26 @@ import { formatMoney } from "@/lib/invoices/utils";
 import { updateCollectionsNote } from "../actions";
 import { INVOICE_NUMBER_COL_CLASS } from "@/components/tables/invoiceTableColumns";
 import { clsx } from "clsx";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
+import { DataTableShell } from "@/components/layout/DataTableShell";
+import {
+  TABLE_BASE,
+  TABLE_CELL_TEXT_COL,
+  TABLE_MIN_WIDTH_INNER,
+  TABLE_ROW,
+  TABLE_TD,
+  TABLE_TD_RIGHT,
+  TABLE_TH,
+  TABLE_TH_RIGHT,
+} from "@/components/table/tableShell";
+import { EmptyState } from "@/components/ui/state";
 
 interface Client {
   id: string;
   name: string;
   company: string | null;
   email: string | null;
-  phone: string | null;
   whatsapp: string | null;
   whatsapp_phone: string | null;
 }
@@ -35,49 +48,14 @@ interface CollectionsTableProps {
   workspaceId: string;
 }
 
-function sanitizePhone(num: string): string {
-  return num.replace(/[^0-9+]/g, "");
-}
-
-type PrimaryContact =
-  | { type: "whatsapp" | "phone" | "email"; label: string; link: string }
-  | { type: "none"; label: string; link?: undefined };
-
-function getPrimaryContact(client: Client | null): PrimaryContact {
-  if (!client) {
-    return { type: "none", label: "—" };
-  }
-
-  if (client.whatsapp && client.whatsapp.trim() !== "") {
-    const raw = client.whatsapp.trim();
-    const sanitized = sanitizePhone(raw);
-    return {
-      type: "whatsapp",
-      label: raw,
-      link: `https://wa.me/${sanitized}`,
-    };
-  }
-
-  if (client.whatsapp_phone && client.whatsapp_phone.trim() !== "") {
-    const raw = client.whatsapp_phone.trim();
-    const sanitized = sanitizePhone(raw);
-    return {
-      type: "phone",
-      label: raw,
-      link: `tel:${sanitized}`,
-    };
-  }
-
-  if (client.email && client.email.trim() !== "") {
-    const raw = client.email.trim();
-    return {
-      type: "email",
-      label: raw,
-      link: `mailto:${raw}?subject=Regarding your invoice`,
-    };
-  }
-
-  return { type: "none", label: "—" };
+/** Overdue-day heat: 0-7 neutral, 8-30 amber, 31-60 orange, 61-90 red, 90+ max. Returns badge classes for readability. */
+function getOverdueDaysHeatClasses(days: number | null): string {
+  if (days == null || days < 0) return "bg-slate-100 text-slate-700 border-slate-200";
+  if (days <= 7) return "bg-slate-100 text-slate-700 border-slate-200";
+  if (days <= 30) return "bg-amber-100 text-amber-900 border-amber-300";
+  if (days <= 60) return "bg-orange-200 text-orange-900 border-orange-400";
+  if (days <= 90) return "bg-rose-200 text-rose-900 border-rose-400";
+  return "bg-red-300 text-red-900 border-red-500";
 }
 
 function getRiskBadge(risk: string) {
@@ -103,21 +81,6 @@ function getRiskBadge(risk: string) {
   return null;
 }
 
-function getStatusBadge(status: string) {
-  const statusLower = status.toLowerCase();
-  if (statusLower === "paid") {
-    return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  } else if (statusLower === "overdue") {
-    return "bg-red-50 text-red-700 border-red-200";
-  } else if (statusLower === "sent") {
-    return "bg-blue-50 text-blue-700 border-blue-200";
-  } else if (statusLower === "partial" || statusLower === "partially_paid") {
-    return "bg-amber-50 text-amber-700 border-amber-200";
-  } else if (statusLower === "void") {
-    return "bg-slate-100 text-slate-500 border-slate-200";
-  }
-  return "bg-slate-50 text-slate-700 border-slate-200";
-}
 
 function CollectionsNotesModal({
   invoice,
@@ -209,43 +172,47 @@ export function CollectionsTable({
 
   if (invoices.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-        <p className="text-sm text-slate-500">
-          No invoices found for collections. All invoices are up to date.
-        </p>
-      </div>
+      <EmptyState
+        title="Nothing in collections"
+        message="No overdue invoices match this view."
+        actionLabel="View invoices"
+        actionHref={`/${workspaceId}/invoices`}
+      />
     );
   }
 
   return (
     <>
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <table className="min-w-full table-auto text-sm">
+      <DataTableShell disableInnerScroll>
+      <HorizontalScrollArea
+        className="relative w-full min-w-0"
+        viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent"
+      >
+        <div className={TABLE_MIN_WIDTH_INNER}>
+        <table className={TABLE_BASE}>
           <thead className="bg-slate-50 border-b border-slate-200">
-            <tr className="text-xs uppercase tracking-wide text-slate-500">
-              <th className="px-3 py-2 text-left">Risk</th>
-              <th className={clsx("py-2", INVOICE_NUMBER_COL_CLASS)}>Invoice #</th>
-              <th className="px-3 py-2 text-left">Client</th>
-              <th className="px-3 py-2 text-left">Due Date</th>
-              <th className="px-3 py-2 text-right">Outstanding</th>
-              <th className="px-3 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-center">Contact</th>
-              <th className="px-3 py-2 text-left">Note</th>
+            <tr>
+              <th className={`hidden lg:table-cell ${TABLE_TH}`}>Risk</th>
+              <th className={clsx(TABLE_TH, INVOICE_NUMBER_COL_CLASS)}>Invoice #</th>
+              <th className={clsx(TABLE_CELL_TEXT_COL, TABLE_TH)}>Client</th>
+              <th className={`hidden lg:table-cell ${TABLE_TH}`}>Due Date</th>
+              <th className={TABLE_TH_RIGHT}>Outstanding</th>
+              <th className={TABLE_TH}>Status</th>
+              <th className={clsx("hidden md:table-cell", TABLE_CELL_TEXT_COL, TABLE_TH)}>
+                Contact
+              </th>
+              <th className={`${TABLE_TH} whitespace-nowrap`}>Action</th>
             </tr>
           </thead>
           <tbody>
             {invoices.map((inv) => {
               const currency = inv.currency || "USD";
               const client = inv.clients;
-              const contact = getPrimaryContact(client);
 
               return (
-                <tr
-                  key={inv.id}
-                  className="border-b border-slate-100 hover:bg-slate-50"
-                >
-                  <td className="px-3 py-2">{getRiskBadge(inv.risk)}</td>
-                  <td className={clsx("py-2 text-sm text-slate-700", INVOICE_NUMBER_COL_CLASS)}>
+                <tr key={inv.id} className={TABLE_ROW}>
+                  <td className={`hidden lg:table-cell ${TABLE_TD}`}>{getRiskBadge(inv.risk)}</td>
+                  <td className={clsx(TABLE_TD, "text-sm text-slate-700 whitespace-nowrap", INVOICE_NUMBER_COL_CLASS)}>
                     <Link
                       href={`/${workspaceId}/invoices/${inv.id}`}
                       className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
@@ -253,78 +220,64 @@ export function CollectionsTable({
                       {inv.invoice_number}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-slate-800">
-                    <div>
-                      <div className="font-medium">{client?.name ?? "—"}</div>
-                      {client?.company && (
-                        <div className="text-xs text-slate-500">
-                          {client.company}
+                  <td className={clsx(TABLE_CELL_TEXT_COL, TABLE_TD, "text-slate-800")}>
+                    <div className="min-w-0">
+                      <div className="font-medium break-words">{client?.name ?? "—"}</div>
+                      {client?.email ? (
+                        <div className="mt-0.5 hidden break-words text-sm text-slate-500 md:block">
+                          {client.email}
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-slate-700">
+                  <td className={`hidden lg:table-cell ${TABLE_TD} text-slate-700`}>
                     <div>
                       {inv.due_date
                         ? new Date(inv.due_date).toLocaleDateString()
                         : "—"}
                       {inv.daysOverdue !== null && (
-                        <div className="text-xs text-red-600 font-medium">
-                          {inv.daysOverdue} day{inv.daysOverdue !== 1 ? "s" : ""}{" "}
-                          overdue
-                        </div>
+                        <span
+                          className={clsx(
+                            "mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium",
+                            getOverdueDaysHeatClasses(inv.daysOverdue)
+                          )}
+                        >
+                          {inv.daysOverdue} day{inv.daysOverdue !== 1 ? "s" : ""} overdue
+                        </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-right font-medium text-red-600">
-                    {formatMoney(Math.abs(inv.outstanding), currency)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${getStatusBadge(
-                        inv.status
-                      )}`}
-                    >
-                      {inv.status}
+                  <td className={`${TABLE_TD_RIGHT} text-sm`}>
+                    <span className="font-semibold text-red-700">
+                      {formatMoney(Math.abs(inv.outstanding), currency)}
                     </span>
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-sm text-slate-700">
-                    {contact.type === "none" ? (
-                      <span className="text-slate-400">—</span>
+                  <td className={`${TABLE_TD} whitespace-nowrap`}>
+                    <StatusBadge type="invoice" status={inv.status} />
+                  </td>
+                  <td className={clsx("hidden md:table-cell", TABLE_TD, "text-sm text-slate-700", TABLE_CELL_TEXT_COL)}>
+                    {client?.whatsapp_phone || client?.whatsapp ? (
+                      <div className="break-words text-slate-600">{client?.whatsapp_phone || client?.whatsapp}</div>
                     ) : (
-                      <a
-                        href={contact.link}
-                        target={contact.type === "email" ? undefined : "_blank"}
-                        rel={contact.type === "email" ? undefined : "noreferrer"}
-                        className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                      >
-                        {contact.type === "whatsapp" && <span>🟢</span>}
-                        {contact.type === "phone" && <span>📞</span>}
-                        {contact.type === "email" && <span>✉️</span>}
-                        <span>{contact.label}</span>
-                      </a>
+                      <span className="text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingInvoice(inv)}
-                      className="text-xs text-blue-600 hover:underline"
+                  <td className={`${TABLE_TD} whitespace-nowrap`}>
+                    <Link
+                      href={`/${workspaceId}/invoices/${inv.id}`}
+                        className="inline-flex items-center whitespace-nowrap rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
                     >
-                      {inv.notes ? "Edit note" : "Add note"}
-                    </button>
-                    {inv.notes && (
-                      <div className="mt-1 text-xs text-slate-600 line-clamp-1">
-                        {inv.notes}
-                      </div>
-                    )}
+                      View invoice
+                    </Link>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      </div>
+        </div>
+        </HorizontalScrollArea>
+      </DataTableShell>
 
       {editingInvoice && (
         <CollectionsNotesModal

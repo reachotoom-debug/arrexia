@@ -24,6 +24,42 @@
 -- Pattern used: workspace_members join (not JWT claims)
 -- ============================================================================
 
+DO $$
+DECLARE
+  missing text;
+  migration_sql text;
+BEGIN
+  -- Check if all required tables exist
+  SELECT t.table_name
+    INTO missing
+  FROM (values
+    ('clients'),
+    ('invoices'),
+    ('invoice_items'),
+    ('payments'),
+    ('reminders'),
+    ('invoice_delivery_logs'),
+    ('workspace_email_settings'),
+    ('settings'),
+    ('message_templates'),
+    ('reminder_rules'),
+    ('reminder_templates')
+  ) AS t(table_name)
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM information_schema.tables it
+    WHERE it.table_schema = 'public'
+      AND it.table_name = t.table_name
+  )
+  LIMIT 1;
+
+  IF missing IS NOT NULL THEN
+    RAISE NOTICE 'Skipping RLS hardening migration: missing table public.%', missing;
+    RETURN;
+  END IF;
+
+  -- All tables exist, execute the migration
+  migration_sql := $migration$
 -- ============================================================================
 -- CLIENTS
 -- ============================================================================
@@ -847,29 +883,8 @@ CREATE POLICY "reminder_templates_delete_own_workspace"
         AND wm.user_id = auth.uid()
     )
   );
+$migration$;
 
--- ============================================================================
--- SUMMARY
--- ============================================================================
---
--- Tables with RLS enabled in this migration:
---   - clients (new)
---   - invoices (new)
---   - invoice_items (new, scoped via invoice)
---   - payments (new)
---   - reminders (new)
---   - workspace_email_settings (new)
---   - settings (new)
---   - message_templates (new)
---   - invoice_delivery_logs (updated - replaced weak policies)
---   - reminder_rules (updated - replaced weak policies)
---   - reminder_templates (updated - replaced weak policies)
---
--- Pattern used: workspace_members join
---   All policies check: EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = <table>.workspace_id AND user_id = auth.uid())
---
--- Example manual test (run in psql as authenticated user):
---   set local role authenticated;
---   set local "request.jwt.claims" to '{"sub":"<user_id>"}';
---   select count(*) from public.invoices; -- should only return rows for workspaces where user is a member
--- ============================================================================
+  EXECUTE migration_sql;
+
+END $$;

@@ -31,9 +31,10 @@ export type InvoiceRowType = {
     quantity: number;
     unit_price: number;
   }> | null;
-  // Pre-calculated fields from database (optional, for optimization)
-  outstanding_amount?: number | null;
-  total_paid?: number | null;
+  // Pre-calculated fields from invoices_view (optional, for optimization)
+  outstanding?: number | null; // From invoices_view.outstanding
+  paid?: number | null; // From invoices_view.paid
+  total_paid?: number | null; // Legacy alias for paid
 };
 
 /**
@@ -66,7 +67,7 @@ function differenceInDays(date1: Date, date2: Date): number {
  * 2. From pre-calculated fields: uses outstanding_amount and total_paid if available
  * 
  * @param args - Input parameters
- * @param args.invoice - Invoice row data (may include pre-calculated outstanding_amount/total_paid)
+ * @param args.invoice - Invoice row data (may include pre-calculated outstanding/paid from invoices_view)
  * @param args.payments - Array of payment rows related to this invoice (optional if using pre-calculated fields)
  * @param args.today - Optional date to use as "today" (defaults to current date)
  * @returns Calculated metrics
@@ -101,10 +102,12 @@ export function computeInvoiceMetrics(args: {
     );
   }
 
-  // Calculate paid amount - prefer pre-calculated field, otherwise calculate from payments
+  // Calculate paid amount - prefer pre-calculated field from invoices_view, otherwise calculate from payments
   let paidAmount = 0;
-  if (invoice.total_paid != null) {
-    paidAmount = Number(invoice.total_paid);
+  if (invoice.paid != null) {
+    paidAmount = Number(invoice.paid);
+  } else if (invoice.total_paid != null) {
+    paidAmount = Number(invoice.total_paid); // Legacy support
   } else {
     // Calculate from payments array
     const completedPayments = payments.filter(
@@ -116,10 +119,10 @@ export function computeInvoiceMetrics(args: {
     );
   }
 
-  // Calculate outstanding - prefer pre-calculated field, otherwise calculate
+  // Calculate outstanding - prefer pre-calculated field from invoices_view, otherwise calculate
   let outstanding = 0;
-  if (invoice.outstanding_amount != null) {
-    outstanding = Number(invoice.outstanding_amount);
+  if (invoice.outstanding != null) {
+    outstanding = Number(invoice.outstanding);
   } else {
     outstanding = Math.max(0, total - paidAmount);
   }

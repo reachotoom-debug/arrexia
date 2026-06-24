@@ -1,9 +1,11 @@
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { DollarSign, TrendingUp, AlertTriangle, Target, Calendar } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { MetricCard } from "./MetricCard";
 
 export interface DashboardSummaryPremium {
+  /** Workspace default currency for formatting (e.g. from settings.default_currency) */
+  defaultCurrency?: string;
   totals: {
     totalInvoiced: number;
     totalCollected: number;
@@ -11,6 +13,8 @@ export interface DashboardSummaryPremium {
     overdueAmount: number;
     highRiskExposure: number;
     dso: number;
+    paymentsLast30Days?: number;
+    paymentsLast30DaysCount?: number;
   };
   trends: {
     invoiced: number[];
@@ -64,7 +68,7 @@ type MetricConfig = {
 export function PremiumKpiRow({ summary, isLoading = false }: PremiumKpiRowProps) {
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         {Array.from({ length: 6 }).map((_, index) => (
           <div
             key={index}
@@ -86,6 +90,8 @@ export function PremiumKpiRow({ summary, isLoading = false }: PremiumKpiRowProps
     return null;
   }
 
+  const currency = summary.defaultCurrency ?? "USD";
+
   const metrics: MetricConfig[] = [
     {
       key: "totalInvoiced",
@@ -95,14 +101,14 @@ export function PremiumKpiRow({ summary, isLoading = false }: PremiumKpiRowProps
       trendKey: "invoiced",
       icon: DollarSign,
       inverse: false,
-      period: "12 months",
-      bottomLabel: "Billed last 12 months",
+      period: "All time",
+      bottomLabel: "All-time billed",
       valueColor: "text-blue-700",
       sparklineColors: {
         stroke: "stroke-blue-400",
         fill: "fill-blue-100/40",
       },
-      formatter: (v) => formatMoney(v, "USD"),
+      formatter: (v) => formatCurrency(v, { currency }),
     },
     {
       key: "totalCollected",
@@ -112,14 +118,14 @@ export function PremiumKpiRow({ summary, isLoading = false }: PremiumKpiRowProps
       trendKey: "collected",
       icon: TrendingUp,
       inverse: false,
-      period: "12 months",
-      bottomLabel: "Payments received",
+      period: "All time",
+      bottomLabel: "All-time collected",
       valueColor: "text-emerald-700",
       sparklineColors: {
         stroke: "stroke-emerald-400",
         fill: "fill-emerald-100/40",
       },
-      formatter: (v) => formatMoney(v, "USD"),
+      formatter: (v) => formatCurrency(v, { currency }),
     },
     {
       key: "totalOutstanding",
@@ -136,7 +142,7 @@ export function PremiumKpiRow({ summary, isLoading = false }: PremiumKpiRowProps
         stroke: "stroke-amber-400",
         fill: "fill-amber-100/40",
       },
-      formatter: (v) => formatMoney(v, "USD"),
+      formatter: (v) => formatCurrency(v, { currency }),
     },
     {
       key: "overdueAmount",
@@ -153,7 +159,7 @@ export function PremiumKpiRow({ summary, isLoading = false }: PremiumKpiRowProps
         stroke: "stroke-rose-400",
         fill: "fill-rose-100/40",
       },
-      formatter: (v) => formatMoney(v, "USD"),
+      formatter: (v) => formatCurrency(v, { currency }),
     },
     {
       key: "highRiskExposure",
@@ -170,7 +176,7 @@ export function PremiumKpiRow({ summary, isLoading = false }: PremiumKpiRowProps
         stroke: "stroke-red-400",
         fill: "fill-red-100/40",
       },
-      formatter: (v) => formatMoney(v, "USD"),
+      formatter: (v) => formatCurrency(v, { currency }),
     },
     {
       key: "dso",
@@ -192,18 +198,20 @@ export function PremiumKpiRow({ summary, isLoading = false }: PremiumKpiRowProps
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
       {metrics.map((metric) => {
         const value = summary.totals[metric.key];
         const delta = summary.deltas[metric.deltaKey];
         const trend = summary.trends[metric.trendKey];
+        const formattedValue =
+          typeof value === "number" ? metric.formatter(value) : "—";
 
         return (
           <MetricCard
             key={metric.key}
             label={metric.label}
             period={metric.period}
-            value={metric.formatter(value)}
+            value={formattedValue}
             valueColor={metric.valueColor}
             delta={delta}
             deltaInverse={metric.inverse}

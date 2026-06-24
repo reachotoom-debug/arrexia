@@ -11,11 +11,11 @@ export const INVOICE_NUMBER_COL_CLASS =
  * Ensures consistent row height and no wrapping
  */
 export const OVERDUE_INVOICE_CELL =
-  "whitespace-nowrap align-middle text-sm py-3 px-4";
+  "whitespace-nowrap align-middle text-sm px-3 py-3";
 
 /**
  * Shared header cell styling for Overdue Invoices tables
  * Ensures consistent header height and alignment with rows
  */
 export const OVERDUE_INVOICE_HEADER_CELL =
-  "whitespace-nowrap align-middle text-xs font-medium text-slate-500 uppercase tracking-wide py-2 px-4";
+  "whitespace-nowrap align-middle text-xs font-medium text-slate-500 uppercase tracking-wide px-3 py-3";

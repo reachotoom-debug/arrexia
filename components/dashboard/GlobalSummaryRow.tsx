@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { KPI } from "@/app/[workspaceId]/dashboard/_components/KPI";
 import type { DashboardSummary } from "@/app/[workspaceId]/dashboard/_types/dashboard";
 import { DollarSign, TrendingUp, AlertTriangle, Target, Calendar } from "lucide-react";
@@ -9,34 +9,34 @@ interface GlobalSummaryRowProps {
 
 export function GlobalSummaryRow({ summary }: GlobalSummaryRowProps) {
   return (
-    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
       <KPI
         label="Total Invoiced"
-        value={formatMoney(summary.totalInvoiced, "USD")}
+        value={formatCurrency(summary.totalInvoiced, { currency: "USD" })}
         icon={DollarSign}
         iconBgColor="bg-blue-100"
       />
       <KPI
         label="Total Collected"
-        value={formatMoney(summary.totalCollected, "USD")}
+        value={formatCurrency(summary.totalCollected, { currency: "USD" })}
         icon={TrendingUp}
         iconBgColor="bg-emerald-100"
       />
       <KPI
         label="Total Outstanding"
-        value={formatMoney(summary.totalOutstanding, "USD")}
+        value={formatCurrency(summary.totalOutstanding, { currency: "USD" })}
         icon={AlertTriangle}
         iconBgColor="bg-amber-100"
       />
       <KPI
         label="Overdue Amount"
-        value={formatMoney(summary.overdueAmount, "USD")}
+        value={formatCurrency(summary.overdueAmount, { currency: "USD" })}
         icon={AlertTriangle}
         iconBgColor="bg-red-100"
       />
       <KPI
         label="High-Risk Exposure"
-        value={formatMoney(summary.highRiskExposure, "USD")}
+        value={formatCurrency(summary.highRiskExposure, { currency: "USD" })}
         icon={Target}
         iconBgColor="bg-red-100"
       />

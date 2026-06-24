@@ -56,6 +56,14 @@ export default function ViewClientModal({
     setMounted(true);
   }, []);
 
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 200);
+  };
+
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (e: KeyboardEvent) => {
@@ -70,15 +78,7 @@ export default function ViewClientModal({
         document.body.style.overflow = "unset";
       };
     }
-  }, [isOpen]);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onClose();
-    }, 200);
-  };
+  }, [isOpen, handleClose]);
 
   if (!isOpen || !mounted || !client) return null;
 

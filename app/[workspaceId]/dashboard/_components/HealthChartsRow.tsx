@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { OverdueAmountChart } from "./OverdueAmountChart";
 import { RevenueOverviewChart } from "@/components/dashboard/RevenueOverviewChart";
 import type { DashboardSeries } from "../../_types/dashboard";
@@ -29,7 +29,7 @@ export function HealthChartsRow({ series, workspaceId, totalInvoiced, paymentsCo
       label: labelMap[bucket.bucket] || `${bucket.bucket} days`,
       key: keyMap[bucket.bucket] || `d${bucket.bucket.replace("-", "_")}`,
       amount: bucket.amount,
-      formattedAmount: formatMoney(bucket.amount, "USD"),
+      formattedAmount: formatCurrency(bucket.amount, { currency: "USD" }),
     };
   });
 
@@ -44,7 +44,7 @@ export function HealthChartsRow({ series, workspaceId, totalInvoiced, paymentsCo
   });
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
       <OverdueAmountChart data={agingChartData} currency="USD" workspaceId={workspaceId} />
       <RevenueOverviewChart 
         data={revenueChartData}

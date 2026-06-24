@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local generated PDFs
+*.pdf
+
+# Supabase local temp
+supabase/.temp/
+
+# Local reports/logs
+typecheck.txt

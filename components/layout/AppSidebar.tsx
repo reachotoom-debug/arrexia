@@ -76,10 +76,10 @@ export function AppSidebar({
   const items = navItems(workspaceId);
 
   return (
-    <aside className="w-64 flex-shrink-0 border-r bg-white">
+    <aside className="w-56 shrink-0 border-r bg-white">
       <div className="flex h-screen flex-col">
         {/* Top: App logo */}
-        <div className="flex items-center gap-3 px-5 pt-4 pb-3">
+        <div className="flex items-center gap-3 px-4 pb-2.5 pt-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white">
             FC
           </div>
@@ -91,7 +91,7 @@ export function AppSidebar({
         </div>
 
         {/* Separator */}
-        <div className="mx-4 mb-2 border-t border-slate-200" />
+        <div className="mx-3 mb-2 border-t border-slate-200" />
 
         {/* Main nav */}
         <div className="flex-1 px-2 pb-2 pt-1">
@@ -136,7 +136,7 @@ export function AppSidebar({
         <div className="mx-4 border-t border-slate-200" />
 
         {/* Bottom: account + plan */}
-        <div className="px-4 py-3">
+        <div className="px-3 py-2.5">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold uppercase text-white overflow-hidden">
               <img

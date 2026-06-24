@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
-import { INVOICE_NUMBER_COL_CLASS, OVERDUE_INVOICE_CELL, OVERDUE_INVOICE_HEADER_CELL } from "@/components/tables/invoiceTableColumns";
+import { formatCurrency } from "@/lib/format/currency";
 import { clsx } from "clsx";
+import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
+import { DataTableShell } from "@/components/layout/DataTableShell";
 
 type DashboardOverdueInvoice = {
   id: string;
@@ -22,6 +23,15 @@ interface OverdueInvoicesTableProps {
   workspaceId: string;
   hasMore?: boolean;
 }
+
+/** Compact dashboard card table — no min-w-[60rem]; fits card on desktop. */
+const hdr = (extra: string) =>
+  clsx(
+    "whitespace-nowrap align-middle text-xs font-medium uppercase tracking-wide text-slate-500 px-2.5 py-2",
+    extra
+  );
+
+const cellBase = "px-2.5 py-2 align-middle text-sm";
 
 function getStatusBadge(status: DashboardOverdueInvoice["status"]) {
   const normalized = (status ?? "draft").toLowerCase();
@@ -46,45 +56,14 @@ function getStatusBadge(status: DashboardOverdueInvoice["status"]) {
   }
 }
 
-function getRiskBadge(riskLevel: string | null) {
-  if (riskLevel === "high") {
-    return (
-      <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 border border-red-200">
-        H
-      </span>
-    );
-  } else if (riskLevel === "medium") {
-    return (
-      <span className="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 border border-orange-200">
-        M
-      </span>
-    );
-  } else if (riskLevel === "low") {
-    return (
-      <span className="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-700 border border-yellow-200">
-        L
-      </span>
-    );
-  }
-  return null;
-}
-
 export function OverdueInvoicesTable({
   invoices,
   workspaceId,
   hasMore,
 }: OverdueInvoicesTableProps) {
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-200">
+    <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="shrink-0 border-b border-slate-200 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-900">
           Overdue Invoices
         </h2>
@@ -98,62 +77,104 @@ export function OverdueInvoicesTable({
         </div>
       ) : (
         <>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>INVOICE #</th>
-                <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>CLIENT</th>
-                <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>STATUS</th>
-                <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>DAYS OVERDUE</th>
-                <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-right")}>OUTSTANDING</th>
-                <th className={clsx(OVERDUE_INVOICE_HEADER_CELL, "text-left")}>RISK</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {invoices.map((invoice) => {
-                const badge = getStatusBadge(invoice.status);
-                
-                return (
-                  <tr
-                    key={invoice.id}
-                    className="hover:bg-slate-50 transition-colors"
-                  >
-                    <td className={clsx(OVERDUE_INVOICE_CELL, "text-slate-700", INVOICE_NUMBER_COL_CLASS)}>
-                      <Link
-                        href={`/${workspaceId}/invoices/${invoice.id}`}
-                        className="font-medium text-blue-600 hover:underline"
-                      >
-                        {invoice.invoiceNumber}
-                      </Link>
-                    </td>
-                    <td className={clsx(OVERDUE_INVOICE_CELL, "text-slate-800")}>
-                      {invoice.clientName || "—"}
-                    </td>
-                    <td className={OVERDUE_INVOICE_CELL}>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${badge.className}`}
-                      >
-                        {badge.label}
-                      </span>
-                    </td>
-                    <td className={OVERDUE_INVOICE_CELL}>
-                      <span className="font-medium text-red-600">
-                        {invoice.overdueDays} {invoice.overdueDays === 1 ? "day" : "days"}
-                      </span>
-                    </td>
-                    <td className={clsx(OVERDUE_INVOICE_CELL, "text-right font-medium text-slate-900")}>
-                      {formatMoney(invoice.outstanding, "USD")}
-                    </td>
-                    <td className={OVERDUE_INVOICE_CELL}>
-                      {getRiskBadge(invoice.riskLevel)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DataTableShell
+            disableInnerScroll
+            className="min-h-0 flex-1 rounded-none border-0 shadow-none"
+          >
+            <HorizontalScrollArea
+              className="relative w-full min-w-0"
+              viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent"
+            >
+              <div className="w-full min-w-0">
+                <table className="w-full min-w-0 table-fixed border-collapse text-sm leading-5">
+                  <colgroup>
+                    <col className="w-[6rem]" />
+                    <col />
+                    <col className="w-[6rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[6.5rem]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      <th className={hdr("w-[6rem] text-left")}>INVOICE #</th>
+                      <th className={hdr("min-w-0 text-left")}>CLIENT</th>
+                      <th className={hdr("w-[6rem] text-left")}>STATUS</th>
+                      <th className={hdr("w-[8rem] pl-3 text-right")}>DAYS OVERDUE</th>
+                      <th className={hdr("w-[6.5rem] text-right")}>OUTSTANDING</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {invoices.map((invoice) => {
+                      const badge = getStatusBadge(invoice.status);
+
+                      return (
+                        <tr
+                          key={invoice.id}
+                          className="hover:bg-slate-50 transition-colors"
+                        >
+                          <td
+                            className={clsx(
+                              cellBase,
+                              "w-[6rem] truncate text-slate-700"
+                            )}
+                          >
+                            <Link
+                              href={`/${workspaceId}/invoices/${invoice.id}`}
+                              className="block truncate font-medium text-blue-600 hover:underline"
+                              title={invoice.invoiceNumber}
+                            >
+                              {invoice.invoiceNumber}
+                            </Link>
+                          </td>
+                          <td className="min-w-0 truncate py-2 pl-2.5 pr-3 align-middle text-sm">
+                            <span
+                              className="block w-full truncate text-slate-800"
+                              title={invoice.clientName || undefined}
+                            >
+                              {invoice.clientName || "—"}
+                            </span>
+                          </td>
+                          <td
+                            className={clsx(
+                              cellBase,
+                              "w-[6rem] align-middle"
+                            )}
+                          >
+                            <span
+                              className={`inline-flex h-5 max-w-full items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${badge.className}`}
+                            >
+                              {badge.label}
+                            </span>
+                          </td>
+                          <td
+                            className={clsx(
+                              cellBase,
+                              "w-[8rem] pl-3 text-right whitespace-nowrap font-medium text-red-500"
+                            )}
+                          >
+                            <span>
+                              {invoice.overdueDays}{" "}
+                              {invoice.overdueDays === 1 ? "day" : "days"}
+                            </span>
+                          </td>
+                          <td
+                            className={clsx(
+                              cellBase,
+                              "w-[6.5rem] text-right whitespace-nowrap font-medium tabular-nums text-slate-900"
+                            )}
+                          >
+                            {formatCurrency(invoice.outstanding, { currency: "USD" })}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </HorizontalScrollArea>
+          </DataTableShell>
           {hasMore && (
-            <div className="px-4 py-2 border-t border-slate-200 flex justify-end">
+            <div className="flex justify-end border-t border-slate-200 px-4 py-2">
               <Link
                 href={`/${workspaceId}/invoices?status=overdue`}
                 className="text-[11px] text-slate-500 hover:text-slate-700 hover:underline"

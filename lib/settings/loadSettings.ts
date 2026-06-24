@@ -5,6 +5,7 @@
 
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/auth/server";
+import { resolveEmailProvider } from "@/lib/email/sendEmail";
 
 export type WorkspaceSettings = {
   workspace: {
@@ -42,6 +43,30 @@ export type WorkspaceSettings = {
     defaultCurrency: string; // ISO code like "USD"
     defaultPaymentTermsDays: number;
   };
+  branding: {
+    logoUrl: string | null;
+    businessName: string | null;
+    businessLegalName: string | null;
+    businessAddress: string | null;
+    businessEmail: string | null;
+    businessPhone: string | null;
+    website: string | null;
+    taxId: string | null;
+  };
+  paymentDetails: {
+    bankName: string | null;
+    bankAccountName: string | null;
+    bankAccountNumber: string | null;
+    bankSwift: string | null;
+    bankIban: string | null;
+    paypalHandle: string | null;
+    stripeDescriptor: string | null;
+    otherInstructions: string | null;
+  };
+  invoice: {
+    thankYouNote: string | null;
+  };
+  timezone: string | null;
 };
 
 /**
@@ -112,7 +137,7 @@ export async function loadWorkspaceSettings(
   };
 
   // Normalize email settings
-  const emailProvider = (settings?.email_provider || emailSettings?.email_provider || "smtp") as "resend" | "smtp";
+  const emailProvider = resolveEmailProvider(settings?.email_provider);
   const emailData = {
     provider: emailProvider,
     fromName: emailSettings?.from_name || settings?.from_name || "",
@@ -126,7 +151,7 @@ export async function loadWorkspaceSettings(
 
   // Normalize reminder settings
   const reminderChannel = settings?.reminder_channel;
-  const normalizedChannel = reminderChannel === "whatsapp" ? "whatsapp" : "email";
+  const normalizedChannel: "email" | "whatsapp" = reminderChannel === "whatsapp" ? "whatsapp" : "email";
   const remindersData = {
     enableAutomatic: settings?.auto_send_reminders ?? false,
     afterDueDays: settings?.reminder_after_days ?? 7,
@@ -140,10 +165,42 @@ export async function loadWorkspaceSettings(
     defaultPaymentTermsDays: settings?.default_due_days || 30,
   };
 
+  const brandingData = {
+    logoUrl: settings?.workspace_logo_url ?? settings?.logo_url ?? workspaceSafe.profile_image_url ?? null,
+    businessName: settings?.workspace_display_name ?? workspaceSafe.name ?? null,
+    businessLegalName: settings?.branding_business_legal_name ?? null,
+    businessAddress: settings?.branding_business_address ?? null,
+    businessEmail: settings?.business_email ?? null,
+    businessPhone: settings?.business_phone ?? null,
+    website: settings?.business_website ?? null,
+    taxId: settings?.branding_tax_id ?? settings?.business_tax_number ?? null,
+  };
+
+  const paymentDetailsData = {
+    bankName: settings?.payment_bank_name ?? null,
+    bankAccountName: settings?.payment_bank_account_name ?? null,
+    bankAccountNumber: settings?.payment_bank_account_number ?? null,
+    bankSwift: settings?.payment_bank_swift ?? null,
+    bankIban: settings?.payment_bank_iban ?? null,
+    paypalHandle: settings?.payment_paypal_handle ?? null,
+    stripeDescriptor: settings?.payment_stripe_descriptor ?? null,
+    otherInstructions: settings?.payment_other_instructions ?? null,
+  };
+
+  const invoiceData = {
+    thankYouNote: settings?.invoice_thank_you_note ?? null,
+  };
+
+  const timezone = settings?.timezone ?? null;
+
   return {
     workspace: workspaceData,
     email: emailData,
     reminders: remindersData,
     payments: paymentsData,
+    branding: brandingData,
+    paymentDetails: paymentDetailsData,
+    invoice: invoiceData,
+    timezone,
   };
 }

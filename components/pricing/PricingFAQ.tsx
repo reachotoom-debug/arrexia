@@ -2,30 +2,38 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const FAQ = [
   {
-    q: "Do you lock my data if I don’t pay?",
-    a: "No. Your data is always accessible.",
+    q: "Is FlowCollect just an invoice generator?",
+    a: "No. FlowCollect is built around payment collection, overdue tracking, reminders, and receivables visibility.",
   },
   {
-    q: "Can I change plans later?",
+    q: "Do I need a credit card for trial?",
+    a: "No.",
+  },
+  {
+    q: "Can I upgrade later?",
     a: "Yes, anytime.",
   },
   {
-    q: "When will WhatsApp & payment links be available?",
-    a: "Soon — Pro users first.",
+    q: "Is this for freelancers only?",
+    a: "No — freelancers, agencies, consultants, and SMBs use FlowCollect.",
+  },
+  {
+    q: "What happens after trial?",
+    a: "Choose a plan that fits your business.",
   },
 ];
 
 export function PricingFAQ() {
   return (
-    <Card className="border-slate-200">
-      <CardHeader>
-        <CardTitle className="text-lg text-slate-900">FAQ</CardTitle>
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader className="p-7 lg:p-9">
+        <CardTitle className="text-2xl text-slate-900 lg:text-3xl">FAQ</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4 text-sm text-slate-700">
+      <CardContent className="space-y-6 p-7 pt-0 sm:space-y-8 lg:p-9 lg:pt-0">
         {FAQ.map((item) => (
-          <div key={item.q} className="space-y-1">
-            <p className="font-semibold text-slate-900">{item.q}</p>
-            <p className="text-slate-700">{item.a}</p>
+          <div key={item.q} className="space-y-2 border-b border-slate-100 pb-6 last:border-0 last:pb-0">
+            <p className="text-base font-semibold text-slate-900 sm:text-lg">{item.q}</p>
+            <p className="text-sm leading-relaxed text-slate-600 sm:text-base">{item.a}</p>
           </div>
         ))}
       </CardContent>

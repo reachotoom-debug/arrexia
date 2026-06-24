@@ -1,8 +1,7 @@
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { KPI } from "./KPI";
 import { TopOverdueClientsTable } from "./TopOverdueClientsTable";
 import { OverdueInvoicesTable } from "./OverdueInvoicesTable";
-import { ReminderEffectivenessChart } from "./ReminderEffectivenessChart";
 import type { DashboardData } from "../../_types/dashboard";
 import { AlertTriangle, Target, FileText } from "lucide-react";
 import Link from "next/link";
@@ -13,29 +12,7 @@ interface ArFocusViewProps {
 }
 
 export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
-  const overdueCount = data.arFocus.overdueInvoices.length;
-
-  // Convert aging buckets for chart
-  const agingChartData = data.series.agingBuckets.map((bucket) => {
-    const labelMap: Record<string, string> = {
-      "0-30": "0–30 days",
-      "31-60": "31–60 days",
-      "61-90": "61–90 days",
-      "90+": "90+ days",
-    };
-    const keyMap: Record<string, string> = {
-      "0-30": "d0_30",
-      "31-60": "d31_60",
-      "61-90": "d61_90",
-      "90+": "d90_plus",
-    };
-    return {
-      label: labelMap[bucket.bucket] || `${bucket.bucket} days`,
-      key: keyMap[bucket.bucket] || `d${bucket.bucket.replace("-", "_")}`,
-      amount: bucket.amount,
-      formattedAmount: formatMoney(bucket.amount, "USD"),
-    };
-  });
+  const overdueCount = data.arFocus.overdueInvoicesCount;
 
   // Convert overdue invoices for table
   const overdueInvoicesForTable = data.arFocus.overdueInvoices.map((inv) => ({
@@ -55,22 +32,22 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
   return (
     <div className="space-y-6">
       {/* Top 4 AR-specific KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <KPI
-          label="Total Outstanding"
-          value={formatMoney(data.summary.totalOutstandingNow, "USD")}
+          label="Collectible Outstanding"
+          value={formatCurrency(data.arFocus.collectibleOutstanding, { currency: "USD" })}
           icon={AlertTriangle}
           iconBgColor="bg-blue-100"
         />
         <KPI
           label="Overdue Amount"
-          value={formatMoney(data.summary.overdueAmountNow, "USD")}
+          value={formatCurrency(data.arFocus.overdueAmount, { currency: "USD" })}
           icon={AlertTriangle}
           iconBgColor="bg-red-100"
         />
         <KPI
           label="High-Risk Exposure"
-          value={formatMoney(data.summary.highRiskExposureNow, "USD")}
+          value={formatCurrency(data.arFocus.highRiskExposure, { currency: "USD" })}
           icon={Target}
           iconBgColor="bg-red-100"
         />
@@ -82,35 +59,34 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
         />
       </div>
 
-      {/* Smart Risk Overview + Reminder Effectiveness Chart */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Smart Risk Overview */}
+      {/* Where to Collect First */}
+      <div className="grid grid-cols-1 gap-6">
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">Smart Risk Overview</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Where to Collect First</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                Auto-detected clusters of overdue invoices
+                Prioritized overdue invoices based on risk and amount
               </p>
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            {/* High risk */}
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
+            {/* High priority */}
             <Link
               href={`/${workspaceId}/invoices?view=smart-high-risk`}
               className="flex flex-col rounded-lg border border-red-200 bg-gradient-to-br from-red-50 to-red-100/50 p-4 hover:border-red-300 transition-colors"
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
-                  High risk
+                  High Priority
                 </span>
               </div>
               <div className="text-xs text-red-800 mb-1">
                 {data.riskOverview.high.invoiceCount} invoice{data.riskOverview.high.invoiceCount !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-red-900">
-                {formatMoney(data.riskOverview.high.amount, "USD")}
+                {formatCurrency(data.riskOverview.high.amount, { currency: "USD" })}
               </div>
             </Link>
 
@@ -121,14 +97,14 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                  Medium risk
+                  Medium Priority
                 </span>
               </div>
               <div className="text-xs text-amber-800 mb-1">
                 {data.riskOverview.medium.invoiceCount} invoice{data.riskOverview.medium.invoiceCount !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-amber-900">
-                {formatMoney(data.riskOverview.medium.amount, "USD")}
+                {formatCurrency(data.riskOverview.medium.amount, { currency: "USD" })}
               </div>
             </Link>
 
@@ -139,38 +115,36 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-700">
-                  Low risk
+                  Low Priority
                 </span>
               </div>
               <div className="text-xs text-yellow-800 mb-1">
                 {data.riskOverview.low.invoiceCount} invoice{data.riskOverview.low.invoiceCount !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-yellow-900">
-                {formatMoney(data.riskOverview.low.amount, "USD")}
+                {formatCurrency(data.riskOverview.low.amount, { currency: "USD" })}
               </div>
             </Link>
           </div>
         </div>
-
-        {/* Reminder Effectiveness Chart */}
-        <ReminderEffectivenessChart
-          data={data.reminderEffectiveness}
-          workspaceId={workspaceId}
-        />
       </div>
 
-      {/* Tables */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <TopOverdueClientsTable 
-          clients={data.arFocus.topOverdueClients} 
-          hasMore={data.arFocus.topOverdueClientsHasMore}
-          workspaceId={workspaceId}
-        />
-        <OverdueInvoicesTable 
-          invoices={overdueInvoicesForTable} 
-          workspaceId={workspaceId}
-          hasMore={data.arFocus.overdueInvoicesHasMore}
-        />
+      {/* Tables — min-w-0 so grid children can shrink and tables scroll inside DataTableShell */}
+      <div className="grid min-w-0 grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="min-w-0">
+          <TopOverdueClientsTable
+            clients={data.arFocus.topOverdueClients}
+            hasMore={data.arFocus.topOverdueClientsHasMore}
+            workspaceId={workspaceId}
+          />
+        </div>
+        <div className="min-w-0">
+          <OverdueInvoicesTable
+            invoices={overdueInvoicesForTable}
+            workspaceId={workspaceId}
+            hasMore={data.arFocus.overdueInvoicesHasMore}
+          />
+        </div>
       </div>
     </div>
   );

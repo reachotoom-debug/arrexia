@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ScrollTabStrip } from "@/components/layout/ScrollTabStrip";
 
 interface RemindersTabsProps {
   defaultValue?: "suggested" | "history";
@@ -15,40 +16,32 @@ export function RemindersTabs({
 }: RemindersTabsProps) {
   const [activeTab, setActiveTab] = useState<"suggested" | "history">(defaultValue);
 
+  const tabBtn = (active: boolean) =>
+    [
+      "border-b-2 px-1 py-4 text-sm font-medium transition-colors",
+      active
+        ? "border-blue-500 text-blue-600"
+        : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700",
+    ].join(" ");
+
   return (
     <div className="space-y-4">
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-8">
+      <ScrollTabStrip aria-label="Reminders">
           <button
             type="button"
             onClick={() => setActiveTab("suggested")}
-            className={`
-              whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium transition-colors
-              ${
-                activeTab === "suggested"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700"
-              }
-            `}
+            className={tabBtn(activeTab === "suggested")}
           >
             Suggested reminders
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("history")}
-            className={`
-              whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium transition-colors
-              ${
-                activeTab === "history"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700"
-              }
-            `}
+            className={tabBtn(activeTab === "history")}
           >
             History
           </button>
-        </nav>
-      </div>
+      </ScrollTabStrip>
 
       <div>
         {activeTab === "suggested" && suggestedContent}

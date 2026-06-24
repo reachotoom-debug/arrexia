@@ -1,12 +1,16 @@
 "use server";
 
 import { supabaseServer } from "@/lib/supabase/server";
-import { Database } from "@/types/supabase";
+import { Database } from "@/types/supabase/index";
 
 type Db = Database["public"]["Tables"];
 type InvoiceRow = Db["invoices"]["Row"];
 type ReminderRuleRow = Db["reminder_rules"]["Row"];
 type ReminderTemplateRow = Db["reminder_templates"]["Row"];
+type TemplateForResolve = Pick<
+  ReminderTemplateRow,
+  "id" | "code" | "name" | "subject" | "body" | "is_enabled"
+>;
 
 export type ResolvedReminderTemplate = {
   template: {
@@ -41,7 +45,7 @@ async function fallbackTemplateByCode(
     throw new Error("Failed to load reminder templates");
   }
 
-  const templates = data ?? [];
+  const templates: TemplateForResolve[] = (data ?? []) as unknown as TemplateForResolve[];
 
   if (!templates || templates.length === 0) {
     throw new Error("No reminder templates configured (global fallback is empty)");
@@ -49,43 +53,43 @@ async function fallbackTemplateByCode(
 
   console.log("[fallbackTemplateByCode] using templates", {
     count: templates.length,
-    codes: templates.map((t) => (t as ReminderTemplateRow).code),
+    codes: templates.map((t) => t.code),
   });
 
   const byCode = (code: string) =>
     templates.find((t) => t.code === code) ?? null;
 
-  let chosen: ReminderTemplateRow | null = null;
+  let chosen: TemplateForResolve | null = null;
 
   if (daysFromDue < 0) {
     // Before due date → use PRE_DUE_FRIENDLY if exists
     chosen =
       byCode("PRE_DUE_FRIENDLY") ||
       byCode("ON_DUE") ||
-      (templates[0] as ReminderTemplateRow);
+      templates[0];
   } else if (daysFromDue === 0) {
     // On due date
     chosen =
       byCode("ON_DUE") ||
       byCode("OVERDUE_1") ||
-      (templates[0] as ReminderTemplateRow);
+      templates[0];
   } else {
     // Overdue
     if (daysFromDue <= 7) {
       chosen =
         byCode("OVERDUE_1") ||
         byCode("FINAL_NOTICE") ||
-        (templates[0] as ReminderTemplateRow);
+        templates[0];
     } else {
       chosen =
         byCode("FINAL_NOTICE") ||
         byCode("OVERDUE_1") ||
-        (templates[0] as ReminderTemplateRow);
+        templates[0];
     }
   }
 
   if (!chosen) {
-    chosen = templates[0] as ReminderTemplateRow;
+    chosen = templates[0];
   }
 
   return {
@@ -168,9 +172,10 @@ export async function resolveReminderTemplateForInvoice(
     return fallbackTemplateByCode(workspaceId, daysFromDue);
   }
 
-  const templateMap = new Map<string, ReminderTemplateRow>();
-  for (const tpl of templates) {
-    templateMap.set(tpl.id, tpl as ReminderTemplateRow);
+  const templatesClean: TemplateForResolve[] = (templates ?? []) as unknown as TemplateForResolve[];
+  const templateMap = new Map<string, TemplateForResolve>();
+  for (const tpl of templatesClean) {
+    templateMap.set(tpl.id, tpl);
   }
 
   // ---- 4) Filter rules to enabled + enabled templates + matching status

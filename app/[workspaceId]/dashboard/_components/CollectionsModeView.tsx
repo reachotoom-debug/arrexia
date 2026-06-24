@@ -2,11 +2,10 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
-import { KPI } from "./KPI";
+import { formatCurrency } from "@/lib/format/currency";
 import type { CollectionsModeData } from "../../_types/dashboard";
-import { FileText, DollarSign, AlertTriangle } from "lucide-react";
 import { INVOICE_NUMBER_COL_CLASS } from "@/components/tables/invoiceTableColumns";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { clsx } from "clsx";
 
 interface CollectionsModeViewProps {
@@ -23,13 +22,16 @@ export function CollectionsModeView({ data, workspaceId }: CollectionsModeViewPr
 
   // Filter and sort worklist
   const filteredAndSorted = useMemo(() => {
-    const filtered =
+    // IMPORTANT: this view is “Collections exposure” (chaseable invoices).
+    // data.worklist is already sourced from invoices_view with overdue + outstanding > 0
+    // and eligibility filters applied server-side. We only apply risk_level filtering here.
+    const filteredInvoices =
       riskFilter === "all"
         ? data.worklist
         : data.worklist.filter((item) => item.riskLevel === riskFilter);
 
-    // Apply sorting
-    const sorted = [...filtered].sort((a, b) => {
+    // Apply sorting for the table
+    const sorted = [...filteredInvoices].sort((a, b) => {
       switch (sortOption) {
         case "overdue-days-desc":
           return b.overdueDays - a.overdueDays;
@@ -43,23 +45,17 @@ export function CollectionsModeView({ data, workspaceId }: CollectionsModeViewPr
     });
 
     // Cap to 10 rows for display
-    return sorted.slice(0, 10);
+    return {
+      filteredInvoices,
+      tableRows: sorted.slice(0, 10),
+    };
   }, [data.worklist, riskFilter, sortOption]);
   
   // Check if there are more items (considering filter and original data)
-  const hasMore = data.worklistHasMore || (riskFilter !== "all" && data.worklist.length > 10);
-
-  const worklistOutstanding = filteredAndSorted.reduce(
-    (sum, item) => sum + item.outstanding,
-    0
-  );
-
-  const riskFilterLabels: Record<RiskFilter, string> = {
-    all: "All risks",
-    high: "High risk",
-    medium: "Medium risk",
-    low: "Low risk",
-  };
+  const hasMore =
+    riskFilter === "all"
+      ? data.worklistHasMore
+      : filteredAndSorted.filteredInvoices.length > 10;
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "—";
@@ -69,6 +65,13 @@ export function CollectionsModeView({ data, workspaceId }: CollectionsModeViewPr
       day: "numeric",
     });
   };
+
+  /** Overdue-day heat for urgency: <60 light, 60-120 medium red, >120 strong red. */
+  function getOverdueDaysHeatClasses(days: number): string {
+    if (days > 120) return "bg-red-600 text-white border-red-700";
+    if (days >= 60) return "bg-red-200 text-red-900 border-red-400";
+    return "bg-red-50 text-red-700 border-red-200";
+  }
 
   function getRiskBadge(riskLevel: string | null) {
     if (riskLevel === "high") {
@@ -95,28 +98,6 @@ export function CollectionsModeView({ data, workspaceId }: CollectionsModeViewPr
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <KPI
-          label="Invoices in view"
-          value={filteredAndSorted.length}
-          icon={FileText}
-          iconBgColor="bg-blue-100"
-        />
-        <KPI
-          label="Outstanding in view"
-          value={formatMoney(worklistOutstanding, "USD")}
-          icon={DollarSign}
-          iconBgColor="bg-red-100"
-        />
-        <KPI
-          label="Mode"
-          value={riskFilterLabels[riskFilter]}
-          icon={AlertTriangle}
-          iconBgColor="bg-amber-100"
-        />
-      </div>
-
       {/* Filters and Sort */}
       <div className="flex gap-4 items-center flex-wrap">
         <div className="flex gap-2 flex-wrap">
@@ -193,10 +174,10 @@ export function CollectionsModeView({ data, workspaceId }: CollectionsModeViewPr
         <div className="px-4 py-3 border-b border-slate-200">
           <h2 className="text-sm font-semibold text-slate-900">Collections Worklist</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Overdue invoices requiring collection action
+            Open the invoice to review details and prepare follow-up
           </p>
         </div>
-        {filteredAndSorted.length === 0 ? (
+        {filteredAndSorted.filteredInvoices.length === 0 ? (
           <div className="p-6 text-center">
             <p className="text-sm font-semibold text-slate-900 mb-1">
               No invoices require collection action
@@ -219,14 +200,19 @@ export function CollectionsModeView({ data, workspaceId }: CollectionsModeViewPr
                     <th className="px-3 py-2 text-right">Outstanding</th>
                     <th className="px-3 py-2 text-left">Status</th>
                     <th className="px-3 py-2 text-center">Contact</th>
-                    <th className="px-3 py-2 text-left">Next action</th>
+                    <th className="px-3 py-2 text-left">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAndSorted.map((item) => (
+                  {filteredAndSorted.tableRows.map((item) => (
                     <tr
                       key={item.id}
-                      className="border-b border-slate-100 hover:bg-slate-50"
+                      className={clsx(
+                        "border-b border-slate-100",
+                        item.overdueDays >= 90
+                          ? "bg-red-50 hover:bg-red-100"
+                          : "hover:bg-slate-50"
+                      )}
                     >
                       <td className="px-3 py-2">{getRiskBadge(item.riskLevel)}</td>
                       <td className={clsx("py-2 text-sm text-slate-700", INVOICE_NUMBER_COL_CLASS)}>
@@ -243,23 +229,41 @@ export function CollectionsModeView({ data, workspaceId }: CollectionsModeViewPr
                       <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
                         {item.dueDate ? formatDate(item.dueDate) : "—"}
                       </td>
-                      <td className="px-3 py-2 text-right font-medium text-red-600 whitespace-nowrap">
-                        {item.overdueDays} day{item.overdueDays !== 1 ? "s" : ""}
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium text-red-600 whitespace-nowrap">
-                        {formatMoney(item.outstanding, "USD")}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="inline-flex rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-xs font-medium text-red-700 capitalize">
-                          Overdue
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        <span
+                          className={clsx(
+                            "inline-flex rounded-full border px-2 py-0.5 text-xs font-medium",
+                            getOverdueDaysHeatClasses(item.overdueDays)
+                          )}
+                        >
+                          {item.overdueDays} day{item.overdueDays !== 1 ? "s" : ""}
                         </span>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-sm text-slate-700 text-center">
-                        <span className="text-slate-400" title="Email">✉️</span>
-                        <span className="text-slate-400 ml-2" title="WhatsApp">💬</span>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        <span className="font-semibold text-red-700">
+                          {formatCurrency(item.outstanding, { currency: "USD" })}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge type="invoice" status="overdue" />
+                      </td>
+                      <td className="px-3 py-2 text-sm text-slate-700">
+                        {item.primaryEmail || item.primaryPhone ? (
+                          <div className="space-y-0.5">
+                            {item.primaryEmail ? <div>{item.primaryEmail}</div> : null}
+                            {item.primaryPhone ? <div className="text-slate-500">{item.primaryPhone}</div> : null}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">No contact info</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <span className="text-xs text-slate-500">—</span>
+                        <Link
+                          href={`/${workspaceId}/invoices/${item.id}`}
+                          className="inline-flex items-center rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+                        >
+                          View invoice
+                        </Link>
                       </td>
                     </tr>
                   ))}

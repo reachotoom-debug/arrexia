@@ -10,7 +10,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatMoney } from "@/lib/invoices/utils";
 import { CHART_COLORS, formatCurrencyAxis, ChartTooltip } from "./chart-utils";
 import { ChartEmptyState } from "./ChartEmptyState";
 
@@ -121,7 +120,7 @@ export function OverdueAmountChart({
           </div>
 
           {/* Legend / Summary row */}
-          <div className="mt-4 grid gap-2 text-xs md:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
             {data.map((bucket) => (
               <div
                 key={bucket.key}

@@ -1,7 +1,10 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { AlertTriangle, Inbox } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { primaryCtaClass } from "@/components/ui/cta-styles";
 
 interface ErrorStateProps {
   title?: string;
@@ -41,40 +44,63 @@ export function ErrorState({
   );
 }
 
-interface EmptyStateProps {
+export interface EmptyStateProps {
   title: string;
   message?: string;
   actionLabel?: string;
+  /** Primary action as navigation (preferred over onAction when both set) */
+  actionHref?: string;
   onAction?: () => void;
   children?: React.ReactNode;
+  /** Replaces default Inbox icon in the circle */
+  icon?: React.ReactNode;
+  /** Minimal container (e.g. inside a table cell or nested card) */
+  bare?: boolean;
 }
 
 export function EmptyState({
   title,
   message,
   actionLabel,
+  actionHref,
   onAction,
   children,
+  icon,
+  bare = false,
 }: EmptyStateProps) {
+  const cta =
+    actionLabel && actionHref ? (
+      <Link href={actionHref} className={cn(primaryCtaClass, "mt-4")}>
+        {actionLabel}
+      </Link>
+    ) : actionLabel && onAction ? (
+      <button
+        type="button"
+        onClick={onAction}
+        className={cn(primaryCtaClass, "mt-4")}
+      >
+        {actionLabel}
+      </button>
+    ) : null;
+
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center text-center",
+        bare
+          ? "py-10 px-4"
+          : "rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
+      )}
+    >
       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-slate-50">
-        <Inbox className="h-5 w-5 text-slate-400" />
+        {icon ?? <Inbox className="h-5 w-5 text-slate-400" />}
       </div>
       <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-      {message && (
+      {message ? (
         <p className="mt-2 max-w-sm text-sm text-slate-500">{message}</p>
-      )}
+      ) : null}
       {children}
-      {onAction && actionLabel && (
-        <button
-          type="button"
-          onClick={onAction}
-          className="mt-4 inline-flex items-center rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800"
-        >
-          {actionLabel}
-        </button>
-      )}
+      {cta}
     </div>
   );
 }

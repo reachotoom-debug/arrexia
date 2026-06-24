@@ -7,6 +7,9 @@ import { ActionMenu } from "./ActionMenu";
 import { DeleteClientModal } from "./DeleteClientModal";
 import { deleteClient } from "../actions";
 import { formatMoney } from "@/lib/invoices/utils";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { EmptyState } from "@/components/ui/state";
+import { resolveClientStatus } from "@/lib/clients/state";
 
 interface Client {
   id: string;
@@ -16,7 +19,9 @@ interface Client {
   whatsapp: string | null;
   country: string | null;
   payment_terms: number | null;
-  status: string;
+  status: string; // Legacy field, not used for UI status
+  archived_at: string | null;
+  is_active: boolean;
   invoicesCount?: number;
   outstanding?: number;
 }
@@ -47,9 +52,13 @@ export function ClientsCards({ clients, workspaceId }: ClientsCardsProps) {
 
   if (!clients.length) {
     return (
-      <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
-        No clients found. Try adjusting your filters or search.
-      </div>
+      <EmptyState
+        bare
+        title="No clients match your filters"
+        message="Try clearing filters or search to see more clients."
+        actionLabel="View all clients"
+        actionHref={`/${workspaceId}/clients`}
+      />
     );
   }
 
@@ -57,7 +66,7 @@ export function ClientsCards({ clients, workspaceId }: ClientsCardsProps) {
     <>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {clients.map((client) => {
-          const displayStatus = client.status === "archived" ? "inactive" : "active";
+          const displayStatus = resolveClientStatus(client);
           const outstanding = Number(client.outstanding ?? 0);
           const invoicesCount = client.invoicesCount ?? 0;
 
@@ -83,15 +92,7 @@ export function ClientsCards({ clients, workspaceId }: ClientsCardsProps) {
                     </div>
                   )}
                 </div>
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0 ${
-                    displayStatus === "active"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {displayStatus === "active" ? "Active" : "Inactive"}
-                </span>
+                <StatusBadge type="client" status={displayStatus} className="shrink-0 text-[11px]" />
               </div>
 
               {/* Middle: key stats */}

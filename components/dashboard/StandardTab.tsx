@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { OverdueAmountChart } from "@/app/[workspaceId]/dashboard/_components/OverdueAmountChart";
 import { RevenueOverviewChart } from "./RevenueOverviewChart";
 import { RecentActivityTable } from "./RecentActivityTable";
@@ -40,7 +40,7 @@ export function StandardTab({
       label: bucket.label,
       key: keyMap[bucket.label] || bucket.label.replace(/[^a-z0-9]/gi, "_"),
       amount: bucket.amount,
-      formattedAmount: formatMoney(bucket.amount, "USD"),
+      formattedAmount: formatCurrency(bucket.amount, { currency: "USD" }),
     };
   });
 
@@ -54,13 +54,13 @@ export function StandardTab({
   return (
     <div className="space-y-6">
       {/* Row 1: Charts */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <OverdueAmountChart data={agingChartData} currency="USD" />
         <RevenueOverviewChart data={revenueChartData} />
       </div>
 
       {/* Row 2: Tables */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <RecentActivityTable activities={recentActivity} workspaceId={workspaceId} />
         <UpcomingDueTable invoices={upcomingDue} workspaceId={workspaceId} />
       </div>

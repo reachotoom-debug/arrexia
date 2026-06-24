@@ -1,15 +1,15 @@
 export default function DashboardLoading() {
   return (
-    <div className="max-w-7xl mx-auto py-6 space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       {/* Header skeleton */}
       <div className="space-y-2">
         <div className="h-7 w-40 bg-slate-200 rounded animate-pulse" />
         <div className="h-4 w-64 bg-slate-200 rounded animate-pulse" />
       </div>
 
-      {/* KPI row – 6 metric cards */}
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, i) => (
+      {/* KPI row – 4–5 cards */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
+        {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-3 flex flex-col gap-3"
@@ -51,7 +51,7 @@ export default function DashboardLoading() {
       </div>
 
       {/* First row: two big cards (charts / risk) */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {Array.from({ length: 2 }).map((_, i) => (
           <div
             key={i}
@@ -64,7 +64,7 @@ export default function DashboardLoading() {
       </div>
 
       {/* Second row: action table + activity feed */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {Array.from({ length: 2 }).map((_, i) => (
           <div
             key={i}

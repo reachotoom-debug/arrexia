@@ -61,12 +61,15 @@ export async function runDueRemindersForWorkspace(
       return result;
     }
 
-    // 3) Load candidate invoices from invoices_view
+    // 3) Load candidate invoices from invoices_view with client status filtering
     // Criteria:
     // - Not fully paid (outstanding > 0)
     // - Not void (display_status != 'void')
     // - Has due_date (required for timing calculations)
     // - Status is sent, partially_paid, or overdue
+    // - Client is not archived (archived_at IS NULL) and is active (is_active = true)
+    // Note: invoices_view sets client_name to NULL if client is archived, but we also need to check is_active
+    // So we query invoices_view first, then join with clients table to filter by both archived_at and is_active
     const { data: candidateInvoices, error: invoicesError } = await supabase
       .from("invoices_view")
       .select(`
@@ -80,9 +83,13 @@ export async function runDueRemindersForWorkspace(
         base_status
       `)
       .eq("workspace_id", workspaceId)
+      // Reminders eligibility: only invoices with outstanding > 0 and not archived
+      // This uses invoices_view as the single source of truth.
+      .is("archived_at", null)
       .gt("outstanding", 0)
       .not("due_date", "is", null)
-      .in("display_status", ["sent", "partially_paid", "overdue"]);
+      .in("display_status", ["sent", "partially_paid", "overdue"])
+      .not("client_name", "is", null); // invoices_view sets client_name to NULL if client is archived
 
     if (invoicesError) {
       console.error(`[runDueRemindersForWorkspace] Error loading invoices for workspace ${workspaceId}:`, invoicesError);
@@ -100,19 +107,63 @@ export async function runDueRemindersForWorkspace(
 
     console.log(`[runDueRemindersForWorkspace] Processing ${candidateInvoices.length} candidate invoices for workspace ${workspaceId}`);
 
-    // 4) For each invoice, find applicable rule and send reminder
-    for (const invoice of candidateInvoices) {
+    // 4) Filter invoices by client status (archived_at IS NULL AND is_active = true)
+    // Load client statuses for the candidate invoices to filter out archived/inactive clients
+    const clientIds = [...new Set(candidateInvoices.map((inv) => inv.client_id).filter(Boolean))];
+    if (clientIds.length === 0) {
+      console.log(`[runDueRemindersForWorkspace] No client IDs found in candidate invoices for workspace ${workspaceId}`);
+      return result;
+    }
+
+    const { data: clients, error: clientsError } = await supabase
+      .from("clients")
+      .select("id, archived_at, is_active")
+      // Reminders eligibility: clients must be active AND not archived
+      // This rule must match all reminders queries globally.
+      .eq("workspace_id", workspaceId)
+      .eq("is_active", true)
+      .is("archived_at", null)
+      .in("id", clientIds);
+
+    if (clientsError) {
+      console.error(`[runDueRemindersForWorkspace] Error loading clients for workspace ${workspaceId}:`, clientsError);
+      result.errors.push({
+        invoiceId: "all",
+        error: `Failed to load clients: ${clientsError.message}`,
+      });
+      return result;
+    }
+
+    // Build map of active, non-archived client IDs
+    const activeClientIds = new Set(
+      (clients || [])
+        .filter((c) => !c.archived_at && c.is_active === true)
+        .map((c) => c.id)
+    );
+
+    // Filter invoices to only those with active, non-archived clients
+    const eligibleInvoices = candidateInvoices.filter((inv) =>
+      inv.client_id && activeClientIds.has(inv.client_id)
+    );
+
+    const skippedCount = candidateInvoices.length - eligibleInvoices.length;
+    if (skippedCount > 0) {
+      console.log(`[runDueRemindersForWorkspace] Skipped ${skippedCount} invoices due to archived/inactive clients for workspace ${workspaceId}`);
+    }
+
+    // 5) For each eligible invoice, find applicable rule and send reminder
+    for (const invoice of eligibleInvoices) {
       result.invoicesProcessed++;
 
       try {
         // Find applicable rule (this already checks for duplicates within the same day)
         const match = await findApplicableRuleForInvoice(
-          supabase,
+          supabaseServer(),
           workspaceId,
           {
             id: invoice.id,
             due_date: invoice.due_date,
-            outstanding_amount: Number(invoice.outstanding ?? 0),
+            outstanding: Number(invoice.outstanding ?? 0),
             status: invoice.display_status ?? invoice.base_status,
           },
           today
@@ -123,7 +174,7 @@ export async function runDueRemindersForWorkspace(
           continue;
         }
 
-        // Send reminder
+        // Send reminder (sendReminderForInvoice will also check client status as a safety measure)
         const sendResult: SendReminderResult = await sendReminderForInvoice({
           workspaceId,
           invoiceId: invoice.id,
@@ -137,15 +188,24 @@ export async function runDueRemindersForWorkspace(
           result.remindersSent++;
           console.log(`[runDueRemindersForWorkspace] Sent reminder for invoice ${invoice.invoice_number} (${invoice.id})`);
         } else {
-          result.remindersFailed++;
-          result.errors.push({
-            invoiceId: invoice.id,
-            error: sendResult.errorMessage || "Unknown error",
-          });
-          console.error(
-            `[runDueRemindersForWorkspace] Failed to send reminder for invoice ${invoice.invoice_number} (${invoice.id}):`,
-            sendResult.errorMessage
-          );
+          // Check if this was skipped (archived/inactive client) vs failed
+          const wasSkipped = (sendResult as any).skipped === true;
+          if (wasSkipped) {
+            // Don't count skipped reminders as failures - they're expected behavior
+            console.log(
+              `[runDueRemindersForWorkspace] Skipped reminder for invoice ${invoice.invoice_number} (${invoice.id}): ${sendResult.errorMessage}`
+            );
+          } else {
+            result.remindersFailed++;
+            result.errors.push({
+              invoiceId: invoice.id,
+              error: sendResult.errorMessage || "Unknown error",
+            });
+            console.error(
+              `[runDueRemindersForWorkspace] Failed to send reminder for invoice ${invoice.invoice_number} (${invoice.id}):`,
+              sendResult.errorMessage
+            );
+          }
         }
       } catch (err) {
         result.remindersFailed++;

@@ -3,15 +3,11 @@
 import { useRouter, usePathname } from "next/navigation";
 
 interface InvoicesClientFilterBadgeProps {
-  clientId: string;
   clientName?: string | null;
-  workspaceId: string;
 }
 
 export function InvoicesClientFilterBadge({
-  clientId,
   clientName,
-  workspaceId,
 }: InvoicesClientFilterBadgeProps) {
   const router = useRouter();
   const pathname = usePathname();

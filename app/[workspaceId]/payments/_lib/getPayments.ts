@@ -1,7 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export type PaymentSort = "default" | "recentFirst" | "largestFirst" | "failedFirst";
-export type PaymentStatus = "all" | "completed" | "pending" | "failed" | "refunded";
+export type PaymentStatus = "all" | "completed" | "pending" | "failed" | "refunded" | "archived";
 
 export interface PaymentsQueryState {
   sort: PaymentSort;
@@ -39,31 +39,66 @@ export async function getPayments(
 ): Promise<GetPaymentsResult> {
   const { sort, status, search, page, pageSize } = state;
 
-  // Build base query
-  let query = supabase
-    .from("payments")
-    .select(
-      `
-      id,
-      workspace_id,
-      invoice_id,
-      payment_date,
-      amount,
-      currency,
-      method,
-      status,
-      transaction_id,
-      notes,
-      payment_provider,
-      created_at,
-      updated_at
-    `,
-      { count: "exact" }
-    )
-    .eq("workspace_id", workspaceId);
+  // AR-Professional Archive Behavior:
+  // - All active tabs (All/Completed/Pending/Failed/Refunded) MUST exclude archived payments
+  // - Archived tab shows payments where archived_at IS NOT NULL
+  // - Archived payments must NOT affect invoice paid totals or outstanding calculations
+  const isArchivedFilter = status === "archived";
+  
+  let query;
+  if (isArchivedFilter) {
+    // Archived tab: Query base table with archived_at IS NOT NULL
+    query = supabase
+      .from("payments")
+      .select(
+        `
+        id,
+        workspace_id,
+        invoice_id,
+        payment_date,
+        amount,
+        currency,
+        method,
+        status,
+        transaction_id,
+        notes,
+        payment_provider,
+        created_at,
+        updated_at
+      `,
+        { count: "exact" }
+      )
+      .eq("workspace_id", workspaceId)
+      .not("archived_at", "is", null);
+  } else {
+    // Active tabs: Query base table with archived_at IS NULL
+    // ✅ CRITICAL: Exclude archived payments (p.archived_at IS NULL)
+    query = supabase
+      .from("payments")
+      .select(
+        `
+        id,
+        workspace_id,
+        invoice_id,
+        payment_date,
+        amount,
+        currency,
+        method,
+        status,
+        transaction_id,
+        notes,
+        payment_provider,
+        created_at,
+        updated_at
+      `,
+        { count: "exact" }
+      )
+      .eq("workspace_id", workspaceId)
+      .is("archived_at", null);  // ✅ CRITICAL: Exclude archived payments for financial integrity
+  }
 
-  // Apply status filter
-  if (status !== "all") {
+  // Apply status filter (only for non-archived)
+  if (!isArchivedFilter && status !== "all") {
     query = query.eq("status", status);
   }
 

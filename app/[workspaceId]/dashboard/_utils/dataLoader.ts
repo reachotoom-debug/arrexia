@@ -3,6 +3,7 @@
  */
 
 import { supabaseServer } from "@/lib/supabase/server";
+import { formatCurrency } from "@/lib/format/currency";
 import type {
   DashboardData,
   DashboardSummary,
@@ -15,7 +16,6 @@ import type {
   OwnerOverviewData,
   CollectionsModeData,
   DashboardInsight,
-  InsightSeverity,
   ReminderEffectivenessData,
 } from "../_types/dashboard";
 import type { DashboardSummaryPremium } from "../_components/PremiumKpiRow";
@@ -29,6 +29,47 @@ export type PeriodStats = {
   highRiskCount: number;
 };
 
+type RiskBucket = { invoiceCount: number; amount: number };
+type RiskBuckets = { high: RiskBucket; medium: RiskBucket; low: RiskBucket };
+
+function computeRiskBuckets(
+  rows: Array<{
+    riskLevel: "high" | "medium" | "low" | null;
+    isOverdue: boolean;
+    outstanding: number;
+    clientIsActive?: boolean;
+    clientArchivedAt?: string | null;
+  }>,
+  opts: { mode: "ledger" | "collections" }
+): RiskBuckets {
+  const buckets: RiskBuckets = {
+    high: { invoiceCount: 0, amount: 0 },
+    medium: { invoiceCount: 0, amount: 0 },
+    low: { invoiceCount: 0, amount: 0 },
+  };
+
+  for (const r of rows) {
+    // Risk buckets are defined by invoices_view fields only:
+    // - risk_level (classification)
+    // - is_overdue (overdue status)
+    // - outstanding (exposure amount)
+    if (!r.isOverdue) continue;
+    if (!(r.outstanding > 0)) continue;
+    if (!r.riskLevel) continue;
+
+    if (opts.mode === "collections") {
+      // Collections exposure: only active, non-archived clients + non-archived invoices.
+      if (!r.clientIsActive) continue;
+      if (r.clientArchivedAt != null) continue;
+    }
+
+    buckets[r.riskLevel].invoiceCount += 1;
+    buckets[r.riskLevel].amount += r.outstanding;
+  }
+
+  return buckets;
+}
+
 // Helper functions
 function calcDelta(current: number, previous: number): number | null {
   if (previous === 0) {
@@ -37,14 +78,6 @@ function calcDelta(current: number, previous: number): number | null {
   return ((current - previous) / previous) * 100;
 }
 
-function formatCurrency(value: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 function formatPercent(value: number): string {
   if (value > 0) {
@@ -56,11 +89,20 @@ function formatPercent(value: number): string {
 }
 
 export async function getDashboardData(
-  workspaceId: string,
-  collectionsLimit: number = 10,
-  collectionsOffset: number = 0
+  workspaceId: string
 ): Promise<DashboardData> {
   const supabase = await supabaseServer();
+
+  // Fetch workspace settings for default currency (used for display/formatting only)
+  const { data: settingsRow } = await supabase
+    .from("settings")
+    .select("default_currency")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  const workspaceCurrency = (settingsRow as { default_currency?: string } | null)?.default_currency || "USD";
+
+  // Dashboard data powers the tab content and “Smart Risk Overview” section.
+  // Top “Premium KPI” cards are powered by getDashboardSummary().
 
   const toNumber = (value: number | string | null): number => {
     if (value == null) return 0;
@@ -80,10 +122,16 @@ export async function getDashboardData(
   fourteenDaysFromNow.setDate(fourteenDaysFromNow.getDate() + 14);
 
   // --- Load invoices_view ----------------------------------------------------
+  // Ledger truth: invoices_view is the single source of truth for AR fields
+  // (paid, outstanding, display_status, is_overdue, overdue_days, risk_level).
+  // CRITICAL: dashboard must exclude archived invoices by default.
   let invoicesRaw: Array<{
     id: string;
+    workspace_id: string;
     client_id: string | null;
     client_name: string | null;
+    client_is_active?: boolean | null;
+    client_archived_at?: string | null;
     invoice_number: string | null;
     display_status: string | null;
     base_status: string | null;
@@ -93,6 +141,8 @@ export async function getDashboardData(
     paid: number | string | null;
     outstanding: number | string | null;
     currency: string | null;
+    archived_at: string | null;
+    is_overdue: boolean | null;
     overdue_days: number | null;
     risk_level: string | null;
   }> = [];
@@ -101,9 +151,12 @@ export async function getDashboardData(
     const { data: invoices, error: invoicesError } = await supabase
       .from("invoices_view")
       .select(
-        "id, workspace_id, client_id, client_name, invoice_number, display_status, base_status, issue_date, due_date, currency, total, paid, outstanding, overdue_days, risk_level"
+        "id, workspace_id, client_id, client_name, client_is_active, client_archived_at, invoice_number, display_status, base_status, issue_date, due_date, currency, total, paid, outstanding, is_overdue, overdue_days, risk_level, archived_at"
       )
-      .eq("workspace_id", workspaceId);
+      .eq("workspace_id", workspaceId)
+      // invoices_view excludes archived invoices at the SQL layer, but this explicit
+      // filter keeps app behavior aligned with the contract and avoids drift.
+      .is("archived_at", null);
 
     if (invoicesError) {
       console.error("[Dashboard] invoices_view error", invoicesError);
@@ -121,6 +174,8 @@ export async function getDashboardData(
     clientId: inv.client_id ?? null,
     invoiceNumber: inv.invoice_number ?? "",
     clientName: inv.client_name ?? null,
+    clientIsActive: Boolean(inv.client_is_active),
+    clientArchivedAt: inv.client_archived_at ?? null,
     status: inv.display_status ?? "draft",
     baseStatus: inv.base_status ?? null,
     issueDate: inv.issue_date ?? null,
@@ -128,46 +183,51 @@ export async function getDashboardData(
     totalAmount: toNumber(inv.total),
     paidAmount: toNumber(inv.paid),
     outstanding: toNumber(inv.outstanding),
+    isOverdue: Boolean(inv.is_overdue),
     overdueDays: Number(inv.overdue_days ?? 0),
     riskLevel: (inv.risk_level as "high" | "medium" | "low" | null) ?? null,
   }));
 
-  // --- Load payments ----------------------------------------------------------
-  let paymentsRaw: Array<{
+  // Ledger AR view: all-time invoices_view rows, excluding draft/void and archived invoices. No date filter.
+  const ledgerInvoices = safeInvoices.filter(
+    (inv) => inv.baseStatus !== "draft" && inv.baseStatus !== "void"
+  );
+
+  // --- Load clients (for eligibility filters) --------------------------------
+  // Collections exposure: align with Reminders/Collections eligibility rules.
+  // Only active, non-archived clients are eligible for “chase/action” views.
+  let clientsRaw: Array<{
     id: string;
-    amount: number | string | null;
-    payment_date: string | null;
-    invoice_id: string | null;
+    name: string | null;
+    email: string | null;
+    is_active: boolean | null;
+    archived_at: string | null;
   }> = [];
 
   try {
-    const { data: payments, error: paymentsError } = await supabase
-      .from("payments")
-      .select("id, workspace_id, amount, payment_date, invoice_id")
-      .eq("workspace_id", workspaceId)
-      .gte("payment_date", twelveMonthsAgo.toISOString().slice(0, 10));
+    const { data: clients, error: clientsError } = await supabase
+      .from("clients")
+      .select("id, name, email, is_active, archived_at")
+      .eq("workspace_id", workspaceId);
 
-    if (paymentsError) {
-      console.error("[Dashboard] payments error", {
-        message: paymentsError.message,
-        details: paymentsError.details,
-        hint: paymentsError.hint,
-        code: paymentsError.code,
-      });
-      paymentsRaw = [];
+    if (clientsError) {
+      console.error("[Dashboard] clients error", clientsError);
+      clientsRaw = [];
     } else {
-      paymentsRaw = payments ?? [];
+      clientsRaw = clients ?? [];
     }
   } catch (error) {
-    console.error("[Dashboard] payments query failed", error);
-    paymentsRaw = [];
+    console.error("[Dashboard] failed to load clients", error);
+    clientsRaw = [];
   }
 
-  const safePayments = paymentsRaw.map((p) => ({
-    amount: toNumber(p.amount),
-    paymentDate: p.payment_date ? new Date(p.payment_date) : null,
-    invoiceId: p.invoice_id ?? null,
-  }));
+  const eligibleClients = new Map<string, { name: string | null; email: string | null }>();
+  for (const c of clientsRaw) {
+    const isEligible = c.is_active === true && c.archived_at == null;
+    if (isEligible) {
+      eligibleClients.set(c.id, { name: c.name ?? null, email: c.email ?? null });
+    }
+  }
 
   // --- Compute period stats for insight ---------------------------------------
   const periodEnd = now;
@@ -187,22 +247,18 @@ export async function getDashboardData(
       })
       .reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-    // Collected amount from payments with paid date in [start, end]
-    const collectedAmount = safePayments
+    // Collected amount from invoices_view.paid for invoices issued in [start, end]
+    const collectedAmount = safeInvoices
       .filter((p) => {
-        if (!p.paymentDate) return false;
-        return p.paymentDate >= start && p.paymentDate <= end;
+        if (!p.issueDate) return false;
+        const issueDate = new Date(p.issueDate);
+        return issueDate >= start && issueDate <= end;
       })
-      .reduce((sum, p) => sum + p.amount, 0);
+      .reduce((sum, p) => sum + p.paidAmount, 0);
 
-    // Overdue as of end date: invoices with due_date < end AND non-final status
-    const overdueAtEnd = safeInvoices.filter((inv) => {
-      if (!inv.dueDate) return false;
-      const dueDate = new Date(inv.dueDate);
-      if (dueDate >= end) return false;
-      // Non-final status means not paid and not void
-      return inv.status !== "paid" && inv.status !== "void";
-    });
+    // IMPORTANT: invoices_view is the source of truth for overdue.
+    // Note: this is a “current-state” approximation for the insight period.
+    const overdueAtEnd = ledgerInvoices.filter((inv) => inv.isOverdue && inv.outstanding > 0);
 
     const overdueAmount = overdueAtEnd.reduce((sum, inv) => sum + inv.outstanding, 0);
     const overdueCount = overdueAtEnd.length;
@@ -224,8 +280,8 @@ export async function getDashboardData(
   const currentStats = computePeriodStats(periodStart, periodEnd);
   const previousStats = computePeriodStats(prevStart, prevEnd);
 
-  // Default currency - could be extended to read from workspace settings
-  const currency = "USD";
+  // Default currency from workspace settings (for display/formatting only)
+  const currency = workspaceCurrency;
 
   function buildDashboardInsight(
     current: PeriodStats,
@@ -245,10 +301,10 @@ export async function getDashboardData(
     if (overdueDelta !== null && overdueDelta > 20 && current.overdueAmount > 0) {
       return {
         title: "Overdue is trending up",
-        message: `${current.overdueCount} overdue invoice${current.overdueCount !== 1 ? "s" : ""} totaling ${formatCurrency(current.overdueAmount, currencyCode)}. Up ${formatPercent(overdueDelta!)} from last period.`,
+        message: `${current.overdueCount} overdue invoice${current.overdueCount !== 1 ? "s" : ""} totaling ${formatCurrency(current.overdueAmount, { currency: currencyCode })}. Up ${formatPercent(overdueDelta!)} from last period.`,
         severity: "warning",
         primaryMetricLabel: "Overdue Amount",
-        primaryMetricValue: formatCurrency(current.overdueAmount, currencyCode),
+        primaryMetricValue: formatCurrency(current.overdueAmount, { currency: currencyCode }),
         deltaLabel: "Change",
         deltaValue: formatPercent(overdueDelta!),
       };
@@ -259,10 +315,10 @@ export async function getDashboardData(
       const deltaText = highRiskDelta !== null ? ` (${highRiskDelta > 0 ? "+" : ""}${formatPercent(highRiskDelta!)})` : "";
       return {
         title: "High-risk invoices need attention",
-        message: `${current.highRiskCount} high-risk invoice${current.highRiskCount !== 1 ? "s" : ""} with ${formatCurrency(current.highRiskAmount, currencyCode)} exposure${deltaText}.`,
+        message: `${current.highRiskCount} high-risk invoice${current.highRiskCount !== 1 ? "s" : ""} with ${formatCurrency(current.highRiskAmount, { currency: currencyCode })} exposure${deltaText}.`,
         severity: "warning",
         primaryMetricLabel: "High-Risk Exposure",
-        primaryMetricValue: formatCurrency(current.highRiskAmount, currencyCode),
+        primaryMetricValue: formatCurrency(current.highRiskAmount, { currency: currencyCode }),
         deltaLabel: highRiskDelta !== null ? "Change" : undefined,
         deltaValue: highRiskDelta !== null ? formatPercent(highRiskDelta) : undefined,
       };
@@ -296,64 +352,79 @@ export async function getDashboardData(
     // Default: Neutral
     return {
       title: "Steady collections this month",
-      message: `Invoiced ${formatCurrency(current.invoicedAmount, currencyCode)}, collected ${formatCurrency(current.collectedAmount, currencyCode)}. ${current.overdueAmount > 0 ? `${formatCurrency(current.overdueAmount, currencyCode)} overdue.` : "No overdue invoices."}`,
+      message: `Invoiced ${formatCurrency(current.invoicedAmount, { currency: currencyCode })}, collected ${formatCurrency(current.collectedAmount, { currency: currencyCode })}. ${current.overdueAmount > 0 ? `${formatCurrency(current.overdueAmount, { currency: currencyCode })} overdue.` : "No overdue invoices."}`,
       severity: "neutral",
       primaryMetricLabel: "Collected",
-      primaryMetricValue: formatCurrency(current.collectedAmount, currencyCode),
+      primaryMetricValue: formatCurrency(current.collectedAmount, { currency: currencyCode }),
     };
   }
 
   const insight = buildDashboardInsight(currentStats, previousStats, currency);
 
   // --- Calculate summary ------------------------------------------------------
-  const invoices12m = safeInvoices.filter(
+  const invoices12m = ledgerInvoices.filter(
     (inv) => inv.issueDate && new Date(inv.issueDate) >= twelveMonthsAgo
   );
   const totalInvoiced12m = invoices12m.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  const payments12m = safePayments.filter(
-    (p) => p.paymentDate && p.paymentDate >= twelveMonthsAgo
+  const totalCollected12m = invoices12m.reduce((sum, inv) => sum + inv.paidAmount, 0);
+
+  // --- Ledger AR totals (live) -----------------------------------------------
+  // Ledger AR view: all-time invoices_view totals, excluding draft/void and archived invoices. No date filter.
+  // IMPORTANT: invoices_view is the source of truth for AR totals.
+  const totalOutstandingNow = ledgerInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
+
+  // Overdue amount: sum of outstanding for all overdue, non-archived, non-draft/non-void invoices_view rows.
+  const overdueAmountNow = ledgerInvoices
+    .filter((inv) => inv.isOverdue && inv.outstanding > 0)
+    .reduce((sum, inv) => sum + inv.outstanding, 0);
+
+  // Ledger truth (open overdue): relies on invoices_view.is_overdue and invoices_view.overdue_days.
+  const overdueInvoices = ledgerInvoices.filter((inv) => inv.isOverdue && inv.outstanding > 0);
+
+  // Collections exposure: source invoice set for ALL chase-style dashboard views.
+  // IMPORTANT: This is the single source set for both:
+  // - Smart Risk Overview (high/medium/low buckets)
+  // - Collections mode worklist (table + “Outstanding in view”)
+  //
+  // Filters:
+  // - invoices_view (already archived_at IS NULL)
+  // - base_status NOT IN ('draft','void') via ledgerInvoices
+  // - is_overdue = true AND outstanding > 0
+  // - risk_level IN ('high','medium','low')
+  // - client eligibility: active AND not archived
+  const collectionsExposureInvoices = overdueInvoices.filter(
+    (inv) =>
+      inv.clientId != null &&
+      inv.clientIsActive &&
+      inv.clientArchivedAt == null &&
+      (inv.riskLevel === "high" || inv.riskLevel === "medium" || inv.riskLevel === "low")
   );
-  const totalCollected12m = payments12m.reduce((sum, p) => sum + p.amount, 0);
 
-  const totalOutstandingNow = safeInvoices.reduce(
-    (sum, inv) => sum + (inv.status === "void" ? 0 : inv.outstanding),
-    0
-  );
-
-  const overdueInvoices = safeInvoices.filter((inv) => inv.status === "overdue");
-  const overdueAmountNow = overdueInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
-
+  // High-risk exposure: sum of outstanding where invoices_view marks row overdue
+  // and risk_level = 'high'. Do not derive from overdue_days thresholds.
   const highRiskExposureNow = overdueInvoices
     .filter((inv) => inv.riskLevel === "high")
     .reduce((sum, inv) => sum + inv.outstanding, 0);
 
   // Calculate DSO (rolling 3 months)
   let dsoRolling3m: number | null = null;
-  const fullyPaidInvoices3m = safeInvoices.filter(
+  // Rolling 3 months is OK for DSO (time-window metric).
+  const fullyPaidInvoices3m = ledgerInvoices.filter(
     (inv) =>
       inv.outstanding <= 0 &&
       inv.issueDate &&
       new Date(inv.issueDate) >= threeMonthsAgo
   );
 
-  if (fullyPaidInvoices3m.length > 0 && safePayments.length > 0) {
+  if (fullyPaidInvoices3m.length > 0) {
     const daysToPay: number[] = [];
 
     for (const inv of fullyPaidInvoices3m) {
       const issue = new Date(inv.issueDate!);
-      const relevantPayments = safePayments.filter(
-        (p) => p.paymentDate && p.paymentDate >= threeMonthsAgo && p.invoiceId === inv.id
-      );
-
-      if (relevantPayments.length === 0) continue;
-
-      const lastPayment = relevantPayments
-        .map((p) => p.paymentDate!.getTime())
-        .sort((a, b) => b - a)[0];
-
+      const due = inv.dueDate ? new Date(inv.dueDate) : issue;
       const days = Math.max(
-        Math.round((lastPayment - issue.getTime()) / (1000 * 60 * 60 * 24)),
+        Math.round((due.getTime() - issue.getTime()) / (1000 * 60 * 60 * 24)),
         0
       );
       daysToPay.push(days);
@@ -394,14 +465,14 @@ export async function getDashboardData(
     }
   }
 
-  // Aggregate payments by payment_date month
-  for (const p of payments12m) {
-    if (!p.paymentDate) continue;
-    const d = p.paymentDate;
+  // Aggregate collected amounts from invoices_view.paid by issue_date month
+  for (const inv of invoices12m) {
+    if (!inv.issueDate) continue;
+    const d = new Date(inv.issueDate);
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const existing = monthlyMap.get(monthKey);
     if (existing) {
-      existing.collected += p.amount;
+      existing.collected += inv.paidAmount;
     }
   }
 
@@ -464,37 +535,26 @@ export async function getDashboardData(
   };
 
   // --- Risk overview ----------------------------------------------------------
-  const riskOverview: RiskOverview = {
-    high: {
-      invoiceCount: overdueInvoices.filter((inv) => inv.riskLevel === "high").length,
-      amount: overdueInvoices
-        .filter((inv) => inv.riskLevel === "high")
-        .reduce((sum, inv) => sum + inv.outstanding, 0),
-    },
-    medium: {
-      invoiceCount: overdueInvoices.filter((inv) => inv.riskLevel === "medium").length,
-      amount: overdueInvoices
-        .filter((inv) => inv.riskLevel === "medium")
-        .reduce((sum, inv) => sum + inv.outstanding, 0),
-    },
-    low: {
-      invoiceCount: overdueInvoices.filter((inv) => inv.riskLevel === "low").length,
-      amount: overdueInvoices
-        .filter((inv) => inv.riskLevel === "low")
-        .reduce((sum, inv) => sum + inv.outstanding, 0),
-    },
-  };
+  // AR focus uses overdue/risk summaries across overdue ledger invoices.
+  const arRiskInvoices = overdueInvoices.filter(
+    (inv) => inv.riskLevel === "high" || inv.riskLevel === "medium" || inv.riskLevel === "low"
+  );
+  const riskOverview: RiskOverview = computeRiskBuckets(arRiskInvoices, { mode: "ledger" });
 
   // --- Upcoming due (next 14 days) -------------------------------------------
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const upcomingDue: UpcomingDueItem[] = safeInvoices
+  // Collections exposure: upcoming invoices that are eligible for reminders/chase UI.
+  // Aligns with Reminders eligibility: active, non-archived clients + outstanding > 0 + sent/partially_paid.
+  const upcomingDue: UpcomingDueItem[] = ledgerInvoices
     .filter(
       (inv) =>
-        (inv.status === "sent" ||
-          inv.status === "partially_paid" ||
-          inv.status === "draft") &&
+        inv.outstanding > 0 &&
+        (inv.status === "sent" || inv.status === "partially_paid") &&
+        inv.clientId != null &&
+        inv.clientIsActive &&
+        inv.clientArchivedAt == null &&
         inv.dueDate &&
         new Date(inv.dueDate) >= today &&
         new Date(inv.dueDate) <= fourteenDaysFromNow
@@ -519,7 +579,7 @@ export async function getDashboardData(
   const recentActivity: ActivityItem[] = [];
 
   // Add recent invoices (using issue_date as created_at proxy)
-  for (const inv of safeInvoices) {
+  for (const inv of ledgerInvoices) {
     if (!inv.issueDate) continue;
     const statusLabel =
       inv.status === "paid"
@@ -545,50 +605,53 @@ export async function getDashboardData(
     });
   }
 
-  // Add recent payments
-  for (const p of safePayments) {
-    if (!p.paymentDate || !p.invoiceId) continue;
-    const inv = safeInvoices.find((i) => i.id === p.invoiceId);
-    if (!inv) continue;
-
-    recentActivity.push({
-      id: `payment-${p.invoiceId}-${p.paymentDate.getTime()}`,
-      type: "payment",
-      invoiceNumber: inv.invoiceNumber,
-      clientName: inv.clientName ?? "—",
-      date: p.paymentDate.toISOString().slice(0, 10),
-      amount: p.amount,
-      statusLabel: "Paid",
-    });
-  }
-
   // Sort by date descending (created_at desc) and cap to 20
   recentActivity.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const recentActivityCapped = recentActivity.slice(0, 20);
 
   // --- AR Focus Data ----------------------------------------------------------
-  const clientOverdueMap = new Map<string, { clientName: string; overdueAmount: number }>();
+  // AR focus is overdue + risk summary data (separate from collections-action eligibility).
+  const arOverdueInvoices = overdueInvoices;
+  const arCollectibleOutstanding = arOverdueInvoices.reduce(
+    (sum, inv) => sum + inv.outstanding,
+    0
+  );
+  const arOverdueAmount = arCollectibleOutstanding;
+  const arHighRiskExposure = arOverdueInvoices
+    .filter((inv) => inv.riskLevel === "high")
+    .reduce((sum, inv) => sum + inv.outstanding, 0);
 
-  for (const inv of overdueInvoices) {
+  // High-risk = overdue outstanding by client for AR summaries.
+  const clientOverdueMap = new Map<
+    string,
+    { clientId: string; clientName: string; overdueAmount: number; maxOverdueDays: number }
+  >();
+
+  for (const inv of arOverdueInvoices) {
     if (!inv.clientId || !inv.clientName) continue;
 
     const existing = clientOverdueMap.get(inv.clientId);
+    const days = inv.overdueDays ?? 0;
     if (existing) {
       existing.overdueAmount += inv.outstanding;
+      existing.maxOverdueDays = Math.max(existing.maxOverdueDays, days);
     } else {
       clientOverdueMap.set(inv.clientId, {
+        clientId: inv.clientId,
         clientName: inv.clientName,
         overdueAmount: inv.outstanding,
+        maxOverdueDays: days,
       });
     }
   }
 
   const allTopOverdueClients = Array.from(clientOverdueMap.values())
-    .sort((a, b) => b.overdueAmount - a.overdueAmount);
+    .sort((a, b) => b.overdueAmount - a.overdueAmount)
+    .map(({ clientName, overdueAmount }) => ({ clientName, overdueAmount }));
   const topOverdueClientsHasMore = allTopOverdueClients.length > 10;
   const topOverdueClients = allTopOverdueClients.slice(0, 10);
 
-  const allOverdueInvoicesList: CollectionsWorkItem[] = overdueInvoices
+  const allOverdueInvoicesList: CollectionsWorkItem[] = [...arOverdueInvoices]
     .sort((a, b) => b.outstanding - a.outstanding)
     .map((inv) => ({
       id: inv.id,
@@ -598,11 +661,16 @@ export async function getDashboardData(
       overdueDays: inv.overdueDays,
       outstanding: inv.outstanding,
       riskLevel: inv.riskLevel,
+      primaryEmail: inv.clientId ? eligibleClients.get(inv.clientId)?.email ?? null : null,
     }));
   const overdueInvoicesHasMore = allOverdueInvoicesList.length > 10;
   const overdueInvoicesList = allOverdueInvoicesList.slice(0, 10);
 
   const arFocus: ArFocusData = {
+    collectibleOutstanding: arCollectibleOutstanding,
+    overdueAmount: arOverdueAmount,
+    highRiskExposure: arHighRiskExposure,
+    overdueInvoicesCount: arOverdueInvoices.length,
     topOverdueClients,
     topOverdueClientsHasMore,
     overdueInvoices: overdueInvoicesList,
@@ -610,7 +678,7 @@ export async function getDashboardData(
   };
 
   // --- Owner Overview Data ----------------------------------------------------
-  const invoicesLast30 = safeInvoices.filter((inv) => {
+  const invoicesLast30 = ledgerInvoices.filter((inv) => {
     if (!inv.issueDate) return false;
     const issueDate = new Date(inv.issueDate);
     return issueDate >= thirtyDaysAgo;
@@ -618,19 +686,14 @@ export async function getDashboardData(
 
   const totalInvoiced30 = invoicesLast30.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  const paymentsLast30 = safePayments.filter((p) => {
-    if (!p.paymentDate) return false;
-    return p.paymentDate >= thirtyDaysAgo;
-  });
-
-  const totalCollected30 = paymentsLast30.reduce((sum, p) => sum + p.amount, 0);
+  const totalCollected30 = invoicesLast30.reduce((sum, inv) => sum + inv.paidAmount, 0);
 
   const collectionRate = totalInvoiced30 > 0 ? totalCollected30 / totalInvoiced30 : null;
 
   // Status funnel
   const funnelMap = new Map<string, { amount: number; count: number }>();
 
-  for (const inv of safeInvoices) {
+  for (const inv of ledgerInvoices) {
     let status: "paid" | "overdue" | "sent" | "draft";
     if (inv.status === "paid") {
       status = "paid";
@@ -668,20 +731,19 @@ export async function getDashboardData(
     }
   >();
 
-  for (const p of safePayments) {
-    if (!p.invoiceId) continue;
-    const inv = safeInvoices.find((i) => i.id === p.invoiceId);
-    if (!inv || !inv.clientId || !inv.clientName) continue;
+  for (const inv of safeInvoices) {
+    if (!inv.clientId || !inv.clientName) continue;
 
+    const collectedForInvoice = inv.paidAmount;
     const existing = clientPaymentsMap.get(inv.clientId);
     if (existing) {
-      existing.totalCollected += p.amount;
+      existing.totalCollected += collectedForInvoice;
       existing.invoiceIds.add(inv.id);
     } else {
       clientPaymentsMap.set(inv.clientId, {
         clientId: inv.clientId,
         clientName: inv.clientName,
-        totalCollected: p.amount,
+        totalCollected: collectedForInvoice,
         invoiceIds: new Set([inv.id]),
       });
     }
@@ -693,15 +755,14 @@ export async function getDashboardData(
       let avgDays: number | null = null;
       const paymentDays: number[] = [];
       
-      for (const p of safePayments) {
-        if (!p.invoiceId || !p.paymentDate) continue;
-        const inv = safeInvoices.find((i) => i.id === p.invoiceId);
-        if (!inv || inv.clientId !== client.clientId || !inv.issueDate) continue;
-        
+      for (const inv of safeInvoices) {
+        if (inv.clientId !== client.clientId || !inv.issueDate || !inv.dueDate) continue;
+        if (inv.paidAmount <= 0) continue;
+
         const issueDate = new Date(inv.issueDate);
-        const paymentDate = new Date(p.paymentDate);
+        const dueDate = new Date(inv.dueDate);
         const daysDiff = Math.max(
-          Math.round((paymentDate.getTime() - issueDate.getTime()) / (1000 * 60 * 60 * 24)),
+          Math.round((dueDate.getTime() - issueDate.getTime()) / (1000 * 60 * 60 * 24)),
           0
         );
         paymentDays.push(daysDiff);
@@ -792,7 +853,7 @@ export async function getDashboardData(
   };
 
   // --- Collections Mode Data --------------------------------------------------
-  const allCollectionsWorklist: CollectionsWorkItem[] = overdueInvoices
+  const allCollectionsWorklist: CollectionsWorkItem[] = collectionsExposureInvoices
     .map((inv) => ({
       id: inv.id,
       invoiceNumber: inv.invoiceNumber,
@@ -801,6 +862,7 @@ export async function getDashboardData(
       overdueDays: inv.overdueDays,
       outstanding: inv.outstanding,
       riskLevel: inv.riskLevel,
+      primaryEmail: inv.clientId ? eligibleClients.get(inv.clientId)?.email ?? null : null,
     }))
     .sort((a, b) => {
       // Sort by risk (high first), then by outstanding desc
@@ -810,14 +872,18 @@ export async function getDashboardData(
       if (aRisk !== bRisk) return aRisk - bRisk;
       return b.outstanding - a.outstanding;
     });
+  // NOTE: Do NOT slice here. CollectionsModeView supports client-side filtering by risk,
+  // so it needs the full (sorted) worklist to avoid “low risk” disappearing when it falls
+  // outside the top 10 of the combined list.
   const collectionsWorklistHasMore = allCollectionsWorklist.length > 10;
-  const collectionsWorklist = allCollectionsWorklist.slice(0, 10);
+  const collectionsWorklist = allCollectionsWorklist;
 
   const collectionsMode: CollectionsModeData = {
     invoicesInView: allCollectionsWorklist.length,
     outstandingInView: allCollectionsWorklist.reduce((sum, item) => sum + item.outstanding, 0),
     worklist: collectionsWorklist,
     worklistHasMore: collectionsWorklistHasMore,
+    totalCount: allCollectionsWorklist.length,
   };
 
   // --- Calculate Reminder Effectiveness (last 12 months) --------------------
@@ -858,7 +924,7 @@ export async function getDashboardData(
       // Combine with payments data (already loaded) to create effectiveness chart
       reminderEffectiveness = Array.from(reminderMonthlyMap.entries())
         .sort()
-        .map(([month, remindersCount], idx) => {
+        .map(([month, remindersCount]) => {
           const paymentForMonth = series.collectedMonthly.find((p) => p.month === month);
           return {
             month: new Date(month + "-01").toLocaleDateString("en-US", { month: "short" }),
@@ -890,12 +956,24 @@ export async function getDashboardData(
 export async function getDashboardSummary(workspaceId: string): Promise<DashboardSummaryPremium> {
   const supabase = await supabaseServer();
 
+  // getDashboardSummary powers the top “Premium KPI Row”:
+  // - Total Invoiced / Collected / Outstanding cards
+  // - Overdue Amount + High-Risk Exposure tiles
+  // It should use all-time ledger totals from invoices_view (no date filter) for these core KPIs.
+
   const toNumber = (value: number | string | null): number => {
     if (value == null) return 0;
     if (typeof value === "number") return value;
     const parsed = parseFloat(value);
     return Number.isFinite(parsed) ? parsed : 0;
   };
+
+  const { data: settingsRow } = await supabase
+    .from("settings")
+    .select("default_currency")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  const defaultCurrency = (settingsRow as { default_currency?: string } | null)?.default_currency || "USD";
 
   const now = new Date();
   const twelveMonthsAgo = new Date();
@@ -904,24 +982,38 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   previousTwelveMonthsAgo.setMonth(previousTwelveMonthsAgo.getMonth() - 24);
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   // --- Load invoices_view ----------------------------------------------------
   let invoicesRaw: Array<{
+    id: string;
     total: number | string | null;
     paid: number | string | null;
     outstanding: number | string | null;
     issue_date: string | null;
     due_date: string | null;
     display_status: string | null;
+    base_status: string | null;
+    is_overdue: boolean | null;
     risk_level: string | null;
+    client_is_active?: boolean | null;
+    client_archived_at?: string | null;
     currency: string | null;
+    archived_at: string | null;
   }> = [];
 
   try {
     const { data: invoices, error: invoicesError } = await supabase
       .from("invoices_view")
-      .select("total, paid, outstanding, issue_date, due_date, display_status, risk_level, currency")
-      .eq("workspace_id", workspaceId);
+      .select(
+        "id, total, paid, outstanding, issue_date, due_date, display_status, base_status, is_overdue, risk_level, client_is_active, client_archived_at, currency, archived_at"
+      )
+      .eq("workspace_id", workspaceId)
+      // invoices_view excludes archived invoices at SQL, but keep explicit for consistency.
+      .is("archived_at", null)
+      // Exclude draft/void from ledger totals + risk exposure.
+      .not("base_status", "in", '("draft","void")');
 
     if (invoicesError) {
       console.error("[Dashboard] invoices_view error in getDashboardSummary", invoicesError);
@@ -935,45 +1027,44 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   }
 
   const safeInvoices = invoicesRaw.map((inv) => ({
+    id: inv.id,
     totalAmount: toNumber(inv.total),
     paidAmount: toNumber(inv.paid),
     outstanding: toNumber(inv.outstanding),
     issueDate: inv.issue_date,
     dueDate: inv.due_date,
     status: inv.display_status ?? "draft",
+    baseStatus: inv.base_status ?? null,
+    isOverdue: Boolean(inv.is_overdue),
     riskLevel: inv.risk_level as "high" | "medium" | "low" | null,
+    clientIsActive: Boolean(inv.client_is_active),
+    clientArchivedAt: inv.client_archived_at ?? null,
   }));
 
-  // --- Load payments ----------------------------------------------------------
-  let paymentsRaw: Array<{
-    amount: number | string | null;
-    payment_date: string | null;
-    invoice_id: string | null;
-  }> = [];
+  // Ledger AR view: all-time invoices_view totals,
+  // excluding draft/void and archived invoices. No date filter.
+  const totalInvoicedAllTime = safeInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+  const totalCollectedAllTime = safeInvoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
+  const totalOutstandingNow = safeInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
 
-  try {
-    const { data: payments, error: paymentsError } = await supabase
-      .from("payments")
-      .select("amount, payment_date, invoice_id")
-      .eq("workspace_id", workspaceId)
-      .gte("payment_date", previousTwelveMonthsAgo.toISOString().slice(0, 10));
+  // Overdue amount: sum of outstanding for all overdue, non-archived, non-draft/non-void invoices_view rows.
+  const overdueAmountNow = safeInvoices
+    .filter((inv) => inv.isOverdue && inv.outstanding > 0)
+    .reduce((sum, inv) => sum + inv.outstanding, 0);
 
-    if (paymentsError) {
-      console.error("[Dashboard] payments error in getDashboardSummary", paymentsError);
-      paymentsRaw = [];
-    } else {
-      paymentsRaw = payments ?? [];
-    }
-  } catch (error) {
-    console.error("[Dashboard] payments query failed in getDashboardSummary", error);
-    paymentsRaw = [];
-  }
+  // High-risk exposure: overdue rows with risk_level = 'high' from invoices_view.
+  // Do not mix this metric with overdue_days thresholds.
+  const highRiskExposureNow = safeInvoices
+    .filter((inv) => inv.isOverdue && inv.outstanding > 0 && inv.riskLevel === "high")
+    .reduce((sum, inv) => sum + inv.outstanding, 0);
 
-  const safePayments = paymentsRaw.map((p) => ({
-    amount: toNumber(p.amount),
-    paymentDate: p.payment_date ? new Date(p.payment_date) : null,
-    invoiceId: p.invoice_id ?? null,
-  }));
+  // Payments last 30 days are derived from invoices_view.paid for invoices issued in this window.
+  // This keeps financial rollups sourced from invoices_view only.
+  const invoicesLast30 = safeInvoices.filter(
+    (inv) => inv.issueDate && new Date(inv.issueDate) >= thirtyDaysAgo
+  );
+  const paymentsLast30Days = invoicesLast30.reduce((sum, inv) => sum + inv.paidAmount, 0);
+  const paymentsLast30DaysCount = invoicesLast30.filter((inv) => inv.paidAmount > 0).length;
 
   // Calculate totals for current 12 months
   const invoices12m = safeInvoices.filter(
@@ -981,22 +1072,11 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   );
   const totalInvoiced12m = invoices12m.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  const payments12m = safePayments.filter(
-    (p) => p.paymentDate && p.paymentDate >= twelveMonthsAgo
-  );
-  const totalCollected12m = payments12m.reduce((sum, p) => sum + p.amount, 0);
-
-  const totalOutstandingNow = safeInvoices.reduce(
-    (sum, inv) => sum + (inv.status === "void" ? 0 : inv.outstanding),
-    0
-  );
-
-  const overdueInvoices = safeInvoices.filter((inv) => inv.status === "overdue");
-  const overdueAmountNow = overdueInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
-
-  const highRiskExposureNow = overdueInvoices
-    .filter((inv) => inv.riskLevel === "high")
-    .reduce((sum, inv) => sum + inv.outstanding, 0);
+  // Paid total for the KPI period (12 months): sourced from invoices_view.paid.
+  // Rolling window is OK here: this is a trend/delta metric, not the all-time ledger total above.
+  const totalCollected12m = safeInvoices
+    .filter((inv) => inv.issueDate && new Date(inv.issueDate) >= twelveMonthsAgo)
+    .reduce((sum, inv) => sum + inv.paidAmount, 0);
 
   // Calculate DSO (rolling 3 months)
   let dsoRolling3m = 0;
@@ -1004,19 +1084,13 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
     (inv) => inv.outstanding <= 0 && inv.issueDate && new Date(inv.issueDate) >= threeMonthsAgo
   );
 
-  if (fullyPaid3m.length > 0 && safePayments.length > 0) {
+  if (fullyPaid3m.length > 0) {
     const daysToPay: number[] = [];
     for (const inv of fullyPaid3m) {
       const issue = new Date(inv.issueDate!);
-      const relevantPayments = safePayments.filter(
-        (p) => p.paymentDate && p.paymentDate >= threeMonthsAgo && p.invoiceId === inv.id
-      );
-      if (relevantPayments.length === 0) continue;
-      const lastPayment = relevantPayments
-        .map((p) => p.paymentDate!.getTime())
-        .sort((a, b) => b - a)[0];
+      const due = inv.dueDate ? new Date(inv.dueDate) : issue;
       const days = Math.max(
-        Math.round((lastPayment - issue.getTime()) / (1000 * 60 * 60 * 24)),
+        Math.round((due.getTime() - issue.getTime()) / (1000 * 60 * 60 * 24)),
         0
       );
       daysToPay.push(days);
@@ -1035,13 +1109,14 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   );
   const totalInvoicedPrev12m = invoicesPrev12m.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  const paymentsPrev12m = safePayments.filter(
-    (p) =>
-      p.paymentDate &&
-      p.paymentDate >= previousTwelveMonthsAgo &&
-      p.paymentDate < twelveMonthsAgo
-  );
-  const totalCollectedPrev12m = paymentsPrev12m.reduce((sum, p) => sum + p.amount, 0);
+  const totalCollectedPrev12m = safeInvoices
+    .filter(
+      (inv) =>
+        inv.issueDate &&
+        new Date(inv.issueDate) >= previousTwelveMonthsAgo &&
+        new Date(inv.issueDate) < twelveMonthsAgo
+    )
+    .reduce((sum, inv) => sum + inv.paidAmount, 0);
 
   // Calculate deltas
   const invoicedPct = totalInvoicedPrev12m > 0
@@ -1075,6 +1150,20 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
     dso: [],
   };
 
+  // IMPORTANT: invoices_view is the source of truth for overdue/risk (no due_date/status recompute).
+  const overdueByDueMonth = new Map<string, { overdue: number; highRisk: number }>();
+  for (const inv of safeInvoices) {
+    if (!inv.isOverdue || inv.outstanding <= 0 || !inv.dueDate) continue;
+    const d = new Date(inv.dueDate);
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const existing = overdueByDueMonth.get(monthKey) ?? { overdue: 0, highRisk: 0 };
+    existing.overdue += inv.outstanding;
+    if (inv.riskLevel === "high") {
+      existing.highRisk += inv.outstanding;
+    }
+    overdueByDueMonth.set(monthKey, existing);
+  }
+
   for (let i = 11; i >= 0; i--) {
     const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
@@ -1089,34 +1178,25 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
       monthInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0)
     );
 
-    // Collected for this month
-    const monthPayments = safePayments.filter((p) => {
-      if (!p.paymentDate) return false;
-      return p.paymentDate >= monthStart && p.paymentDate <= monthEnd;
+    // Collected for this month (KPI trend): invoices_view.paid on invoices issued in this month.
+    const monthInvoicesForPaid = safeInvoices.filter((inv) => {
+      if (!inv.issueDate) return false;
+      const date = new Date(inv.issueDate);
+      return date >= monthStart && date <= monthEnd;
     });
     monthlyTrends.collected.push(
-      monthPayments.reduce((sum, p) => sum + p.amount, 0)
+      monthInvoicesForPaid.reduce((sum, inv) => sum + inv.paidAmount, 0)
     );
 
-    // Overdue at end of this month (invoices due before month end that are still unpaid)
-    const overdueAtMonthEnd = safeInvoices.filter((inv) => {
-      if (!inv.dueDate || inv.status === "paid" || inv.status === "void") return false;
-      const dueDate = new Date(inv.dueDate);
-      return dueDate <= monthEnd;
-    });
-    monthlyTrends.overdue.push(
-      overdueAtMonthEnd.reduce((sum, inv) => sum + inv.outstanding, 0)
-    );
-
-    // High-risk at end of this month
-    const highRiskAtMonthEnd = overdueAtMonthEnd.filter((inv) => inv.riskLevel === "high");
-    monthlyTrends.highRisk.push(
-      highRiskAtMonthEnd.reduce((sum, inv) => sum + inv.outstanding, 0)
-    );
+    // Overdue/high-risk trend (ledger): group current overdue invoices by due_date month.
+    const dueMonthKey = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}`;
+    const overdueAgg = overdueByDueMonth.get(dueMonthKey) ?? { overdue: 0, highRisk: 0 };
+    monthlyTrends.overdue.push(overdueAgg.overdue);
+    monthlyTrends.highRisk.push(overdueAgg.highRisk);
 
     // Outstanding at end of this month (simplified: current outstanding for all invoices issued up to month end)
     const outstandingAtMonthEnd = safeInvoices.filter((inv) => {
-      if (!inv.issueDate || inv.status === "void") return false;
+      if (!inv.issueDate) return false;
       const issueDate = new Date(inv.issueDate);
       return issueDate <= monthEnd;
     });
@@ -1129,13 +1209,16 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   }
 
   return {
+    defaultCurrency,
     totals: {
-      totalInvoiced: totalInvoiced12m,
-      totalCollected: totalCollected12m,
+      totalInvoiced: totalInvoicedAllTime,
+      totalCollected: totalCollectedAllTime,
       totalOutstanding: totalOutstandingNow,
       overdueAmount: overdueAmountNow,
       highRiskExposure: highRiskExposureNow,
       dso: dsoRolling3m,
+      paymentsLast30Days,
+      paymentsLast30DaysCount,
     },
     trends: monthlyTrends,
     deltas: {
@@ -1147,8 +1230,8 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
       dsoPct,
     },
     periods: {
-      invoicedLabel: "12 months",
-      collectedLabel: "12 months",
+      invoicedLabel: "All time",
+      collectedLabel: "All time",
       outstandingLabel: "Open balance",
       overdueLabel: "Overdue",
       highRiskLabel: "High-risk overdue",

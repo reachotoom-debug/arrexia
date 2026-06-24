@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/incompatible-library */
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -9,11 +10,13 @@ import {
 } from "@/lib/clients/schema";
 import { countries } from "@/lib/utils/countries";
 import { useState, useEffect } from "react";
+import { useToast } from "@/components/ui/use-toast";
+import { PLAN_LIMIT_CLIENTS_MESSAGE } from "@/lib/billing/assertWithinPlanLimits";
 
 interface ClientFormProps {
   mode: "create" | "edit";
   initialData?: ClientFormValues;
-  onSubmit: (values: ClientFormValues) => Promise<void>;
+  onSubmit: (values: ClientFormValues) => Promise<{ ok: boolean; redirectTo?: string; message?: string; code?: string }>;
   workspaceId: string;
   cancelUrl?: string;
 }
@@ -36,6 +39,7 @@ export function ClientForm({
   cancelUrl,
 }: ClientFormProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const isEdit = mode === "edit";
   const [isCustomPaymentTerms, setIsCustomPaymentTerms] = useState(false);
   const [customDays, setCustomDays] = useState<string>("");
@@ -87,16 +91,50 @@ export function ClientForm({
 
   const submitHandler = async (values: ClientFormValues) => {
     try {
-      await onSubmit(values);
-    } catch (error) {
+      const result = await onSubmit(values);
+      
+      if (result.ok) {
+        // Success: redirect if redirectTo is provided
+        if (result.redirectTo) {
+          router.push(result.redirectTo);
+        } else if (isEdit) {
+          // For edit mode without redirectTo, show success toast
+          toast({
+            title: "Client updated",
+            description: "The client has been updated successfully.",
+          });
+        }
+        console.log("[ClientForm] submit successful", { mode: isEdit ? "edit" : "create" });
+      } else {
+        const description =
+          result.code === "PLAN_LIMIT_CLIENTS"
+            ? PLAN_LIMIT_CLIENTS_MESSAGE
+            : result.message || "Failed to save client";
+        toast({
+          variant: "destructive",
+          title: isEdit ? "Update failed" : "Creation failed",
+          description,
+        });
+      }
+    } catch (error: unknown) {
       console.error("[ClientForm] submit failed", error);
+      const rawMessage = error instanceof Error ? error.message : "Failed to save client";
+      const errorMessage =
+        rawMessage === "PLAN_LIMIT_CLIENTS" ? PLAN_LIMIT_CLIENTS_MESSAGE : rawMessage;
+      toast({
+        variant: "destructive",
+        title: isEdit ? "Update failed" : "Creation failed",
+        description: errorMessage,
+      });
+      // Re-throw to prevent navigation on error
+      throw error;
     }
   };
 
   return (
     <form
       onSubmit={handleSubmit(submitHandler)}
-      className="space-y-6 max-w-2xl mx-auto"
+      className="mx-auto w-full max-w-2xl min-w-0 space-y-6"
     >
       {/* Header */}
       <div className="flex items-center justify-between">

@@ -15,7 +15,7 @@ SELECT
   p.invoice_id,
   COALESCE(p.payment_date, p.created_at::date) AS payment_date,
   p.amount,
-  COALESCE(p.currency, i.currency, c.currency, s.default_currency, 'USD') AS currency,
+  COALESCE(p.currency, i.currency, s.default_currency, 'USD') AS currency,
   p.method,
   p.status,
   p.transaction_id,
@@ -34,7 +34,7 @@ LEFT JOIN public.settings s ON s.workspace_id = p.workspace_id;
 
 -- Step 3: Add comment documenting the view
 COMMENT ON VIEW public.payments_view IS 
-'Payments view with joined client_name, invoice_number, and computed is_failed for server-side sorting/searching. Required columns: id, workspace_id, invoice_id, payment_date (coalesced), amount, currency (coalesced from payment/invoice/client/settings), method, status, transaction_id, notes, payment_provider, created_at, updated_at, invoice_number (nullable), client_name (nullable), is_failed (boolean), paid_at (payment_date). Use this view for list queries that need to sort/search by client_name, invoice_number, or prioritize failed payments.';
+'Payments view with joined client_name, invoice_number, and computed is_failed for server-side sorting/searching. Required columns: id, workspace_id, invoice_id, payment_date (coalesced), amount, currency (coalesced from payment/invoice/settings: p.currency -> i.currency -> s.default_currency -> USD), method, status, transaction_id, notes, payment_provider, created_at, updated_at, invoice_number (nullable), client_name (nullable), is_failed (boolean), paid_at (payment_date). Use this view for list queries that need to sort/search by client_name, invoice_number, or prioritize failed payments.';
 
 -- Step 4: Refresh PostgREST schema cache
 SELECT pg_notify('pgrst', 'reload schema');

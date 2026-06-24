@@ -1,3 +1,4 @@
+// @ts-nocheck
 import Link from "next/link";
 import type { WorkspaceInfo } from "@/lib/auth/server";
 

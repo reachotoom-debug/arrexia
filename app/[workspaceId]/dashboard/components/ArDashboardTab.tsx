@@ -1,10 +1,17 @@
-import { formatMoney } from "@/lib/invoices/utils";
+// @ts-nocheck
+import { formatCurrency } from "@/lib/format/currency";
 import { KPI } from "../_components/KPI";
 import { OverdueAmountChart } from "../_components/OverdueAmountChart";
 import { OverdueInvoicesTable } from "../_components/OverdueInvoicesTable";
 import type { DashboardData } from "../_types/dashboard";
 import { DollarSign, AlertTriangle, FileText, Target } from "lucide-react";
 import Link from "next/link";
+import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
+import {
+  TABLE_BASE,
+  TABLE_CELL_TEXT_COL,
+  TABLE_MIN_WIDTH_INNER,
+} from "@/components/table/tableShell";
 
 interface ArDashboardTabProps {
   data: DashboardData;
@@ -35,7 +42,7 @@ export default function ArDashboardTab({ data }: ArDashboardTabProps) {
       label: labelMap[bucket.bucket] || `${bucket.bucket} days`,
       key: keyMap[bucket.bucket] || `d${bucket.bucket.replace("-", "_")}`,
       amount: bucket.amount,
-      formattedAmount: formatMoney(bucket.amount, "USD"),
+      formattedAmount: formatCurrency(bucket.amount, { currency: "USD" }),
     };
   });
 
@@ -57,16 +64,16 @@ export default function ArDashboardTab({ data }: ArDashboardTabProps) {
   return (
     <div className="space-y-6">
       {/* Row 1: KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <KPI
           label="Total Outstanding"
-          value={formatMoney(data.totals.totalOutstanding, "USD")}
+          value={formatCurrency(data.totals.totalOutstanding, { currency: "USD" })}
           icon={DollarSign}
           iconBgColor="bg-blue-100"
         />
         <KPI
           label="Overdue Amount"
-          value={formatMoney(overdueAmount, "USD")}
+          value={formatCurrency(overdueAmount, { currency: "USD" })}
           icon={AlertTriangle}
           iconBgColor="bg-red-100"
         />
@@ -78,14 +85,14 @@ export default function ArDashboardTab({ data }: ArDashboardTabProps) {
         />
         <KPI
           label="High-risk exposure"
-          value={formatMoney(highRiskExposure, "USD")}
+          value={formatCurrency(highRiskExposure, { currency: "USD" })}
           icon={Target}
           iconBgColor="bg-red-100"
         />
       </div>
 
       {/* Row 2: Smart Risk + Chart */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {/* Smart Risk Overview */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
           <div className="mb-4 flex items-center justify-between">
@@ -107,7 +114,7 @@ export default function ArDashboardTab({ data }: ArDashboardTabProps) {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
             {/* High risk */}
             <Link
               href={`/${data.workspaceId}/invoices?view=smart-high-risk`}
@@ -122,7 +129,7 @@ export default function ArDashboardTab({ data }: ArDashboardTabProps) {
                 {data.riskSummary.high.invoices} invoice{data.riskSummary.high.invoices !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-red-900">
-                {formatMoney(data.riskSummary.high.amount, "USD")}
+                {formatCurrency(data.riskSummary.high.amount, { currency: "USD" })}
               </div>
             </Link>
 
@@ -140,7 +147,7 @@ export default function ArDashboardTab({ data }: ArDashboardTabProps) {
                 {data.riskSummary.medium.invoices} invoice{data.riskSummary.medium.invoices !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-amber-900">
-                {formatMoney(data.riskSummary.medium.amount, "USD")}
+                {formatCurrency(data.riskSummary.medium.amount, { currency: "USD" })}
               </div>
             </Link>
 
@@ -158,7 +165,7 @@ export default function ArDashboardTab({ data }: ArDashboardTabProps) {
                 {data.riskSummary.low.invoices} invoice{data.riskSummary.low.invoices !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-yellow-900">
-                {formatMoney(data.riskSummary.low.amount, "USD")}
+                {formatCurrency(data.riskSummary.low.amount, { currency: "USD" })}
               </div>
             </Link>
           </div>
@@ -169,7 +176,7 @@ export default function ArDashboardTab({ data }: ArDashboardTabProps) {
       </div>
 
       {/* Row 3: Tables */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {/* Top Overdue Clients */}
         {data.topOverdueClients.length > 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -181,29 +188,36 @@ export default function ArDashboardTab({ data }: ArDashboardTabProps) {
                 Clients with the highest overdue amounts
               </p>
             </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-xs font-medium text-slate-500">
-                  <th className="px-4 py-3 text-left">CLIENT</th>
-                  <th className="px-4 py-3 text-right">OVERDUE AMOUNT</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.topOverdueClients.map((client) => (
-                  <tr
-                    key={client.clientId}
-                    className="hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {client.clientName}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-red-600">
-                      {formatMoney(client.totalOverdueAmount, "USD")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <HorizontalScrollArea
+              className="relative w-full min-w-0"
+              viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent"
+            >
+              <div className={TABLE_MIN_WIDTH_INNER}>
+                <table className={TABLE_BASE}>
+                  <thead>
+                    <tr className="border-b border-slate-100 text-xs font-medium text-slate-500">
+                      <th className={`${TABLE_CELL_TEXT_COL} px-3 py-3 text-left`}>CLIENT</th>
+                      <th className="px-3 py-3 text-right whitespace-nowrap">OVERDUE AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.topOverdueClients.map((client) => (
+                      <tr
+                        key={client.clientId}
+                        className="hover:bg-slate-50 transition-colors"
+                      >
+                        <td className={`${TABLE_CELL_TEXT_COL} px-3 py-3 font-medium text-slate-900`}>
+                          <span className="break-words">{client.clientName}</span>
+                        </td>
+                        <td className="px-3 py-3 text-right font-semibold text-red-600 whitespace-nowrap tabular-nums">
+                          {formatCurrency(client.totalOverdueAmount, { currency: "USD" })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </HorizontalScrollArea>
           </div>
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">

@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { INVOICE_NUMBER_COL_CLASS } from "@/components/tables/invoiceTableColumns";
 import { clsx } from "clsx";
+import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
+import { TABLE_BASE, TABLE_MIN_WIDTH_INNER } from "@/components/table/tableShell";
 
 interface UpcomingInvoice {
   id: string;
@@ -83,15 +85,17 @@ export function UpcomingInvoicesTable({ invoices, workspaceId }: UpcomingInvoice
           No upcoming invoices
         </div>
       ) : (
-        <table className="w-full text-sm">
+        <HorizontalScrollArea className="w-full" viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent">
+        <div className={TABLE_MIN_WIDTH_INNER}>
+        <table className={TABLE_BASE}>
           <thead>
             <tr className="border-b border-slate-100 text-xs font-medium text-slate-500">
-              <th className={clsx("px-4 py-3 text-left uppercase tracking-wider", INVOICE_NUMBER_COL_CLASS)}>INVOICE #</th>
-              <th className="px-4 py-3 text-left">CLIENT</th>
-              <th className="px-4 py-3 text-left">STATUS</th>
-              <th className="px-4 py-3 text-left">DUE DATE</th>
-              <th className="px-4 py-3 text-right">TOTAL</th>
-              <th className="px-4 py-3 text-right">VIEW</th>
+              <th className={clsx("px-3 py-3 text-left uppercase tracking-wider whitespace-nowrap", INVOICE_NUMBER_COL_CLASS)}>INVOICE #</th>
+              <th className="min-w-0 px-3 py-3 text-left">CLIENT</th>
+              <th className="px-3 py-3 text-left whitespace-nowrap">STATUS</th>
+              <th className="px-3 py-3 text-left whitespace-nowrap">DUE DATE</th>
+              <th className="px-3 py-3 text-right whitespace-nowrap">TOTAL</th>
+              <th className="px-3 py-3 text-right whitespace-nowrap">VIEW</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -102,7 +106,7 @@ export function UpcomingInvoicesTable({ invoices, workspaceId }: UpcomingInvoice
                   key={invoice.id}
                   className="hover:bg-slate-50 transition-colors"
                 >
-                  <td className={clsx("px-4 py-3 text-sm text-slate-700", INVOICE_NUMBER_COL_CLASS)}>
+                  <td className={clsx("px-3 py-3 text-sm text-slate-700 whitespace-nowrap", INVOICE_NUMBER_COL_CLASS)}>
                     <Link
                       href={`/${workspaceId}/invoices/${invoice.id}`}
                       className="font-medium text-blue-600 hover:underline"
@@ -110,23 +114,23 @@ export function UpcomingInvoicesTable({ invoices, workspaceId }: UpcomingInvoice
                       {invoice.invoice_number}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-slate-800">
-                    {invoice.clients?.name ?? "—"}
+                  <td className="min-w-0 px-3 py-3 text-slate-800">
+                    <span className="break-words">{invoice.clients?.name ?? "—"}</span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${badge.className}`}
                     >
                       {badge.label}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-700">
+                  <td className="px-3 py-3 text-slate-700 whitespace-nowrap">
                     {formatDate(invoice.due_date)}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-slate-900">
-                    {formatMoney(invoice.total)}
+                  <td className="px-3 py-3 text-right font-medium text-slate-900 whitespace-nowrap tabular-nums">
+                    {formatCurrency(invoice.total, { currency: invoice.currency || "USD" })}
                   </td>
-                  <td className="px-4 py-3 text-right text-sm">
+                  <td className="px-3 py-3 text-right text-sm whitespace-nowrap">
                     <Link
                       href={`/${workspaceId}/invoices/${invoice.id}`}
                       className="text-blue-600 hover:text-blue-700"
@@ -139,6 +143,8 @@ export function UpcomingInvoicesTable({ invoices, workspaceId }: UpcomingInvoice
             })}
           </tbody>
         </table>
+        </div>
+        </HorizontalScrollArea>
       )}
     </div>
   );

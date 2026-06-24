@@ -7,13 +7,18 @@ interface ActionMenuProps {
   clientId: string;
   workspaceId: string;
   onDelete: () => void;
+  returnToUrl?: string;
 }
 
 export function ActionMenu({
   clientId,
   workspaceId,
   onDelete,
+  returnToUrl,
 }: ActionMenuProps) {
+  const editHref = returnToUrl
+    ? `/${workspaceId}/clients/${clientId}/edit?returnTo=${encodeURIComponent(returnToUrl)}`
+    : `/${workspaceId}/clients/${clientId}/edit`;
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -70,7 +75,7 @@ export function ActionMenu({
               View
             </Link>
             <Link
-              href={`/${workspaceId}/clients/${clientId}/edit`}
+              href={editHref}
               className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               onClick={() => setIsOpen(false)}
             >

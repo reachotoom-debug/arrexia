@@ -2,8 +2,55 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Eye, Pencil, Archive, ArchiveRestore } from "lucide-react";
 import { EmptyState } from "@/components/ui/state";
+import { TableActionIconLink } from "@/components/table/TableActionIconLink";
+import { archivePayment, unarchivePayment } from "../actions";
 import type { PaymentSort, PaymentStatus } from "../_lib/getPayments";
+import { PaymentsBulkActions } from "./PaymentsBulkActions";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { prettyLabel } from "@/lib/formatters/prettyLabel";
+import { formatCurrency } from "@/lib/format/currency";
+import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
+import { DataTableShell } from "@/components/layout/DataTableShell";
+import {
+  TABLE_BASE,
+  TABLE_MIN_WIDTH_INNER,
+  TABLE_ROW,
+  TABLE_TD,
+  TABLE_TD_RIGHT,
+  TABLE_TH,
+  TABLE_TH_RIGHT,
+} from "@/components/table/tableShell";
+
+function SelectAllCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="checkbox"
+      aria-label="Select all payments"
+      checked={checked}
+      onChange={onChange}
+      className="h-4 w-4 cursor-pointer accent-foreground"
+    />
+  );
+}
 
 interface PaymentRow {
   id: string;
@@ -14,6 +61,9 @@ interface PaymentRow {
   status: string; // "completed" | "pending" | "failed" | "refunded" | etc.
   transaction_id: string | null;
   payment_provider: string | null;
+  archived_at?: string | null;
+  invoice_number?: string | null;
+  client_name?: string | null;
   invoices?: { invoice_number?: string | null; clients?: { name?: string | null } | null } | null;
   clients?: { name?: string | null } | null;
 }
@@ -30,7 +80,7 @@ interface PaymentsTableProps {
 }
 
 export function PaymentsTable({ 
-  payments, 
+  payments: paymentsProp, 
   workspaceId,
   searchParams = {},
   totalFilteredCount = 0,
@@ -46,6 +96,42 @@ export function PaymentsTable({
   const [searchTerm, setSearchTerm] = useState(currentSearch);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Manage payments as state for optimistic updates
+  const [payments, setPayments] = useState<PaymentRow[]>(paymentsProp);
+
+  // Reset selection when status/tab changes (to avoid stale selection crossing tabs)
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [currentStatus]);
+
+  // Update payments when prop changes (e.g., after router.refresh())
+  useEffect(() => {
+    setPayments(paymentsProp);
+  }, [paymentsProp]);
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllVisible = () => {
+    if (selectedIds.size === payments.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(payments.map((p) => p.id)));
+    }
+  };
+
+  const allSelected = payments.length > 0 && selectedIds.size === payments.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < payments.length;
   
   // Sync search term with URL param
   useEffect(() => {
@@ -99,7 +185,6 @@ export function PaymentsTable({
     router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ""}`);
   };
 
-  const visiblePayments = payments ?? [];
 
   // Reset filters handler - resets to default: default + all
   const handleResetFilters = () => {
@@ -124,13 +209,8 @@ export function PaymentsTable({
     setSearchTerm(value);
   };
 
-  const formatMoney = (amount: number, currency: string = "USD") => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
+  const formatMoney = (amount: number, currency?: string | null) => {
+    return formatCurrency(amount, { currency });
   };
 
   const formatDate = (dateString: string) => {
@@ -141,19 +221,6 @@ export function PaymentsTable({
     });
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusLower = status.toLowerCase();
-    if (statusLower === "completed") {
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    } else if (statusLower === "pending") {
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    } else if (statusLower === "failed") {
-      return "bg-red-50 text-red-700 border-red-200";
-    } else if (statusLower === "refunded") {
-      return "bg-slate-50 text-slate-700 border-slate-200";
-    }
-    return "bg-slate-50 text-slate-700 border-slate-200";
-  };
 
   const getPresetLabel = (preset: PaymentSort): string => {
     switch (preset) {
@@ -183,6 +250,7 @@ export function PaymentsTable({
     { key: "pending", label: "Pending" },
     { key: "failed", label: "Failed" },
     { key: "refunded", label: "Refunded" },
+    { key: "archived", label: "Archived" },
   ];
 
   // Close dropdown when clicking outside
@@ -202,8 +270,10 @@ export function PaymentsTable({
 
   return (
     <div className="space-y-4">
+      <div className="flex w-full max-w-full flex-col gap-3 py-2">
       {/* Sort Preset Chips */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex w-full max-w-full items-center justify-between gap-2">
+        <div className="flex w-full max-w-full flex-wrap gap-2">
         {SORT_PRESETS.map((preset) => (
           <button
             key={preset.key}
@@ -219,12 +289,12 @@ export function PaymentsTable({
             {preset.label}
           </button>
         ))}
+        </div>
       </div>
 
-      {/* Top controls row */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Status chips */}
-        <div className="flex flex-wrap gap-2">
+      {/* Status chips + search */}
+      <div className="flex w-full max-w-full flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex w-full max-w-full flex-wrap gap-2">
           {STATUS_OPTIONS.map((chip) => (
             <button
               key={chip.key}
@@ -241,9 +311,8 @@ export function PaymentsTable({
           ))}
         </div>
 
-        {/* Search + Reset */}
-        <div className="flex flex-wrap items-center gap-2">
-          <form onSubmit={handleSearchSubmit} className="flex gap-2">
+        <div className="flex w-full max-w-full flex-col gap-2 md:flex-row md:items-center">
+          <form onSubmit={handleSearchSubmit} className="flex min-w-0 w-full gap-2 md:w-auto">
             <input
               type="text"
               placeholder="Search transaction, client, or invoice..."
@@ -261,6 +330,7 @@ export function PaymentsTable({
           </button>
         </div>
       </div>
+      </div>
 
       {/* Helper text for active preset */}
       <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -277,6 +347,8 @@ export function PaymentsTable({
             <EmptyState
               title="No payments match your filters"
               message="Try clearing search or filters to see more payments."
+              actionLabel="Reset filters"
+              onAction={handleResetFilters}
             />
           </div>
         ) : (
@@ -284,101 +356,132 @@ export function PaymentsTable({
             <EmptyState
               title="No payments recorded"
               message="Record a payment against an invoice to see it here."
+              actionLabel="Record payment"
+              actionHref={`/${workspaceId}/payments/new`}
             />
           </div>
         )
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full table-fixed divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50/60 text-xs font-medium uppercase text-slate-500">
-              <tr>
-                <th className="w-[120px] px-4 py-3 text-left">Date</th>
-                <th className="w-[180px] px-4 py-3 text-left">Client</th>
-                <th className="w-[120px] px-4 py-3 text-left">Invoice #</th>
-                <th className="w-[120px] px-4 py-3 text-right">Amount</th>
-                <th className="w-[100px] px-4 py-3 text-left">Method</th>
-                <th className="w-[120px] px-4 py-3 text-left">Provider</th>
-                <th className="w-[110px] px-4 py-3 text-left">Status</th>
-                <th className="w-[80px] px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {visiblePayments.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-4 text-sm text-slate-700 whitespace-nowrap">
+        <div className="w-full">
+          <PaymentsBulkActions
+            workspaceId={workspaceId}
+            payments={payments as any}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            onPaymentsChange={(updatedPayments) => setPayments(updatedPayments as unknown as PaymentRow[])}
+            status={currentStatus}
+          />
+          <DataTableShell disableInnerScroll>
+          <HorizontalScrollArea className="relative w-full min-w-0" viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent">
+            <div className={TABLE_MIN_WIDTH_INNER}>
+            <table className={`${TABLE_BASE} divide-y divide-slate-100`}>
+              <thead className="bg-slate-50/60 border-b border-slate-200">
+                <tr>
+                  {/* Selection */}
+                  <th className={`w-[40px] ${TABLE_TH}`}>
+                    <SelectAllCheckbox
+                      checked={allSelected}
+                      indeterminate={someSelected}
+                      onChange={toggleAllVisible}
+                    />
+                  </th>
+                  <th className={`hidden md:table-cell ${TABLE_TH}`}>Date</th>
+                  <th className={TABLE_TH}>Client</th>
+                  <th className={TABLE_TH}>Invoice #</th>
+                  <th className={TABLE_TH_RIGHT}>Amount</th>
+                  <th className={`hidden lg:table-cell ${TABLE_TH}`}>Method</th>
+                  <th className={`hidden lg:table-cell ${TABLE_TH}`}>Provider</th>
+                  <th className={TABLE_TH}>Status</th>
+                  <th className={TABLE_TH_RIGHT}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {payments.map((p) => (
+                <tr key={p.id} className={TABLE_ROW}>
+                  {/* Selection */}
+                  <td
+                    className={TABLE_TD}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Select payment ${p.id}`}
+                      checked={selectedIds.has(p.id)}
+                      onChange={() => toggleOne(p.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 cursor-pointer accent-foreground"
+                    />
+                  </td>
+                  <td className={`hidden md:table-cell ${TABLE_TD} text-sm text-slate-700`}>
                     {formatDate(p.payment_date)}
                   </td>
-                  <td className="px-4 py-4 text-slate-800">
-                    <div className="truncate" title={p.invoices?.clients?.name ?? p.clients?.name ?? "—"}>
-                      {p.invoices?.clients?.name ?? p.clients?.name ?? "—"}
+                  <td className={`min-w-0 ${TABLE_TD} text-slate-800`}>
+                    <div className="break-words" title={p.client_name ?? p.invoices?.clients?.name ?? p.clients?.name ?? "—"}>
+                      {p.client_name ?? p.invoices?.clients?.name ?? p.clients?.name ?? "—"}
                     </div>
                   </td>
-                  <td className="px-4 py-4 text-slate-800 whitespace-nowrap">
-                    {p.invoices?.invoice_number ?? "—"}
+                  <td className={`${TABLE_TD} text-slate-800`}>
+                    {p.invoice_number ?? p.invoices?.invoice_number ?? "—"}
                   </td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-900 tabular-nums whitespace-nowrap">
+                  <td className={`${TABLE_TD_RIGHT} text-sm font-medium text-slate-900`}>
                     {formatMoney(Number(p.amount), p.currency || "USD")}
                   </td>
-                  <td className="px-4 py-4 text-sm text-slate-700 capitalize whitespace-nowrap">
-                    {p.method ?? "—"}
+                  <td className={`hidden lg:table-cell ${TABLE_TD} text-sm text-slate-700`}>
+                    {prettyLabel(p.method)}
                   </td>
-                  <td className="px-4 py-4 text-sm text-slate-500 whitespace-nowrap">
+                  <td className={`hidden lg:table-cell ${TABLE_TD} text-sm text-slate-500`}>
                     {p.payment_provider ?? "—"}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${getStatusBadge(
-                        p.status
-                      )}`}
-                    >
-                      {p.status}
-                    </span>
+                  <td className={`${TABLE_TD} whitespace-nowrap`}>
+                    <StatusBadge type="payment" status={p.status} />
                   </td>
-                  <td className="px-4 py-4 text-right whitespace-nowrap">
-                    <div className="relative inline-block" ref={(el) => { dropdownRefs.current[p.id] = el; }}>
-                      <button
-                        type="button"
-                        onClick={() => setOpenDropdownId(openDropdownId === p.id ? null : p.id)}
-                        className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        aria-label="Actions"
-                      >
-                        <svg
-                          className="h-5 w-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
+                  <td className={`${TABLE_TD_RIGHT} text-sm`}>
+                    <div className="flex items-center justify-end gap-1">
+                      <TableActionIconLink
+                        href={`/${workspaceId}/payments/${p.id}`}
+                        label="View payment"
+                        icon={<Eye className="h-4 w-4" />}
+                      />
+                      {!p.archived_at && (
+                        <>
+                          <TableActionIconLink
+                            href={`/${workspaceId}/payments/${p.id}/edit`}
+                            label="Edit payment"
+                            icon={<Pencil className="h-4 w-4" />}
                           />
-                        </svg>
-                      </button>
-                      {openDropdownId === p.id && (
-                        <div className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                          <div className="py-1">
-                            <button
-                              onClick={() => {
-                                router.push(`/${workspaceId}/payments/${p.id}`);
-                                setOpenDropdownId(null);
-                              }}
-                              className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                            >
-                              View payment
-                            </button>
-                            <button
-                              onClick={() => {
-                                router.push(`/${workspaceId}/payments/${p.id}/edit`);
-                                setOpenDropdownId(null);
-                              }}
-                              className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                            >
-                              Edit payment
-                            </button>
-                          </div>
-                        </div>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await archivePayment(workspaceId, p.id);
+                                router.refresh();
+                              } catch (error) {
+                                alert("Failed to archive payment");
+                              }
+                            }}
+                            className="p-1.5 rounded-md hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            aria-label="Archive payment"
+                            title="Archive payment"
+                          >
+                            <Archive className="h-4 w-4 text-slate-600" />
+                          </button>
+                        </>
+                      )}
+                      {p.archived_at && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await unarchivePayment(workspaceId, p.id);
+                              router.refresh();
+                            } catch (error) {
+                              alert("Failed to restore payment");
+                            }
+                          }}
+                          className="p-1.5 rounded-md hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          aria-label="Restore payment"
+                          title="Restore payment"
+                        >
+                          <ArchiveRestore className="h-4 w-4 text-slate-600" />
+                        </button>
                       )}
                     </div>
                   </td>
@@ -386,6 +489,9 @@ export function PaymentsTable({
               ))}
             </tbody>
           </table>
+            </div>
+        </HorizontalScrollArea>
+        </DataTableShell>
         </div>
       )}
     </div>

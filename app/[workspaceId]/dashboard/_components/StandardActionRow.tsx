@@ -1,25 +1,16 @@
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatCurrency } from "@/lib/format/currency";
 import { INVOICE_NUMBER_COL_CLASS } from "@/components/tables/invoiceTableColumns";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { clsx } from "clsx";
+import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
+import { TABLE_BASE, TABLE_MIN_WIDTH_INNER } from "@/components/table/tableShell";
 import type { UpcomingDueItem, CollectionsWorkItem } from "../../_types/dashboard";
 
 interface StandardActionRowProps {
   upcoming: UpcomingDueItem[];
   collections: CollectionsWorkItem[];
   workspaceId: string;
-}
-
-function getStatusBadge(status: string) {
-  const statusLower = status.toLowerCase();
-  if (statusLower === "sent") {
-    return { label: "Sent", className: "bg-blue-100 text-blue-700 border-blue-200" };
-  } else if (statusLower === "partially_paid" || statusLower === "partial") {
-    return { label: "Partially paid", className: "bg-amber-100 text-amber-700 border-amber-200" };
-  } else if (statusLower === "draft") {
-    return { label: "Draft", className: "bg-slate-100 text-slate-700 border-slate-200" };
-  }
-  return { label: status, className: "bg-gray-100 text-gray-600 border-gray-200" };
 }
 
 function getRiskBadge(riskLevel: string | null) {
@@ -59,7 +50,7 @@ export function StandardActionRow({ upcoming, collections, workspaceId }: Standa
   const upcomingLimited = upcoming.slice(0, 10);
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
       {/* Upcoming Due Table */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-200">
@@ -69,52 +60,49 @@ export function StandardActionRow({ upcoming, collections, workspaceId }: Standa
         {upcomingLimited.length === 0 ? (
           <div className="p-6 text-center text-sm text-slate-500">No upcoming invoices</div>
         ) : (
-          <table className="w-full text-sm">
+          <HorizontalScrollArea className="w-full" viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent">
+          <div className={TABLE_MIN_WIDTH_INNER}>
+          <table className={TABLE_BASE}>
             <thead>
               <tr className="border-b border-slate-100 text-xs font-medium text-slate-500">
-                <th className={clsx("px-4 py-3 text-left uppercase tracking-wider", INVOICE_NUMBER_COL_CLASS)}>
+                <th className={clsx("px-3 py-3 text-left uppercase tracking-wider", INVOICE_NUMBER_COL_CLASS)}>
                   INVOICE #
                 </th>
-                <th className="px-4 py-3 text-left">CLIENT</th>
-                <th className="px-4 py-3 text-left">DUE DATE</th>
-                <th className="px-4 py-3 text-right">OUTSTANDING</th>
-                <th className="px-4 py-3 text-left">STATUS</th>
+                <th className="min-w-0 px-3 py-3 text-left">CLIENT</th>
+                <th className="hidden md:table-cell px-3 py-3 text-left whitespace-nowrap">DUE DATE</th>
+                <th className="px-3 py-3 text-right whitespace-nowrap">OUTSTANDING</th>
+                <th className="px-3 py-3 text-left whitespace-nowrap">STATUS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {upcomingLimited.map((invoice) => {
-                const badge = getStatusBadge(invoice.status);
-                return (
-                  <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
-                    <td className={clsx("px-4 py-3 text-sm text-slate-700", INVOICE_NUMBER_COL_CLASS)}>
-                      <Link
-                        href={`/${workspaceId}/invoices/${invoice.id}`}
-                        className="font-medium text-blue-600 hover:underline"
-                      >
-                        {invoice.invoiceNumber}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-800 whitespace-nowrap truncate max-w-[150px]" title={invoice.clientName}>
-                      {invoice.clientName}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
-                      {formatDate(invoice.dueDate)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-slate-900 whitespace-nowrap">
-                      {formatMoney(invoice.outstanding, "USD")}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${badge.className}`}
-                      >
-                        {badge.label}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {upcomingLimited.map((invoice) => (
+                <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
+                  <td className={clsx("px-3 py-3 text-sm text-slate-700 whitespace-nowrap", INVOICE_NUMBER_COL_CLASS)}>
+                    <Link
+                      href={`/${workspaceId}/invoices/${invoice.id}`}
+                      className="font-medium text-blue-600 hover:underline"
+                    >
+                      {invoice.invoiceNumber}
+                    </Link>
+                  </td>
+                  <td className="min-w-0 px-3 py-3 text-slate-800 break-words" title={invoice.clientName}>
+                    {invoice.clientName}
+                  </td>
+                  <td className="hidden md:table-cell px-3 py-3 text-slate-700 whitespace-nowrap">
+                    {formatDate(invoice.dueDate)}
+                  </td>
+                  <td className="px-3 py-3 text-right font-medium text-slate-900 whitespace-nowrap tabular-nums">
+                    {formatCurrency(invoice.outstanding, { currency: "USD" })}
+                  </td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <StatusBadge type="invoice" status={invoice.status} />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+          </div>
+          </HorizontalScrollArea>
         )}
       </div>
 
@@ -127,23 +115,25 @@ export function StandardActionRow({ upcoming, collections, workspaceId }: Standa
         {topOverdue.length === 0 ? (
           <div className="p-6 text-center text-sm text-slate-500">No overdue invoices</div>
         ) : (
-          <table className="w-full text-sm">
+          <HorizontalScrollArea className="w-full" viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent">
+          <div className={TABLE_MIN_WIDTH_INNER}>
+          <table className={TABLE_BASE}>
             <thead>
               <tr className="border-b border-slate-100 text-xs font-medium text-slate-500">
-                <th className="px-4 py-3 text-left">RISK</th>
-                <th className={clsx("px-4 py-3 text-left uppercase tracking-wider", INVOICE_NUMBER_COL_CLASS)}>
+                <th className="hidden lg:table-cell px-3 py-3 text-left whitespace-nowrap">RISK</th>
+                <th className={clsx("px-3 py-3 text-left uppercase tracking-wider whitespace-nowrap", INVOICE_NUMBER_COL_CLASS)}>
                   INVOICE #
                 </th>
-                <th className="px-4 py-3 text-left">CLIENT</th>
-                <th className="px-4 py-3 text-right">DAYS</th>
-                <th className="px-4 py-3 text-right">OUTSTANDING</th>
+                <th className="min-w-0 px-3 py-3 text-left">CLIENT</th>
+                <th className="hidden md:table-cell px-3 py-3 text-right whitespace-nowrap">DAYS</th>
+                <th className="px-3 py-3 text-right whitespace-nowrap">OUTSTANDING</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {topOverdue.map((invoice) => (
                 <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">{getRiskBadge(invoice.riskLevel)}</td>
-                  <td className={clsx("px-4 py-3 text-sm text-slate-700", INVOICE_NUMBER_COL_CLASS)}>
+                  <td className="hidden lg:table-cell px-3 py-3 whitespace-nowrap">{getRiskBadge(invoice.riskLevel)}</td>
+                  <td className={clsx("px-3 py-3 text-sm text-slate-700 whitespace-nowrap", INVOICE_NUMBER_COL_CLASS)}>
                     <Link
                       href={`/${workspaceId}/invoices/${invoice.id}`}
                       className="font-medium text-blue-600 hover:underline"
@@ -151,19 +141,21 @@ export function StandardActionRow({ upcoming, collections, workspaceId }: Standa
                       {invoice.invoiceNumber}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-slate-800 whitespace-nowrap truncate max-w-[150px]" title={invoice.clientName}>
+                  <td className="min-w-0 px-3 py-3 text-slate-800 break-words" title={invoice.clientName}>
                     {invoice.clientName}
                   </td>
-                  <td className="px-4 py-3 text-right text-red-600 font-medium whitespace-nowrap">
+                  <td className="hidden md:table-cell px-3 py-3 text-right text-red-600 font-medium whitespace-nowrap tabular-nums">
                     {invoice.overdueDays}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold text-red-600 whitespace-nowrap">
-                    {formatMoney(invoice.outstanding, "USD")}
+                  <td className="px-3 py-3 text-right font-semibold text-red-600 whitespace-nowrap tabular-nums">
+                    {formatCurrency(invoice.outstanding, { currency: "USD" })}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
+          </HorizontalScrollArea>
         )}
       </div>
     </div>

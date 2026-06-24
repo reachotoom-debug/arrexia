@@ -8,14 +8,14 @@ export type FeatureItem = {
 };
 
 interface FeatureListProps {
-  items: FeatureItem[];
+  items: readonly FeatureItem[];
 }
 
 export function FeatureList({ items }: FeatureListProps) {
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-3 lg:space-y-4">
       {items.map((item) => (
-        <li key={item.label} className="flex items-start gap-3 text-sm text-slate-700">
+        <li key={item.label} className="flex items-start gap-3 text-sm text-slate-700 sm:text-base">
           {item.comingSoon ? (
             <Clock className="mt-0.5 h-4 w-4 text-amber-500" aria-hidden="true" />
           ) : (

@@ -24,7 +24,7 @@ export default function LoginForm({ onSubmit }: LoginFormProps) {
           FlowCollect
         </h1>
 
-        <form onSubmit={handleSubmit((data) => onSubmit(data))} className="space-y-4">
+        <form method="post" onSubmit={handleSubmit((data) => onSubmit(data))} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Email
