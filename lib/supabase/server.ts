@@ -4,7 +4,12 @@ import { cookies } from "next/headers";
 export async function supabaseServer() {
   const cookieStore = await cookies();
 
-  return createServerClient(
+  console.log(
+    "[FLOWCOLLECT_SUPABASE] cookies:",
+    cookieStore.getAll().map((c) => c.name)
+  );
+
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -24,4 +29,12 @@ export async function supabaseServer() {
       },
     }
   );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  console.log("[FLOWCOLLECT_SUPABASE] user:", user?.id ?? null);
+
+  return supabase;
 }

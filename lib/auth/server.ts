@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { logAuthGate } from "@/lib/auth/debug";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -62,6 +63,16 @@ export async function requireWorkspace(workspaceId: string): Promise<{
   workspace: WorkspaceInfo;
   membership: MembershipInfo;
 }> {
+  const cookieStore = await cookies();
+
+  console.log(
+    "[FLOWCOLLECT_AUTH] cookies:",
+    cookieStore.getAll().map((c) => ({
+      name: c.name,
+      valueLength: c.value.length,
+    }))
+  );
+
   const supabase = await supabaseServer();
   let user = null as any;
   let authError: unknown = null;
