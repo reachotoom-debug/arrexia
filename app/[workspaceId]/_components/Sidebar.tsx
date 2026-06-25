@@ -48,7 +48,7 @@ export function Sidebar({ workspace, user, plan = "free" }: SidebarProps) {
     <aside className="w-56 shrink-0 bg-white border-r border-slate-200 flex flex-col h-full">
       {/* FlowCollect Branding */}
       <div className="px-3 py-3 border-b border-slate-200">
-        <Link href={`${base}/dashboard`} className="flex items-center gap-3">
+        <Link href={`${base}/dashboard`} prefetch={false} className="flex items-center gap-3">
           <Image
             src="/brand/icon-logo.png"
             alt=""
@@ -76,6 +76,7 @@ export function Sidebar({ workspace, user, plan = "free" }: SidebarProps) {
             <Link
               key={item.slug}
               href={item.href}
+              prefetch={false}
               className={`block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive
                   ? "bg-blue-50 text-blue-700"
@@ -114,6 +115,7 @@ export function Sidebar({ workspace, user, plan = "free" }: SidebarProps) {
           {isUpgradeAvailable(plan) ? (
             <Link
               href={`${base}/settings?section=billing`}
+              prefetch={false}
               className="text-xs text-blue-600 hover:text-blue-700 font-medium"
             >
               Upgrade
