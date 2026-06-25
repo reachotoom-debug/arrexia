@@ -21,7 +21,6 @@ import {
 } from "@/lib/auth/clientRedirect";
 import { useAuthUrlSanitizer } from "@/lib/auth/useAuthUrlSanitizer";
 import { loginSchema, type LoginFormValues } from "@/lib/schemas/auth";
-import { supabaseBrowser } from "@/lib/supabase/client";
 
 export function LoginClient() {
   const router = useRouter();
@@ -49,49 +48,31 @@ export function LoginClient() {
   useAuthUrlSanitizer(prefillEmail);
 
   const onSubmit = async (data: LoginFormValues) => {
-    const supabase = supabaseBrowser();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
+    const loginResponse = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      cache: "no-store",
+      body: JSON.stringify({
+        email: data.email,
+        password: data.password,
+      }),
     });
 
-    if (signInError) {
-      if (process.env.NODE_ENV === "development") {
-        console.info("[auth/login]", {
-          signInWithPasswordSuccess: "no",
-          sessionExists: "no",
-          userId: null,
-        });
-      }
-      setError("root", { message: signInError.message || "Failed to sign in" });
-      return;
-    }
+    const loginPayload = (await loginResponse.json().catch(() => null)) as
+      | { ok?: boolean; error?: string }
+      | null;
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (process.env.NODE_ENV === "development") {
-      console.info("[auth/login]", {
-        signInWithPasswordSuccess: "yes",
-        sessionExists: session ? "yes" : "no",
-        userId: user?.id ?? null,
+    if (!loginResponse.ok || !loginPayload?.ok) {
+      setError("root", {
+        message: loginPayload?.error || "Failed to sign in",
       });
+      return;
     }
 
     router.refresh();
 
     const { redirectTo, error: redirectError } = await resolvePostLoginPath(nextUrl);
-
-    if (process.env.NODE_ENV === "development") {
-      console.info("[auth/login]", {
-        finalPath: redirectTo,
-        redirectError: redirectError ?? null,
-      });
-    }
 
     if (redirectError) {
       setError("root", { message: redirectError });

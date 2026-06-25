@@ -1,11 +1,10 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getOAuthCallbackErrorMessage, isSocialAuthEnabled } from "@/lib/auth/oauthErrors";
 import {
   resolvePostLoginDestination,
   WORKSPACE_SETUP_FAILED_MESSAGE,
 } from "@/lib/auth/resolvePostLoginDestination";
+import { supabaseRouteHandler } from "@/lib/supabase/route-handler";
 
 function sanitizeNext(next: string | null): string | null {
   if (!next) return null;
@@ -48,23 +47,8 @@ export async function GET(request: Request) {
     return redirectWithError(origin, returnTo, "Missing authorization code");
   }
 
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
-        },
-      },
-    }
-  );
+  const cookieHolder = NextResponse.next();
+  const supabase = await supabaseRouteHandler(cookieHolder);
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
@@ -86,5 +70,10 @@ export async function GET(request: Request) {
     return redirectWithError(origin, returnTo, WORKSPACE_SETUP_FAILED_MESSAGE);
   }
 
-  return NextResponse.redirect(`${origin}${destination.path}`);
+  const finalRedirect = NextResponse.redirect(`${origin}${destination.path}`);
+  cookieHolder.cookies.getAll().forEach(({ name, value, ...options }) => {
+    finalRedirect.cookies.set(name, value, options);
+  });
+
+  return finalRedirect;
 }
