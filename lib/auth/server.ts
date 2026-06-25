@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { logAuthGate } from "@/lib/auth/debug";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export type AuthUserInfo = {
@@ -17,6 +18,15 @@ export type MembershipInfo = {
   role: string | null;
 };
 
+function formatAuthError(error: unknown): string | null {
+  if (!error) return null;
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return String((error as { message?: unknown }).message ?? error);
+  }
+  return String(error);
+}
+
 export async function requireUser(): Promise<{ user: AuthUserInfo }> {
   const supabase = await supabaseServer();
   let user = null as any;
@@ -28,12 +38,17 @@ export async function requireUser(): Promise<{ user: AuthUserInfo }> {
   } catch (err) {
     error = err;
   }
-  
-  // Treat refresh_token_not_found and any auth errors as unauthenticated
+
   if (!user || error) {
+    await logAuthGate("requireUser", {
+      redirectTo: "/login",
+      redirectReason: !user ? "no_user" : "getUser_error",
+      getUserError: formatAuthError(error),
+      userId: user?.id ?? null,
+    });
     redirect("/login");
   }
-  
+
   return {
     user: {
       id: user.id,
@@ -57,13 +72,18 @@ export async function requireWorkspace(workspaceId: string): Promise<{
   } catch (err) {
     authError = err;
   }
-  
-  // Treat refresh_token_not_found and any auth errors as unauthenticated
+
   if (!user || authError) {
+    await logAuthGate("requireWorkspace", {
+      workspaceId,
+      redirectTo: "/login",
+      redirectReason: !user ? "no_user" : "getUser_error",
+      getUserError: formatAuthError(authError),
+      userId: user?.id ?? null,
+    });
     redirect("/login");
   }
 
-  // Check membership first
   const { data: membership } = await supabase
     .from("workspace_members")
     .select("workspace_id, role")
@@ -72,10 +92,16 @@ export async function requireWorkspace(workspaceId: string): Promise<{
     .maybeSingle();
 
   if (!membership) {
+    await logAuthGate("requireWorkspace", {
+      workspaceId,
+      redirectTo: "/start",
+      redirectReason: "no_membership",
+      userId: user.id,
+      getUserError: null,
+    });
     redirect("/start");
   }
 
-  // Load workspace - must exist if membership exists
   const { data: workspace, error: wsError } = await supabase
     .from("workspaces")
     .select("id, name, organization_id")
@@ -83,11 +109,15 @@ export async function requireWorkspace(workspaceId: string): Promise<{
     .single();
 
   if (!workspace || wsError || !workspace.organization_id) {
+    await logAuthGate("requireWorkspace", {
+      workspaceId,
+      redirectTo: "/start",
+      redirectReason: "workspace_missing_or_invalid",
+      userId: user.id,
+      workspaceError: wsError?.message ?? null,
+    });
     redirect("/start");
   }
-
-  // Note: Organization existence is ensured by migration 20260106150000_repair_missing_organizations.sql
-  // Do NOT attempt to create organizations here - RLS will block it and migration handles repairs
 
   return {
     user: {

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { getPublicAdminBasePath } from "@/lib/admin/adminPaths";
 
 function isRefreshTokenNotFoundError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -17,8 +18,6 @@ function isRefreshTokenNotFoundError(err: unknown): boolean {
     msg.includes("Refresh Token Not Found")
   );
 }
-
-import { getPublicAdminBasePath } from "@/lib/admin/adminPaths";
 
 function isAuthRoute(pathname: string | null): boolean {
   if (!pathname) return false;
@@ -43,38 +42,65 @@ export function SupabaseAuthStabilizer() {
     if (didInit.current) return;
     didInit.current = true;
 
+    const onAuthPage = isAuthRoute(pathname);
     const supabase = supabaseBrowser();
 
-    // Register listener early, and never throw from it.
     const { data: subscription } = supabase.auth.onAuthStateChange(async (event) => {
-      if (event === "SIGNED_OUT") {
-        if (!isAuthRoute(pathname)) router.replace("/login");
+      console.info("[auth/stabilizer]", {
+        event,
+        pathname,
+        onAuthPage,
+        signOutExecuted: false,
+      });
+
+      // Server-side HttpOnly cookies own the session on workspace routes.
+      // Do not force client redirects away from the app.
+      if (event === "SIGNED_OUT" && onAuthPage) {
+        router.replace("/login");
       }
     });
 
-    // Defensive session check: stale refresh tokens can surface here.
-    (async () => {
-      try {
-        const { error } = await supabase.auth.getSession();
-        if (error && isRefreshTokenNotFoundError(error)) {
-          await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
-          if (!isAuthRoute(pathname)) router.replace("/login");
+    if (onAuthPage) {
+      (async () => {
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          console.info("[auth/stabilizer]", {
+            pathname,
+            onAuthPage: true,
+            hasSession: Boolean(data.session),
+            getSessionError: error?.message ?? null,
+            signOutExecuted: false,
+          });
+
+          if (error && isRefreshTokenNotFoundError(error)) {
+            console.info("[auth/stabilizer]", {
+              pathname,
+              action: "signOut_local",
+              reason: "refresh_token_not_found_on_auth_page",
+            });
+            await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+          }
+        } catch (err) {
+          console.info("[auth/stabilizer]", {
+            pathname,
+            onAuthPage: true,
+            getSessionThrew: err instanceof Error ? err.message : String(err),
+            signOutExecuted: false,
+          });
         }
-      } catch (err) {
-        if (isRefreshTokenNotFoundError(err)) {
-          await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
-          if (!isAuthRoute(pathname)) router.replace("/login");
-        }
-      }
-    })();
+      })();
+    } else {
+      console.info("[auth/stabilizer]", {
+        pathname,
+        onAuthPage: false,
+        note: "skipping client getSession enforcement; server cookies are authoritative",
+      });
+    }
 
     return () => {
       subscription?.subscription?.unsubscribe();
     };
-    // Intentionally run once; pathname/router changes should not re-register clients.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pathname, router]);
 
   return null;
 }
-
