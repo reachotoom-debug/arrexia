@@ -46,13 +46,6 @@ export function SupabaseAuthStabilizer() {
     const supabase = supabaseBrowser();
 
     const { data: subscription } = supabase.auth.onAuthStateChange(async (event) => {
-      console.info("[auth/stabilizer]", {
-        event,
-        pathname,
-        onAuthPage,
-        signOutExecuted: false,
-      });
-
       // Server-side HttpOnly cookies own the session on workspace routes.
       // Do not force client redirects away from the app.
       if (event === "SIGNED_OUT" && onAuthPage) {
@@ -63,38 +56,15 @@ export function SupabaseAuthStabilizer() {
     if (onAuthPage) {
       (async () => {
         try {
-          const { data, error } = await supabase.auth.getSession();
-          console.info("[auth/stabilizer]", {
-            pathname,
-            onAuthPage: true,
-            hasSession: Boolean(data.session),
-            getSessionError: error?.message ?? null,
-            signOutExecuted: false,
-          });
+          const { error } = await supabase.auth.getSession();
 
           if (error && isRefreshTokenNotFoundError(error)) {
-            console.info("[auth/stabilizer]", {
-              pathname,
-              action: "signOut_local",
-              reason: "refresh_token_not_found_on_auth_page",
-            });
             await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
           }
-        } catch (err) {
-          console.info("[auth/stabilizer]", {
-            pathname,
-            onAuthPage: true,
-            getSessionThrew: err instanceof Error ? err.message : String(err),
-            signOutExecuted: false,
-          });
+        } catch {
+          // Ignore client session cleanup errors on auth pages.
         }
       })();
-    } else {
-      console.info("[auth/stabilizer]", {
-        pathname,
-        onAuthPage: false,
-        note: "skipping client getSession enforcement; server cookies are authoritative",
-      });
     }
 
     return () => {

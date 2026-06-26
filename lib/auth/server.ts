@@ -1,6 +1,4 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { logAuthGate } from "@/lib/auth/debug";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export type AuthUserInfo = {
@@ -19,15 +17,6 @@ export type MembershipInfo = {
   role: string | null;
 };
 
-function formatAuthError(error: unknown): string | null {
-  if (!error) return null;
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message?: unknown }).message ?? error);
-  }
-  return String(error);
-}
-
 export async function requireUser(): Promise<{ user: AuthUserInfo }> {
   const supabase = await supabaseServer();
   let user = null as any;
@@ -41,12 +30,6 @@ export async function requireUser(): Promise<{ user: AuthUserInfo }> {
   }
 
   if (!user || error) {
-    await logAuthGate("requireUser", {
-      redirectTo: "/login",
-      redirectReason: !user ? "no_user" : "getUser_error",
-      getUserError: formatAuthError(error),
-      userId: user?.id ?? null,
-    });
     redirect("/login");
   }
 
@@ -63,16 +46,6 @@ export async function requireWorkspace(workspaceId: string): Promise<{
   workspace: WorkspaceInfo;
   membership: MembershipInfo;
 }> {
-  const cookieStore = await cookies();
-
-  console.log(
-    "[FLOWCOLLECT_AUTH] cookies:",
-    cookieStore.getAll().map((c) => ({
-      name: c.name,
-      valueLength: c.value.length,
-    }))
-  );
-
   const supabase = await supabaseServer();
   let user = null as any;
   let authError: unknown = null;
@@ -85,13 +58,6 @@ export async function requireWorkspace(workspaceId: string): Promise<{
   }
 
   if (!user || authError) {
-    await logAuthGate("requireWorkspace", {
-      workspaceId,
-      redirectTo: "/login",
-      redirectReason: !user ? "no_user" : "getUser_error",
-      getUserError: formatAuthError(authError),
-      userId: user?.id ?? null,
-    });
     redirect("/login");
   }
 
@@ -103,13 +69,6 @@ export async function requireWorkspace(workspaceId: string): Promise<{
     .maybeSingle();
 
   if (!membership) {
-    await logAuthGate("requireWorkspace", {
-      workspaceId,
-      redirectTo: "/start",
-      redirectReason: "no_membership",
-      userId: user.id,
-      getUserError: null,
-    });
     redirect("/start");
   }
 
@@ -120,13 +79,6 @@ export async function requireWorkspace(workspaceId: string): Promise<{
     .single();
 
   if (!workspace || wsError || !workspace.organization_id) {
-    await logAuthGate("requireWorkspace", {
-      workspaceId,
-      redirectTo: "/start",
-      redirectReason: "workspace_missing_or_invalid",
-      userId: user.id,
-      workspaceError: wsError?.message ?? null,
-    });
     redirect("/start");
   }
 
