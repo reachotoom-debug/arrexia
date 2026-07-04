@@ -348,8 +348,7 @@ export function buildReminderEmail(
         body:
           `Dear ${safeClient},\n\n` +
           `Just a friendly reminder that invoice ${safeInvoice} for ${safeAmount} is due on ${dueDateFormatted}.\n\n` +
-          `If you have already scheduled the payment, thank you and please ignore this message.\n\n` +
-          `Best regards,\nArrexia`,
+          `If you have already scheduled the payment, thank you and please ignore this message.`,
       };
 
     case "overdue_soft":
@@ -358,8 +357,7 @@ export function buildReminderEmail(
         body:
           `Dear ${safeClient},\n\n` +
           `We hope you are well. This is a friendly reminder that invoice ${safeInvoice} for ${safeAmount} was due on ${dueDateFormatted}${overduePart}.\n\n` +
-          `We would appreciate your prompt attention.\n\n` +
-          `Thank you,\nArrexia`,
+          `We would appreciate your prompt attention.`,
       };
 
     case "overdue_medium":
@@ -368,8 +366,7 @@ export function buildReminderEmail(
         body:
           `Dear ${safeClient},\n\n` +
           `This is a follow-up regarding invoice ${safeInvoice} for ${safeAmount}, which was due on ${dueDateFormatted}${overduePart}.\n\n` +
-          `Please let us know if there is any issue with this payment or if you need an updated copy of the invoice.\n\n` +
-          `Kind regards,\nArrexia`,
+          `Please let us know if there is any issue with this payment or if you need an updated copy of the invoice.`,
       };
 
     case "overdue_hard":
@@ -378,8 +375,7 @@ export function buildReminderEmail(
         body:
           `Dear ${safeClient},\n\n` +
           `This is a final reminder regarding invoice ${safeInvoice} for ${safeAmount}, which was due on ${dueDateFormatted}${overduePart}.\n\n` +
-          `To avoid any service interruptions or additional actions, please arrange payment as soon as possible or contact us to discuss.\n\n` +
-          `Sincerely,\nArrexia`,
+          `To avoid any service interruptions or additional actions, please arrange payment as soon as possible or contact us to discuss.`,
       };
 
     case "thank_you":
@@ -387,8 +383,7 @@ export function buildReminderEmail(
         subject: `Payment received – invoice ${safeInvoice}`,
         body:
           `Dear ${safeClient},\n\n` +
-          `Thank you for your payment for invoice ${safeInvoice}. We appreciate your prompt response.\n\n` +
-          `Best regards,\nArrexia`,
+          `Thank you for your payment for invoice ${safeInvoice}. We appreciate your prompt response.`,
       };
   }
 }

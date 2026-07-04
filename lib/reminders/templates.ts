@@ -39,25 +39,20 @@ export async function ensureReminderTemplatesForWorkspace(
       name: "Reminder: upcoming due date",
       subject: "Upcoming payment due for invoice {{invoice_number}}",
       body:
-        "Hi {{client_name}},\n\n" +
-        "This is a friendly reminder that invoice {{invoice_number}} for {{amount_due}} is due on {{due_date}}.\n\n" +
-        "Thank you.",
+        "This is a friendly reminder that invoice {{invoice_number}} for {{amount_due}} is due on {{due_date}}.",
     },
     {
       code: "due_day",
       name: "Reminder: due today",
       subject: "Invoice {{invoice_number}} is due today",
       body:
-        "Hi {{client_name}},\n\n" +
-        "Invoice {{invoice_number}} for {{amount_due}} is due today ({{due_date}}).\n\n" +
-        "Thank you.",
+        "Invoice {{invoice_number}} for {{amount_due}} is due today ({{due_date}}).",
     },
     {
       code: "plus_3",
       name: "Reminder: 3 days overdue",
       subject: "Invoice {{invoice_number}} is 3 days overdue",
       body:
-        "Hi {{client_name}},\n\n" +
         "Invoice {{invoice_number}} for {{amount_due}} is now 3 days overdue (due {{due_date}}).\n\n" +
         "Please arrange payment at your earliest convenience.",
     },
@@ -66,7 +61,6 @@ export async function ensureReminderTemplatesForWorkspace(
       name: "Reminder: 7 days overdue",
       subject: "Invoice {{invoice_number}} is 7 days overdue",
       body:
-        "Hi {{client_name}},\n\n" +
         "Invoice {{invoice_number}} for {{amount_due}} is now 7 days overdue (due {{due_date}}).\n\n" +
         "We appreciate your prompt attention to this payment.",
     },
@@ -75,7 +69,6 @@ export async function ensureReminderTemplatesForWorkspace(
       name: "Reminder: final notice",
       subject: "Final notice for invoice {{invoice_number}}",
       body:
-        "Hi {{client_name}},\n\n" +
         "This is a final reminder that invoice {{invoice_number}} for {{amount_due}} is still unpaid, " +
         "{{days_overdue}} days after the due date ({{due_date}}).\n\n" +
         "Please contact us if you have any questions.",

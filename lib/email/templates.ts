@@ -11,6 +11,13 @@ const MUTED = "#64748b";
 const FONT =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
+export const PLATFORM_EMAIL_FOOTER = "Powered by Arrexia";
+
+const LEGACY_BRAND_PATTERN = /flowcollect/gi;
+const LEADING_GREETING_PATTERN = /^\s*(dear|hi|hello)\s+[^\n,]+,?\s*\n+/i;
+const TRAILING_CLOSING_PATTERN =
+  /\n\s*(thank you|thanks|best regards|kind regards|sincerely|regards|yours truly),?\s*(?:\n[^\n]+)?\s*$/i;
+
 export function escapeHtml(value: string | null | undefined): string {
   if (value == null) return "";
   return String(value)
@@ -25,15 +32,35 @@ function plainMultilineToHtml(text: string): string {
   return escapeHtml(text).replace(/\r\n/g, "\n").replace(/\n/g, "<br />");
 }
 
-function formatDisplayDate(value: string | null | undefined): string {
+function formatDisplayDatePlain(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return escapeHtml(value);
+  if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
   });
+}
+
+function formatDisplayDate(value: string | null | undefined): string {
+  return escapeHtml(formatDisplayDatePlain(value));
+}
+
+/** Strip legacy branding, greetings, and sign-offs from template body before the HTML shell wraps it. */
+export function sanitizeReminderMainMessage(message: string): string {
+  let text = message
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*<p[^>]*>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\r\n/g, "\n");
+
+  text = text.replace(LEGACY_BRAND_PATTERN, "");
+  text = text.replace(/\n{3,}/g, "\n\n").trim();
+  text = text.replace(LEADING_GREETING_PATTERN, "");
+  text = text.replace(TRAILING_CLOSING_PATTERN, "");
+
+  return text.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 type SummaryRow = {
@@ -48,8 +75,9 @@ export type EmailShellOptions = {
   mainMessage: string;
   summaryRows: SummaryRow[];
   ctaNote: string;
-  footerThankYou: string;
-  footerTagline: string;
+  signatureLine: string;
+  includeBusinessNameInSignature?: boolean;
+  platformFooter?: string;
 };
 
 function buildSummaryRowsHtml(rows: SummaryRow[]): string {
@@ -94,9 +122,16 @@ export function renderEmailShell(options: EmailShellOptions): { html: string; te
   const greeting = escapeHtml(options.greeting);
   const mainMessageHtml = plainMultilineToHtml(options.mainMessage);
   const ctaNote = escapeHtml(options.ctaNote);
-  const footerThankYou = escapeHtml(options.footerThankYou);
-  const footerTagline = escapeHtml(options.footerTagline);
+  const platformFooter = escapeHtml(options.platformFooter ?? PLATFORM_EMAIL_FOOTER);
   const summaryHtml = buildSummaryRowsHtml(options.summaryRows);
+
+  const signatureHtml = options.includeBusinessNameInSignature
+    ? `${escapeHtml(options.signatureLine)}<br />${businessName}`
+    : escapeHtml(options.signatureLine);
+
+  const signatureText = options.includeBusinessNameInSignature
+    ? `${options.signatureLine}\n${options.businessName}`
+    : options.signatureLine;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -113,8 +148,7 @@ export function renderEmailShell(options: EmailShellOptions): { html: string; te
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background-color:#ffffff;border:1px solid ${BORDER};border-radius:8px;overflow:hidden;">
           <tr>
             <td style="padding:28px 28px 20px 28px;border-bottom:1px solid ${BORDER};">
-              <div style="font-size:13px;font-weight:600;color:${MUTED};letter-spacing:0.04em;text-transform:uppercase;">Arrexia</div>
-              <div style="margin-top:6px;font-size:22px;font-weight:700;color:${NAVY};line-height:1.3;">${businessName}</div>
+              <div style="font-size:22px;font-weight:700;color:${NAVY};line-height:1.3;">${businessName}</div>
             </td>
           </tr>
           <tr>
@@ -132,9 +166,8 @@ export function renderEmailShell(options: EmailShellOptions): { html: string; te
                   </td>
                 </tr>
               </table>
-              <p style="margin:28px 0 8px 0;font-size:14px;line-height:1.6;color:#334155;">${footerThankYou}</p>
-              <p style="margin:0;font-size:14px;font-weight:600;color:${NAVY};">${businessName}</p>
-              <p style="margin:16px 0 0 0;font-size:12px;line-height:1.5;color:${MUTED};">${footerTagline}</p>
+              <p style="margin:28px 0 0 0;font-size:14px;line-height:1.6;color:#334155;">${signatureHtml}</p>
+              <p style="margin:16px 0 0 0;font-size:12px;line-height:1.5;color:${MUTED};">${platformFooter}</p>
             </td>
           </tr>
         </table>
@@ -154,9 +187,8 @@ export function renderEmailShell(options: EmailShellOptions): { html: string; te
     "",
     options.ctaNote,
     "",
-    options.footerThankYou,
-    options.businessName,
-    options.footerTagline,
+    signatureText,
+    options.platformFooter ?? PLATFORM_EMAIL_FOOTER,
   ]
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -207,8 +239,9 @@ export function renderInvoiceEmail(
     mainMessage,
     summaryRows,
     ctaNote: "Please review the attached PDF invoice.",
-    footerThankYou: "Thank you for your business.",
-    footerTagline: "Generated by Arrexia",
+    signatureLine: "Thank you for your business.",
+    includeBusinessNameInSignature: false,
+    platformFooter: PLATFORM_EMAIL_FOOTER,
   });
 
   return { ...rendered, subject };
@@ -225,12 +258,30 @@ export type ReminderEmailOptions = {
   mainMessage?: string | null;
 };
 
+function buildDefaultReminderMainMessage(options: ReminderEmailOptions): string {
+  const amount = options.outstandingAmount || options.totalAmount;
+  const dueDate = formatDisplayDatePlain(options.dueDate);
+
+  let message = `This is a friendly reminder that invoice #${options.invoiceNumber}`;
+  if (amount) {
+    message += ` for ${amount}`;
+  }
+  message += ` was due on ${dueDate}`;
+  if (options.daysOverdue != null && options.daysOverdue > 0) {
+    message += ` (${options.daysOverdue} day${options.daysOverdue === 1 ? "" : "s"} ago)`;
+  }
+  message += ".";
+  message += "\n\nIf you already made the payment, please ignore this message.";
+
+  return message;
+}
+
 export function renderReminderEmail(
   options: ReminderEmailOptions
 ): { html: string; text: string; subject: string } {
   const subject = `Payment reminder: Invoice #${options.invoiceNumber}`;
-  const defaultMain = `This is a friendly reminder that invoice #${options.invoiceNumber} is due.`;
-  const mainMessage = options.mainMessage?.trim() || defaultMain;
+  const rawMainMessage = options.mainMessage?.trim() || buildDefaultReminderMainMessage(options);
+  const mainMessage = sanitizeReminderMainMessage(rawMainMessage);
 
   const summaryRows: SummaryRow[] = [
     { label: "Invoice number", value: options.invoiceNumber },
@@ -257,8 +308,9 @@ export function renderReminderEmail(
     mainMessage,
     summaryRows,
     ctaNote: "Please arrange payment at your earliest convenience.",
-    footerThankYou: "Thank you.",
-    footerTagline: "Sent by Arrexia",
+    signatureLine: "Thank you,",
+    includeBusinessNameInSignature: true,
+    platformFooter: PLATFORM_EMAIL_FOOTER,
   });
 
   return { ...rendered, subject };

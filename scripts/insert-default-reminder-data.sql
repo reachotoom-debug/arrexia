@@ -19,10 +19,7 @@ WITH inserted_template AS (
 
 We hope you are well. This is a friendly reminder that invoice {{invoice_number}} for {{amount_due}} was due on {{due_date}} and is now {{days_overdue}} days overdue.
 
-We would appreciate your prompt attention.
-
-Thank you,
-Arrexia',
+We would appreciate your prompt attention.',
     NOW()
   )
   RETURNING id

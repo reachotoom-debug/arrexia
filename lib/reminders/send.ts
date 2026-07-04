@@ -10,7 +10,7 @@ import {
 } from "@/lib/reminders/render";
 import { logAuditEvent } from "@/lib/audit/log";
 import { resolveEmailProvider, sendEmail } from "@/lib/email/sendEmail";
-import { renderReminderEmail } from "@/lib/email/templates";
+import { renderReminderEmail, sanitizeReminderMainMessage } from "@/lib/email/templates";
 import { formatCurrency } from "@/lib/format/currency";
 import { getWorkspaceOrganizationId } from "@/lib/workspaces/getWorkspaceOrganizationId";
 import type { Database } from "@/types/supabase/index";
@@ -488,7 +488,7 @@ export async function sendReminderForInvoice(
   if (!resolvedTemplateId) {
     try {
       const defaultSubject = "Payment Reminder";
-      const defaultBody = `Dear {{client_name}},\n\nThis is a reminder that invoice {{invoice_number}} is due.\n\nPlease make payment at your earliest convenience.\n\nThank you.`;
+      const defaultBody = `This is a reminder that invoice {{invoice_number}} for {{amount_due}} was due on {{due_date}}.\n\nPlease make payment at your earliest convenience.`;
 
       const { data: newTemplate, error: insertError } = await supabase
         .from("message_templates")
@@ -573,7 +573,9 @@ export async function sendReminderForInvoice(
   // 5) Load email settings and determine provider
   const { data: settings } = await supabase
     .from("settings")
-    .select("email_provider, from_name, from_email")
+    .select(
+      "email_provider, from_name, from_email, workspace_display_name, branding_business_legal_name, business_name"
+    )
     .eq("workspace_id", workspaceId)
     .maybeSingle();
 
@@ -592,10 +594,15 @@ export async function sendReminderForInvoice(
     .maybeSingle();
 
   const businessName =
+    settings?.branding_business_legal_name ||
+    settings?.business_name ||
+    settings?.workspace_display_name ||
+    workspaceRow?.name ||
     emailSettings?.from_name ||
     settings?.from_name ||
-    workspaceRow?.name ||
-    "Arrexia";
+    "Your company";
+
+  const sanitizedMainMessage = sanitizeReminderMainMessage(mainMessagePlain);
 
   const currency = invoiceView.currency || "USD";
   const totalAmountFormatted = formatCurrency(Number(invoiceView.total ?? invoice.amount ?? 0), {
@@ -624,7 +631,7 @@ export async function sendReminderForInvoice(
     totalAmount: totalAmountFormatted,
     outstandingAmount: outstandingFormatted,
     daysOverdue,
-    mainMessage: mainMessagePlain,
+    mainMessage: sanitizedMainMessage,
   });
 
   const emailHtml = emailContent.html;
