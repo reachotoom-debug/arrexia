@@ -181,20 +181,6 @@ export async function sendInvoiceEmail(options: {
 
     const branding = buildInvoiceBranding(settings);
 
-
-
-    const { data: emailSettings } = await supabase
-
-      .from("workspace_email_settings")
-
-      .select("from_name, from_email")
-
-      .eq("workspace_id", workspaceId)
-
-      .maybeSingle();
-
-
-
     const { data: invoiceView } = await supabase
 
       .from("invoices_view")
@@ -346,44 +332,18 @@ export async function sendInvoiceEmail(options: {
 
 
 
-    const fromName =
-
-      emailSettings?.from_name || settings?.from_name || branding.fromName || "Arrexia";
-
-    const fromEmail =
-
-      emailSettings?.from_email || settings?.from_email || branding.fromEmail || null;
-
-
-
     console.info("[sendInvoiceEmail] sending email via Resend", {
-
       workspaceId,
-
       invoiceId,
-
       toEmail,
-
       invoiceNumber,
-
     });
 
-
-
     const sendResult = await sendEmail({
-
       to: toEmail,
-
       subject,
-
       html: bodyHtml,
-
       text: bodyText,
-
-      fromName,
-
-      fromEmail,
-
       attachments: [
 
         {

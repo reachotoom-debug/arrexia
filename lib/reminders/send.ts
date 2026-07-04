@@ -679,8 +679,6 @@ export async function sendReminderForInvoice(
         subject,
         html: emailHtml,
         text: emailText,
-        fromName,
-        fromEmail,
       });
 
       if (!sendResult.success) {

@@ -12,11 +12,16 @@ import type { WorkspaceSettings } from "@/lib/settings/loadSettings";
 interface EmailSettingsFormProps {
   workspaceId: string;
   settings: WorkspaceSettings;
+  resendSenderDisplay: {
+    name: string;
+    email: string;
+  };
 }
 
 export function EmailSettingsForm({
   workspaceId,
   settings,
+  resendSenderDisplay,
 }: EmailSettingsFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -42,6 +47,7 @@ export function EmailSettingsForm({
   });
 
   const selectedProvider = watch("provider");
+  const isResendProvider = selectedProvider === "resend";
 
   const onSubmit = async (values: EmailSettingsFormValues) => {
     const result = await saveEmailSettings(workspaceId, values);
@@ -146,35 +152,59 @@ export function EmailSettingsForm({
           </p>
         </div>
 
-        {/* From Name & Email (common for both providers) */}
+        {/* From Name & Email */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              From Name *
+              From Name {isResendProvider ? "" : "*"}
             </label>
-            <input
-              type="text"
-              {...register("fromName")}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              placeholder="Your Company Name"
-            />
-            {errors.fromName && (
-              <p className="mt-1 text-xs text-red-600">{errors.fromName.message}</p>
+            {isResendProvider ? (
+              <input
+                type="text"
+                readOnly
+                disabled
+                value={resendSenderDisplay.name}
+                className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+              />
+            ) : (
+              <>
+                <input
+                  type="text"
+                  {...register("fromName")}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  placeholder="Your Company Name"
+                />
+                {errors.fromName && (
+                  <p className="mt-1 text-xs text-red-600">{errors.fromName.message}</p>
+                )}
+              </>
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              From Email *
+              From Email {isResendProvider ? "" : "*"}
             </label>
-            <input
-              type="email"
-              {...register("fromEmail")}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              placeholder="noreply@example.com"
-            />
-            {errors.fromEmail && (
-              <p className="mt-1 text-xs text-red-600">{errors.fromEmail.message}</p>
+            {isResendProvider ? (
+              <input
+                type="email"
+                readOnly
+                disabled
+                value={resendSenderDisplay.email}
+                className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+              />
+            ) : (
+              <>
+                <input
+                  type="email"
+                  {...register("fromEmail")}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  placeholder="noreply@example.com"
+                />
+                {errors.fromEmail && (
+                  <p className="mt-1 text-xs text-red-600">{errors.fromEmail.message}</p>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -270,9 +300,10 @@ export function EmailSettingsForm({
         {selectedProvider === "resend" && (
           <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
             <p className="text-xs text-blue-800">
-              <strong>Resend Configuration:</strong> API keys are stored in environment variables
-              (RESEND_API_KEY). The from name and from email above will be used when sending
-              emails via Resend.
+              <strong>Resend configuration:</strong> API keys and the sender address are set via
+              environment variables (<code className="font-mono">RESEND_API_KEY</code>,{" "}
+              <code className="font-mono">EMAIL_FROM</code>). The sender above is read-only and
+              applies to all Resend emails. Configure custom From Name / From Email when using SMTP.
             </p>
           </div>
         )}

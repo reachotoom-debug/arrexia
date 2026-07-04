@@ -139,12 +139,34 @@ export async function saveEmailSettings(
     const parsed = emailSettingsSchema.parse(normalizeEmailSettingsInput(values));
     const supabase = await supabaseServer();
 
+    const { data: existingSettings } = await supabase
+      .from("settings")
+      .select("from_name, from_email")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    const { data: existingEmailSettings } = await supabase
+      .from("workspace_email_settings")
+      .select("from_name, from_email, smtp_password, smtp_host, smtp_port, smtp_username, use_tls")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    const preserveResendSenderFields = parsed.provider === "resend";
+    const fromName = preserveResendSenderFields
+      ? existingSettings?.from_name ?? existingEmailSettings?.from_name ?? parsed.fromName
+      : parsed.fromName;
+    const fromEmail = preserveResendSenderFields
+      ? existingEmailSettings?.from_email ??
+        existingSettings?.from_email ??
+        parsed.fromEmail
+      : parsed.fromEmail;
+
     // Update settings table with email_provider and from_name/from_email
     const settingsUpdate: any = {
       workspace_id: workspaceId,
       email_provider: parsed.provider,
-      from_name: parsed.fromName || null,
-      from_email: parsed.fromEmail || null,
+      from_name: fromName || null,
+      from_email: fromEmail || null,
     };
 
     const { error: settingsError } = await supabase
@@ -158,16 +180,10 @@ export async function saveEmailSettings(
       return { success: false, error: "Failed to update email settings" };
     }
 
-    const { data: existing } = await supabase
-      .from("workspace_email_settings")
-      .select("smtp_password, smtp_host, smtp_port, smtp_username, use_tls")
-      .eq("workspace_id", workspaceId)
-      .maybeSingle();
-
     const emailSettingsUpdate: Record<string, unknown> = {
       workspace_id: workspaceId,
-      from_name: parsed.fromName || null,
-      from_email: parsed.fromEmail || null,
+      from_name: fromName || null,
+      from_email: fromEmail || null,
     };
 
     if (parsed.provider === "smtp") {
@@ -177,16 +193,20 @@ export async function saveEmailSettings(
       emailSettingsUpdate.use_tls = parsed.smtpUseTls ?? true;
       if (parsed.smtpPassword) {
         emailSettingsUpdate.smtp_password = parsed.smtpPassword;
-      } else if (existing?.smtp_password) {
-        emailSettingsUpdate.smtp_password = existing.smtp_password;
+      } else if (existingEmailSettings?.smtp_password) {
+        emailSettingsUpdate.smtp_password = existingEmailSettings.smtp_password;
       }
-    } else if (existing) {
-      if (existing.smtp_host) emailSettingsUpdate.smtp_host = existing.smtp_host;
-      if (existing.smtp_port) emailSettingsUpdate.smtp_port = existing.smtp_port;
-      if (existing.smtp_username) emailSettingsUpdate.smtp_username = existing.smtp_username;
-      if (existing.smtp_password) emailSettingsUpdate.smtp_password = existing.smtp_password;
-      if (existing.use_tls !== null && existing.use_tls !== undefined) {
-        emailSettingsUpdate.use_tls = existing.use_tls;
+    } else if (existingEmailSettings) {
+      if (existingEmailSettings.smtp_host) emailSettingsUpdate.smtp_host = existingEmailSettings.smtp_host;
+      if (existingEmailSettings.smtp_port) emailSettingsUpdate.smtp_port = existingEmailSettings.smtp_port;
+      if (existingEmailSettings.smtp_username) {
+        emailSettingsUpdate.smtp_username = existingEmailSettings.smtp_username;
+      }
+      if (existingEmailSettings.smtp_password) {
+        emailSettingsUpdate.smtp_password = existingEmailSettings.smtp_password;
+      }
+      if (existingEmailSettings.use_tls !== null && existingEmailSettings.use_tls !== undefined) {
+        emailSettingsUpdate.use_tls = existingEmailSettings.use_tls;
       }
     }
 
@@ -228,31 +248,11 @@ export async function testEmailSettings(
       };
     }
 
-    const supabase = await supabaseServer();
-
-    const { data: settings } = await supabase
-      .from("settings")
-      .select("from_name, from_email")
-      .eq("workspace_id", workspaceId)
-      .maybeSingle();
-
-    const { data: emailSettings } = await supabase
-      .from("workspace_email_settings")
-      .select("from_name, from_email")
-      .eq("workspace_id", workspaceId)
-      .maybeSingle();
-
-    const fromName =
-      emailSettings?.from_name || settings?.from_name || "Arrexia";
-    const fromEmail = emailSettings?.from_email || settings?.from_email || null;
-
     const result = await sendEmail({
       to: user.email,
       subject: "Arrexia email test",
       text: "Email delivery is configured for this workspace.",
       html: "<p>Email delivery is configured for this workspace.</p>",
-      fromName,
-      fromEmail,
     });
 
     if (!result.success) {

@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/profile/server";
 import { BrandPreview } from "@/components/settings/BrandPreview";
 import { WorkspaceProfileForm } from "./_components/WorkspaceProfileForm";
 import { BrandingInvoiceSettingsForm } from "./_components/BrandingInvoiceSettingsForm";
+import { getEmailSender, parseEmailSenderDisplay } from "@/lib/email/getEmailSender";
 import { EmailSettingsForm } from "./_components/EmailSettingsForm";
 import { RemindersSettingsSection } from "./_components/RemindersSettingsSection";
 import { AccountSettingsSection } from "./_components/AccountSettingsSection";
@@ -56,7 +57,16 @@ export default async function SettingsPage({ params, searchParams }: SettingsPag
         <BrandingInvoiceSettingsForm workspaceId={workspaceId} settings={settings} />
       )}
       {section === "email" && (
-        <EmailSettingsForm workspaceId={workspaceId} settings={settings} />
+        <EmailSettingsForm
+          workspaceId={workspaceId}
+          settings={settings}
+          resendSenderDisplay={
+            parseEmailSenderDisplay(getEmailSender()) ?? {
+              name: "Arrexia",
+              email: "noreply@arrexia.app",
+            }
+          }
+        />
       )}
       {section === "reminders" && (
         <RemindersSettingsSection workspaceId={workspaceId} settings={settings} />
