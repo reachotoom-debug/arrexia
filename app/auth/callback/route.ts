@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
+import { getServerAppOrigin } from "@/lib/config/appUrl";
 import { getOAuthCallbackErrorMessage, isSocialAuthEnabled } from "@/lib/auth/oauthErrors";
+import {
+  isPasswordRecoveryCallback,
+  PASSWORD_RESET_NEXT_PATH,
+} from "@/lib/auth/passwordRecovery";
 import {
   resolvePostLoginDestination,
   WORKSPACE_SETUP_FAILED_MESSAGE,
@@ -23,16 +28,31 @@ function redirectWithError(origin: string, returnTo: "/login" | "/register", mes
   );
 }
 
+function redirectRecoveryExpired(origin: string) {
+  return NextResponse.redirect(`${origin}${PASSWORD_RESET_NEXT_PATH}?state=expired`);
+}
+
+function copyCookies(from: NextResponse, to: NextResponse) {
+  from.cookies.getAll().forEach(({ name, value, ...options }) => {
+    to.cookies.set(name, value, options);
+  });
+}
+
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = getServerAppOrigin(request);
   const code = searchParams.get("code");
   const next = sanitizeNext(searchParams.get("next"));
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+  const isRecovery = isPasswordRecoveryCallback(next);
 
   const oauthError = searchParams.get("error");
   const oauthErrorDescription = searchParams.get("error_description");
 
   if (oauthError) {
+    if (isRecovery) {
+      return redirectRecoveryExpired(origin);
+    }
     if (!isSocialAuthEnabled()) {
       return NextResponse.redirect(`${origin}${returnTo}`);
     }
@@ -41,6 +61,9 @@ export async function GET(request: Request) {
   }
 
   if (!code) {
+    if (isRecovery) {
+      return redirectRecoveryExpired(origin);
+    }
     if (!isSocialAuthEnabled()) {
       return NextResponse.redirect(`${origin}${returnTo}`);
     }
@@ -53,6 +76,12 @@ export async function GET(request: Request) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[auth/callback/recovery]", error.message);
+    }
+    if (isRecovery) {
+      return redirectRecoveryExpired(origin);
+    }
     return redirectWithError(origin, returnTo, error.message);
   }
 
@@ -61,7 +90,16 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    if (isRecovery) {
+      return redirectRecoveryExpired(origin);
+    }
     return redirectWithError(origin, returnTo, "Signed in, but no user found");
+  }
+
+  if (isRecovery) {
+    const finalRedirect = NextResponse.redirect(`${origin}${PASSWORD_RESET_NEXT_PATH}`);
+    copyCookies(cookieHolder, finalRedirect);
+    return finalRedirect;
   }
 
   const destination = await resolvePostLoginDestination(user.id, next);
@@ -71,9 +109,7 @@ export async function GET(request: Request) {
   }
 
   const finalRedirect = NextResponse.redirect(`${origin}${destination.path}`);
-  cookieHolder.cookies.getAll().forEach(({ name, value, ...options }) => {
-    finalRedirect.cookies.set(name, value, options);
-  });
+  copyCookies(cookieHolder, finalRedirect);
 
   return finalRedirect;
 }

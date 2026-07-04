@@ -35,7 +35,7 @@ export function LandingHero() {
           </h1>
 
           <p className="mt-6 text-lg leading-relaxed text-slate-600 sm:text-xl">
-            FlowCollect helps businesses track invoices, follow up on overdue payments, and
+            Arrexia helps businesses track invoices, follow up on overdue payments, and
             improve cash flow without complex accounting software.
           </p>
 

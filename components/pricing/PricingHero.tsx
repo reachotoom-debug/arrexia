@@ -18,14 +18,14 @@ export function PricingHero({ trialHref }: PricingHeroProps) {
             Stop Chasing Unpaid Invoices.
           </h1>
           <p className="mx-auto max-w-3xl text-lg leading-relaxed text-slate-600 sm:text-xl lg:text-2xl lg:leading-relaxed">
-            FlowCollect helps freelancers, agencies, and businesses recover overdue
+            Arrexia helps freelancers, agencies, and businesses recover overdue
             invoices, automate reminders, track payments, and improve cash flow — all
             in one place.
           </p>
         </div>
 
         <p className="text-base font-medium text-slate-800 sm:text-lg">
-          More than invoicing. FlowCollect is cash collection automation.
+          More than invoicing. Arrexia is cash collection automation.
         </p>
 
         <div className="flex flex-col items-center gap-4 pt-2">

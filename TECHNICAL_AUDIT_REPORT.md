@@ -1,7 +1,7 @@
-# FlowCollect Technical Audit Report
+# Arrexia Technical Audit Report
 
 **Date:** 2025-01-XX  
-**Codebase:** FlowCollect (Next.js 16, TypeScript, Supabase/Postgres)  
+**Codebase:** Arrexia (Next.js 16, TypeScript, Supabase/Postgres)  
 **Audit Scope:** Core features across Phases A–I
 
 ---

@@ -1,6 +1,7 @@
 "use client";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { buildAuthCallbackUrl } from "@/lib/config/appUrl";
 import {
   getOAuthErrorMessage,
   type OAuthProvider,
@@ -18,18 +19,11 @@ export async function signInWithOAuthProvider(
   options: SignInWithOAuthOptions = {}
 ) {
   const supabase = supabaseBrowser();
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const params = new URLSearchParams();
 
-  if (options.next) {
-    params.set("next", options.next);
-  }
-
-  params.set("returnTo", options.returnTo ?? "/login");
-
-  const redirectTo = origin
-    ? `${origin}/auth/callback?${params.toString()}`
-    : undefined;
+  const redirectTo = buildAuthCallbackUrl({
+    next: options.next,
+    returnTo: options.returnTo ?? "/login",
+  });
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,

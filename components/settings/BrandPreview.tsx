@@ -10,16 +10,16 @@ type BrandPreviewProps = {
 };
 
 function getInitialsFromEmail(email: string | null | undefined): string {
-  if (!email) return "FC";
+  if (!email) return "A";
   const beforeAt = email.split("@")[0];
-  if (!beforeAt) return "FC";
+  if (!beforeAt) return "A";
   return beforeAt.charAt(0).toUpperCase();
 }
 
 function getWorkspaceInitials(name: string | undefined): string {
-  if (!name) return "FC";
+  if (!name) return "A";
   const trimmed = name.trim();
-  if (trimmed.length === 0) return "FC";
+  if (trimmed.length === 0) return "A";
   return trimmed.charAt(0).toUpperCase();
 }
 
@@ -88,7 +88,7 @@ export function BrandPreview({
           <div className="mb-1">
             <p className="text-sm font-medium text-slate-900">User avatar</p>
             <p className="text-xs text-slate-500">
-              Shown in FlowCollect sidebar & account menu
+              Shown in Arrexia sidebar & account menu
             </p>
           </div>
           <p className="text-xs text-slate-400 mt-2">

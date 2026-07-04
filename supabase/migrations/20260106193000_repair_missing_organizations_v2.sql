@@ -13,5 +13,5 @@ where w.organization_id is not null
 
 -- Also ensure your specific broken org exists (extra safety)
 insert into public.organizations (id, name, created_at)
-values ('6de76bc8-8787-48ed-ae71-cf0d2eccc021', 'FlowCollect Org', now())
+values ('6de76bc8-8787-48ed-ae71-cf0d2eccc021', 'Arrexia Org', now())
 on conflict (id) do nothing;

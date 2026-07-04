@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, type RegisterFormValues } from "@/lib/schemas/auth";
@@ -10,11 +10,18 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthSocialLogin } from "@/components/auth/AuthSocialLogin";
 import {
   authButtonClass,
+  authErrorClass,
   authFieldLabelClass,
   authFooterClass,
+  authFooterLinkClass,
   authFormClass,
   authInputClass,
+  authNoticeClass,
 } from "@/components/auth/authFormStyles";
+import {
+  logAuthErrorDev,
+  mapSupabaseAuthError,
+} from "@/lib/auth/authErrors";
 import {
   analyzeSignUpResponse,
   getEmailRedirectTo,
@@ -40,6 +47,7 @@ export function RegisterClient() {
   const [isResending, setIsResending] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [successState, setSuccessState] = useState<SuccessState | null>(null);
+  const submitLockRef = useRef(false);
 
   const {
     register,
@@ -105,11 +113,12 @@ export function RegisterClient() {
     });
 
     if (error) {
+      logAuthErrorDev("register/resend", error);
       const cooldown = parseCooldownSeconds(error.message);
       if (cooldown > 0) {
         setCooldownSeconds(cooldown);
       }
-      setResendMessage(error.message || "Failed to resend confirmation email.");
+      setResendMessage(mapSupabaseAuthError(error.message, "resend-confirmation"));
       setIsResending(false);
       return;
     }
@@ -119,10 +128,11 @@ export function RegisterClient() {
   };
 
   const onSubmit = async (data: RegisterFormValues) => {
-    if (isLoading || cooldownSeconds > 0) {
+    if (submitLockRef.current || isLoading || cooldownSeconds > 0) {
       return;
     }
 
+    submitLockRef.current = true;
     setIsLoading(true);
     setResendMessage(null);
 
@@ -142,12 +152,14 @@ export function RegisterClient() {
       const outcome = analyzeSignUpResponse(signUpData, signUpError);
 
       if (outcome.kind === "error") {
+        logAuthErrorDev("register", outcome.message);
         const cooldown = parseCooldownSeconds(outcome.message);
         if (cooldown > 0) {
           setCooldownSeconds(cooldown);
         }
-        setError("root", { message: outcome.message });
-        setIsLoading(false);
+        setError("root", {
+          message: mapSupabaseAuthError(outcome.message, "register"),
+        });
         return;
       }
 
@@ -156,11 +168,16 @@ export function RegisterClient() {
       }
 
       setSuccessState({ outcome, email: data.email });
-      setIsLoading(false);
     } catch (error) {
+      logAuthErrorDev("register", error);
       setError("root", {
-        message: error instanceof Error ? error.message : "An unexpected error occurred",
+        message: mapSupabaseAuthError(
+          error instanceof Error ? error.message : "An unexpected error occurred",
+          "register",
+        ),
       });
+    } finally {
+      submitLockRef.current = false;
       setIsLoading(false);
     }
   };
@@ -188,7 +205,7 @@ export function RegisterClient() {
         <AuthBranding />
 
         <div className={authFormClass}>
-          <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          <div className={authNoticeClass}>
             <p className="mb-1 font-medium">{heading}</p>
             <p className="text-blue-600">{body}</p>
             {resendMessage ? (
@@ -274,7 +291,7 @@ export function RegisterClient() {
         </div>
 
         {errors.root && (
-          <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className={authErrorClass}>
             {errors.root.message}
           </div>
         )}
@@ -288,9 +305,9 @@ export function RegisterClient() {
         </button>
       </form>
 
-      <p className={`${authFooterClass} text-slate-600`}>
+      <p className={authFooterClass}>
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-blue-600 hover:text-blue-700">
+        <Link href="/login" className={authFooterLinkClass}>
           Sign in
         </Link>
       </p>

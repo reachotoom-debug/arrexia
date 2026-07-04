@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AuthBranding } from "@/components/auth/AuthBranding";
@@ -10,11 +10,20 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthSocialLogin } from "@/components/auth/AuthSocialLogin";
 import {
   authButtonClass,
+  authErrorClass,
   authFieldLabelClass,
+  authFieldLabelInlineClass,
   authFooterClass,
+  authFooterLinkClass,
   authFormClass,
+  authInlineLinkClass,
   authInputClass,
+  authPasswordRowClass,
 } from "@/components/auth/authFormStyles";
+import {
+  logAuthErrorDev,
+  mapSupabaseAuthError,
+} from "@/lib/auth/authErrors";
 import {
   completeAuthRedirect,
   resolvePostLoginPath,
@@ -27,6 +36,7 @@ export function LoginClient() {
   const searchParams = useSearchParams();
   const oauthCallbackError = searchParams.get("error");
   const nextUrl = searchParams.get("next");
+  const submitLockRef = useRef(false);
 
   const {
     register,
@@ -48,38 +58,51 @@ export function LoginClient() {
   useAuthUrlSanitizer(prefillEmail);
 
   const onSubmit = async (data: LoginFormValues) => {
-    const loginResponse = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      cache: "no-store",
-      body: JSON.stringify({
-        email: data.email,
-        password: data.password,
-      }),
-    });
+    if (submitLockRef.current || isSubmitting) {
+      return;
+    }
 
-    const loginPayload = (await loginResponse.json().catch(() => null)) as
-      | { ok?: boolean; error?: string }
-      | null;
+    submitLockRef.current = true;
 
-    if (!loginResponse.ok || !loginPayload?.ok) {
-      setError("root", {
-        message: loginPayload?.error || "Failed to sign in",
+    try {
+      const loginResponse = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        cache: "no-store",
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+        }),
       });
-      return;
+
+      const loginPayload = (await loginResponse.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
+
+      if (!loginResponse.ok || !loginPayload?.ok) {
+        const rawError = loginPayload?.error || "Failed to sign in";
+        logAuthErrorDev("login", rawError);
+        setError("root", {
+          message: mapSupabaseAuthError(rawError, "login"),
+        });
+        return;
+      }
+
+      router.refresh();
+
+      const { redirectTo, error: redirectError } = await resolvePostLoginPath(nextUrl);
+
+      if (redirectError) {
+        logAuthErrorDev("login/post-redirect", redirectError);
+        setError("root", { message: redirectError });
+        return;
+      }
+
+      completeAuthRedirect(router, redirectTo);
+    } finally {
+      submitLockRef.current = false;
     }
-
-    router.refresh();
-
-    const { redirectTo, error: redirectError } = await resolvePostLoginPath(nextUrl);
-
-    if (redirectError) {
-      setError("root", { message: redirectError });
-      return;
-    }
-
-    completeAuthRedirect(router, redirectTo);
   };
 
   return (
@@ -101,6 +124,7 @@ export function LoginClient() {
             className={authInputClass}
             placeholder="you@example.com"
             autoComplete="email"
+            disabled={isSubmitting}
           />
           {errors.email && (
             <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
@@ -108,13 +132,22 @@ export function LoginClient() {
         </div>
 
         <div>
-          <label className={authFieldLabelClass}>Password</label>
+          <div className={authPasswordRowClass}>
+            <label htmlFor="login-password" className={authFieldLabelInlineClass}>
+              Password
+            </label>
+            <Link href="/forgot-password" className={authInlineLinkClass}>
+              Forgot password?
+            </Link>
+          </div>
           <input
+            id="login-password"
             type="password"
             {...register("password")}
             className={authInputClass}
             placeholder="••••••••"
             autoComplete="current-password"
+            disabled={isSubmitting}
           />
           {errors.password && (
             <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
@@ -122,9 +155,7 @@ export function LoginClient() {
         </div>
 
         {errors.root && (
-          <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            {errors.root.message}
-          </div>
+          <div className={authErrorClass}>{errors.root.message}</div>
         )}
 
         <button type="submit" disabled={isSubmitting} className={authButtonClass}>
@@ -133,7 +164,7 @@ export function LoginClient() {
       </form>
 
       <div className={authFooterClass}>
-        <Link href="/register" className="font-medium text-blue-600 hover:text-blue-700">
+        <Link href="/register" className={authFooterLinkClass}>
           Create account
         </Link>
       </div>

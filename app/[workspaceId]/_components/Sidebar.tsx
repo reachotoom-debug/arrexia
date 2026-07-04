@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 import { getWorkspaceNavItems } from "./nav";
 import { formatPlanLabel, isUpgradeAvailable, type WorkspacePlan } from "@/lib/billing/plans";
 
@@ -46,20 +46,11 @@ export function Sidebar({ workspace, user, plan = "free" }: SidebarProps) {
 
   return (
     <aside className="w-56 shrink-0 bg-white border-r border-slate-200 flex flex-col h-full">
-      {/* FlowCollect Branding */}
+      {/* Arrexia Branding */}
       <div className="px-3 py-3 border-b border-slate-200">
         <Link href={`${base}/dashboard`} prefetch={false} className="flex items-center gap-3">
-          <Image
-            src="/brand/icon-logo.png"
-            alt=""
-            width={40}
-            height={40}
-            className="h-10 w-10 shrink-0 object-contain"
-          />
+          <ArrexiaLogo variant="light" height={42} className="max-h-[42px] shrink-0 w-auto" />
           <div className="flex flex-col min-w-0">
-            <span className="text-base font-semibold tracking-tight text-slate-900">
-              FlowCollect
-            </span>
             <span className="text-[11px] text-slate-500 truncate">
               {workspace.name}
             </span>

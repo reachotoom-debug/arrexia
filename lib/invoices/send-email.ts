@@ -348,7 +348,7 @@ export async function sendInvoiceEmail(options: {
 
     const fromName =
 
-      emailSettings?.from_name || settings?.from_name || branding.fromName || "FlowCollect";
+      emailSettings?.from_name || settings?.from_name || branding.fromName || "Arrexia";
 
     const fromEmail =
 

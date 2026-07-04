@@ -33,7 +33,7 @@ export function DashboardMockup() {
         <div className="flex min-h-[420px] sm:min-h-[480px]">
           <aside className="hidden w-14 shrink-0 flex-col gap-2 border-r border-slate-800 bg-slate-950 p-2 sm:flex sm:w-16 sm:p-3">
             <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-[10px] font-bold text-white">
-              FC
+              A
             </div>
             {SIDEBAR_ITEMS.map((item, index) => (
               <div

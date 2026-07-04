@@ -19,7 +19,7 @@ export function LandingPaysForItself() {
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <div className="text-center">
           <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            FlowCollect{" "}
+            Arrexia{" "}
             <span className="bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
               pays for itself.
             </span>

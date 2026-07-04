@@ -37,7 +37,7 @@ export type SendEmailResult = {
   error?: string;
 };
 
-const DEFAULT_FROM_NAME = "FlowCollect";
+const DEFAULT_FROM_NAME = "Arrexia";
 const DEFAULT_FROM_EMAIL = SANDBOX_FROM_EMAIL;
 const EMAIL_TIMEOUT_MS = 9000;
 const ATTACHMENT_EMAIL_TIMEOUT_MS = 60000;

@@ -20,10 +20,6 @@ export default function LoginForm({ onSubmit }: LoginFormProps) {
   return (
     <div className="flex justify-center">
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-sm">
-        <h1 className="mb-6 text-2xl font-semibold text-gray-900">
-          FlowCollect
-        </h1>
-
         <form method="post" onSubmit={handleSubmit((data) => onSubmit(data))} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">

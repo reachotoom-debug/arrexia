@@ -16,7 +16,7 @@ export function ReminderTemplatesSection({
   return (
     <SettingsCard
       title="Templates"
-      description="Customize the content FlowCollect sends when reminding clients about invoices."
+      description="Customize the content Arrexia sends when reminding clients about invoices."
     >
       <ReminderTemplatesTable workspaceId={workspaceId} templates={templates} />
     </SettingsCard>

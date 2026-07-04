@@ -1,4 +1,4 @@
-# Risk Logic Audit Report - FlowCollect
+# Risk Logic Audit Report - Arrexia
 
 **Date**: 2025-01-XX  
 **Scope**: Invoice risk logic consistency across Invoices, Collections, Reminders, and Dashboard modules

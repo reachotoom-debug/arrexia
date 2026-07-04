@@ -57,7 +57,7 @@ export function ExportCsvButton({ workspaceId, module, label = "Export CSV" }: E
 
       // Generate filename from response or create default
       const contentDisposition = response.headers.get("Content-Disposition");
-      let filename = `FlowCollect_${workspaceId}_${module}_${new Date().toISOString().split("T")[0]}.csv`;
+      let filename = `Arrexia_${workspaceId}_${module}_${new Date().toISOString().split("T")[0]}.csv`;
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="(.+)"/);
         if (filenameMatch) {

@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 
 type AdminBrandMarkProps = {
   variant?: "dark" | "light";
@@ -17,18 +17,12 @@ export function AdminBrandMark({
       href={adminBasePath}
       className="flex items-center gap-3 rounded-lg transition-opacity hover:opacity-90"
     >
-      <Image
-        src="/brand/icon-logo.png"
-        alt=""
-        width={36}
-        height={36}
-        className="h-9 w-9 shrink-0 rounded-lg object-contain"
-        priority
-      />
+      {isDark ? (
+        <ArrexiaLogo variant="dark" height={34} className="max-h-[34px]" priority />
+      ) : (
+        <ArrexiaLogo variant="light" height={34} className="max-h-[34px]" priority />
+      )}
       <div>
-        <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>
-          FlowCollect
-        </p>
         <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
           Founder Console
         </p>

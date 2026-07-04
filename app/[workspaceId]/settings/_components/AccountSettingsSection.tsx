@@ -120,7 +120,7 @@ export function AccountSettingsSection({ profile }: AccountSettingsSectionProps)
 
       toast({
         title: "Avatar reset",
-        description: "Your avatar has been reset to the FlowCollect default.",
+        description: "Your avatar has been reset to the Arrexia default.",
       });
 
       // Update preview with the default avatar URL
@@ -186,7 +186,7 @@ export function AccountSettingsSection({ profile }: AccountSettingsSectionProps)
                     Profile photo
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Your avatar is only used inside FlowCollect (sidebar and account menu). It does not appear on invoices.
+                    Your avatar is only used inside Arrexia (sidebar and account menu). It does not appear on invoices.
                   </p>
                 </div>
                 <input
@@ -228,7 +228,7 @@ export function AccountSettingsSection({ profile }: AccountSettingsSectionProps)
                     disabled={isPending || isRemoving || isResetting}
                     className="w-full shrink-0 sm:w-auto"
                   >
-                    {isResetting ? "Resetting..." : "Reset to FlowCollect avatar"}
+                    {isResetting ? "Resetting..." : "Reset to Arrexia avatar"}
                   </Button>
                 </div>
               </div>

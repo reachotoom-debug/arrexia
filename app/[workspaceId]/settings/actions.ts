@@ -21,6 +21,7 @@ import {
   isWorkspacePlan,
   type WorkspacePlan,
 } from "@/lib/billing/plans";
+import { assertReminderRulesManageAllowed } from "@/lib/billing/reminderRulesAccess";
 import { sendEmail } from "@/lib/email/sendEmail";
 
 /**
@@ -242,12 +243,12 @@ export async function testEmailSettings(
       .maybeSingle();
 
     const fromName =
-      emailSettings?.from_name || settings?.from_name || "FlowCollect";
+      emailSettings?.from_name || settings?.from_name || "Arrexia";
     const fromEmail = emailSettings?.from_email || settings?.from_email || null;
 
     const result = await sendEmail({
       to: user.email,
-      subject: "FlowCollect email test",
+      subject: "Arrexia email test",
       text: "Email delivery is configured for this workspace.",
       html: "<p>Email delivery is configured for this workspace.</p>",
       fromName,
@@ -669,6 +670,11 @@ export async function createReminderRule(
   try {
     await requireWorkspace(workspaceId);
 
+    const planAccess = await assertReminderRulesManageAllowed(workspaceId);
+    if (!planAccess.ok) {
+      return { success: false, error: planAccess.error };
+    }
+
     const parsed = ReminderRuleSchema.parse(values);
     const supabase = await supabaseServer();
 
@@ -744,6 +750,11 @@ export async function updateReminderRule(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireWorkspace(workspaceId);
+
+    const planAccess = await assertReminderRulesManageAllowed(workspaceId);
+    if (!planAccess.ok) {
+      return { success: false, error: planAccess.error };
+    }
 
     const parsed = ReminderRuleSchema.parse(values);
     const supabase = await supabaseServer();
@@ -821,6 +832,11 @@ export async function toggleReminderRuleEnabled(
   try {
     await requireWorkspace(workspaceId);
 
+    const planAccess = await assertReminderRulesManageAllowed(workspaceId);
+    if (!planAccess.ok) {
+      return { success: false, error: planAccess.error };
+    }
+
     const supabase = await supabaseServer();
 
     // Verify rule belongs to workspace
@@ -872,6 +888,11 @@ export async function deleteReminderRule(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireWorkspace(workspaceId);
+
+    const planAccess = await assertReminderRulesManageAllowed(workspaceId);
+    if (!planAccess.ok) {
+      return { success: false, error: planAccess.error };
+    }
 
     const supabase = await supabaseServer();
 
@@ -1184,7 +1205,7 @@ export type ResetAvatarResult =
   | { success: false; error: string };
 
 /**
- * Reset user avatar to default FlowCollect avatar
+ * Reset user avatar to default Arrexia avatar
  */
 export async function resetAvatarToDefault(): Promise<ResetAvatarResult> {
   try {

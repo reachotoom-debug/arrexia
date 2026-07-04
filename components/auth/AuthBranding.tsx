@@ -1,22 +1,19 @@
-import Image from "next/image";
+import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
+import { authBrandNameClass, authTaglineClass } from "@/components/auth/authFormStyles";
 
 export function AuthBranding() {
   return (
-    <div className="mb-8 text-center">
-      <div className="mb-4 flex justify-center">
-        <Image
-          src="/brand/icon-logo.png"
-          alt=""
-          width={48}
-          height={48}
-          className="h-12 w-12 shrink-0 object-contain"
+    <div className="mb-7 text-center sm:mb-8">
+      <div className="flex shrink-0 justify-center">
+        <ArrexiaLogo
+          variant="icon"
+          height={112}
+          className="h-24 w-24 sm:h-28 sm:w-28"
           priority
         />
       </div>
-      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-        FlowCollect
-      </h1>
-      <p className="text-sm text-slate-500">Cash Solved.</p>
+      <h1 className={authBrandNameClass}>Arrexia</h1>
+      <p className={authTaglineClass}>Cash Solved.</p>
     </div>
   );
 }

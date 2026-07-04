@@ -19,7 +19,7 @@ const BENEFITS = [
   {
     icon: Briefcase,
     title: "Built for Business, Not Busywork",
-    text: "FlowCollect is designed for cash recovery — not just generating invoices.",
+    text: "Arrexia is designed for cash recovery — not just generating invoices.",
   },
 ] as const;
 
@@ -28,7 +28,7 @@ export function PricingWhy() {
     <section className="space-y-10 lg:space-y-12">
       <div className="text-center">
         <h2 className="text-2xl font-semibold text-slate-900 sm:text-3xl lg:text-4xl">
-          Why businesses choose FlowCollect
+          Why businesses choose Arrexia
         </h2>
       </div>
 

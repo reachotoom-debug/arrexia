@@ -32,7 +32,7 @@ export function PricingPlansSection() {
             Plans built for cash recovery
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base text-slate-600 sm:text-lg">
-            Start with a 14-day free trial. Upgrade when FlowCollect starts saving
+            Start with a 14-day free trial. Upgrade when Arrexia starts saving
             you time and recovering overdue payments.
           </p>
         </div>

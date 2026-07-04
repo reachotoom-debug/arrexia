@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Menu, Shield } from "lucide-react";
+import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 import { DEFAULT_AVATAR_URL } from "@/lib/constants";
 import { formatPlanLabel, isUpgradeAvailable, type WorkspacePlan } from "@/lib/billing/plans";
 import { getWorkspaceNavItems } from "./nav";
@@ -87,25 +87,40 @@ function WorkspaceSidebarPanel({
       <div
         className={
           rail
-            ? "flex shrink-0 items-center justify-center gap-0 px-2 pb-2.5 pt-3 lg:justify-start lg:gap-3 lg:px-4"
-            : "flex shrink-0 items-center gap-3 px-4 pb-2.5 pt-3"
+            ? "flex shrink-0 items-center justify-center gap-0 px-2 pb-3 pt-3.5 lg:justify-start lg:gap-3 lg:px-4"
+            : "flex shrink-0 items-center gap-3 px-4 pb-3 pt-3.5"
         }
       >
-        <Image
-          src="/brand/icon-logo.png"
-          alt=""
-          width={40}
-          height={40}
-          className="h-10 w-10 shrink-0 object-contain"
-        />
-        <div className="hidden min-w-0 flex-col lg:flex">
-          <span className="text-sm font-semibold text-slate-900">
-            FlowCollect
-          </span>
-          <span className="truncate text-xs text-slate-500">
-            {workspaceName}
-          </span>
-        </div>
+        {rail ? (
+          <>
+            <div className="flex w-full items-center justify-center lg:hidden">
+              <ArrexiaLogo
+                variant="icon"
+                height={52}
+                className="h-[52px] w-[52px] shrink-0"
+              />
+            </div>
+            <div className="hidden min-w-0 flex-col gap-1.5 lg:flex">
+              <ArrexiaLogo
+                variant="light"
+                height={54}
+                className="max-h-[54px] shrink-0 w-auto"
+              />
+              <span className="truncate text-xs text-slate-500">{workspaceName}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <ArrexiaLogo
+              variant="light"
+              height={54}
+              className="max-h-[54px] shrink-0 w-auto"
+            />
+            <div className="min-w-0 flex flex-col">
+              <span className="truncate text-xs text-slate-500">{workspaceName}</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="mx-3 mb-2 shrink-0 border-t border-slate-200 lg:mx-3" />
@@ -300,9 +315,7 @@ export function WorkspaceShell({
           >
             <Menu className="h-5 w-5" strokeWidth={2} />
           </button>
-          <span className="text-sm font-semibold text-slate-900">
-            FlowCollect
-          </span>
+          <ArrexiaLogo variant="icon" height={48} className="h-12 w-12 shrink-0" />
         </header>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-slate-50">

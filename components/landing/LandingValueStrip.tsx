@@ -13,7 +13,7 @@ const BENEFITS = [
   },
   {
     title: "Built to pay for itself",
-    copy: "Recover one overdue invoice and FlowCollect can cover its plan.",
+    copy: "Recover one overdue invoice and Arrexia can cover its plan.",
   },
 ] as const;
 
@@ -26,7 +26,7 @@ export function LandingValueStrip() {
             Cash Solved.
           </h2>
           <p className="mt-4 text-lg text-slate-300">
-            FlowCollect helps turn overdue invoices into a clear follow-up process.
+            Arrexia helps turn overdue invoices into a clear follow-up process.
           </p>
         </div>
 

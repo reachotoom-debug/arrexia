@@ -22,9 +22,9 @@ npm run supabase:start
 
 The hard reset script will:
 - Stop Supabase gracefully (if possible)
-- Remove all Docker containers with "supabase" or "flowcollect" in the name
-- Remove all Docker networks with "supabase" or "flowcollect" in the name
-- Remove all Docker volumes with "supabase" or "flowcollect" in the name
+- Remove all Docker containers with "supabase" or the local project slug (`flowcollect` in `supabase/config.toml`) in the name
+- Remove all Docker networks with "supabase" or the local project slug in the name
+- Remove all Docker volumes with "supabase" or the local project slug in the name
 - Prune unused Docker resources
 
 This is safe and idempotent - you can run it multiple times.

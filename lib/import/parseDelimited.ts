@@ -152,7 +152,7 @@ export function parseDelimited(
           // Non-strict: warn about extra columns but continue
           warnings.push({
             rowIndex: rowIndex + 1,
-            message: `Row ${rowIndex + 2}: ${rowNormalizeResult.error}. Extra columns detected; please re-export using FlowCollect format.`,
+            message: `Row ${rowIndex + 2}: ${rowNormalizeResult.error}. Extra columns detected; please re-export using Arrexia format.`,
           });
         }
       }

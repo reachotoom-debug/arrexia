@@ -1,6 +1,6 @@
 # Supabase Migrations
 
-This directory contains database migrations for the FlowCollect application.
+This directory contains database migrations for the Arrexia application.
 
 ## Applying Migrations
 

@@ -6,31 +6,31 @@ import { PublicNavbar } from "@/components/public/PublicNavbar";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Contact FlowCollect",
+  title: "Contact Arrexia",
   description:
-    "Questions, feedback, or early access requests? Contact the FlowCollect team at support@flowcollect.app.",
+    "Questions, feedback, or early access requests? Contact the Arrexia team at support@arrexia.app.",
 };
 
 const CONTACT_CARDS = [
   {
     title: "Product questions",
-    description: "Learn how FlowCollect fits your invoicing and collections workflow.",
+    description: "Learn how Arrexia fits your invoicing and collections workflow.",
     icon: HelpCircle,
-    email: "support@flowcollect.app",
+    email: "support@arrexia.app",
     subject: "Product question",
   },
   {
     title: "Billing questions",
     description: "Ask about plans, trials, upgrades, or account billing.",
     icon: CreditCard,
-    email: "support@flowcollect.app",
+    email: "support@arrexia.app",
     subject: "Billing question",
   },
   {
     title: "Support",
     description: "Get help with your workspace, imports, reminders, or setup.",
     icon: Mail,
-    email: "support@flowcollect.app",
+    email: "support@arrexia.app",
     subject: "Support request",
   },
 ] as const;
@@ -42,17 +42,17 @@ export default function ContactPage() {
       <main className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-20">
         <div className="text-center">
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Contact FlowCollect
+            Contact Arrexia
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
             Questions, feedback, or early access requests? We&apos;d love to hear from you.
           </p>
           <p className="mt-6">
             <a
-              href="mailto:support@flowcollect.app"
+              href="mailto:support@arrexia.app"
               className="text-lg font-semibold text-blue-600 hover:text-blue-700"
             >
-              support@flowcollect.app
+              support@arrexia.app
             </a>
           </p>
         </div>
@@ -85,7 +85,7 @@ export default function ContactPage() {
           <Link href="/">
             <Button variant="outline" size="lg" className="gap-2">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Back to FlowCollect
+              Back to Arrexia
             </Button>
           </Link>
         </div>

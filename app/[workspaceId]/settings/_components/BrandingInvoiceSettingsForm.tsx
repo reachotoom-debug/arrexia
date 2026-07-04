@@ -174,7 +174,7 @@ export function BrandingInvoiceSettingsForm({
                   type="text"
                   {...register("workspaceDisplayName")}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
-                  placeholder="e.g. FlowCollect"
+                  placeholder="e.g. Arrexia"
                 />
                 {errors.workspaceDisplayName && (
                   <p className="mt-1 text-xs text-red-600">{errors.workspaceDisplayName.message}</p>
@@ -189,7 +189,7 @@ export function BrandingInvoiceSettingsForm({
                   type="text"
                   {...register("brandingBusinessLegalName")}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
-                  placeholder="e.g. FlowCollect LLC"
+                  placeholder="e.g. Arrexia LLC"
                 />
                 {errors.brandingBusinessLegalName && (
                   <p className="mt-1 text-xs text-red-600">{errors.brandingBusinessLegalName.message}</p>

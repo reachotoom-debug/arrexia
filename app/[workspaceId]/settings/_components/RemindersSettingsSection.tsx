@@ -1,3 +1,5 @@
+import { getWorkspacePlan } from "@/lib/billing/getWorkspacePlan";
+import { canManageReminderRules } from "@/lib/billing/reminderRulesAccess";
 import { supabaseServer } from "@/lib/supabase/server";
 import { RemindersSettingsTabs } from "./RemindersSettingsTabs";
 import type { WorkspaceSettings } from "@/lib/settings/loadSettings";
@@ -13,7 +15,8 @@ export async function RemindersSettingsSection({
 }: RemindersSettingsSectionProps) {
   const supabase = await supabaseServer();
 
-  const [templatesResult, rulesResult] = await Promise.all([
+  const [planResult, templatesResult, rulesResult] = await Promise.all([
+    getWorkspacePlan(workspaceId),
     supabase
       .from("reminder_templates")
       .select("*")
@@ -36,6 +39,7 @@ export async function RemindersSettingsSection({
       settings={settings}
       templates={templates}
       rules={rules}
+      canManageRules={canManageReminderRules(planResult.plan)}
     />
   );
 }

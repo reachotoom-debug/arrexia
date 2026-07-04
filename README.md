@@ -16,6 +16,25 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Local environment (localhost QA)
+
+Copy `.env.example` to `.env.local` and set at minimum:
+
+```bash
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+Auth redirects (login, register, OAuth callback, email confirmation) use the **current browser origin** when available, and fall back to `NEXT_PUBLIC_APP_URL` (default `http://localhost:3000` in development). Production uses `https://arrexia.app` only when neither the request origin nor `NEXT_PUBLIC_APP_URL` is set.
+
+For **local Supabase** (`npm run supabase:start`), redirect URLs are configured in `supabase/config.toml` under `[auth]`. For **hosted Supabase** while testing on localhost, add these in the Supabase Dashboard → Authentication → URL configuration:
+
+- Site URL: `http://localhost:3000` (for local QA) or `https://arrexia.app` (production)
+- Redirect URLs: `http://localhost:3000/auth/callback`, `http://127.0.0.1:3000/auth/callback`, `https://arrexia.app/auth/callback`
+
+OAuth callback path: `{APP_URL}/auth/callback`
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
@@ -37,7 +56,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Social authentication
 
-FlowCollect supports Google OAuth via Supabase Auth.
+Arrexia supports Google OAuth via Supabase Auth.
 
 - **Google provider:** `google`
 - **UI toggle:** set `NEXT_PUBLIC_ENABLE_SOCIAL_AUTH=false` to hide the Google login button
@@ -48,7 +67,7 @@ OAuth callback URL: `{YOUR_SITE_URL}/auth/callback`
 
 ## Transactional email (Resend)
 
-FlowCollect sends invoice and reminder emails through [Resend](https://resend.com) when `RESEND_API_KEY` is set.
+Arrexia sends invoice and reminder emails through [Resend](https://resend.com) when `RESEND_API_KEY` is set.
 
 Copy `.env.example` to `.env.local` and configure:
 
@@ -66,10 +85,10 @@ CRON_SECRET=your-random-secret
 4. In Settings → Email, click **Send Test Email** (delivers to your logged-in account email).
 5. Send invoice/reminder emails only to that same address while testing.
 
-### Production (after verifying flowcollect.app)
+### Production (after verifying arrexia.app)
 
-1. Verify `flowcollect.app` in the Resend dashboard.
-2. Set `EMAIL_FROM=noreply@flowcollect.app`.
+1. Verify `arrexia.app` in the Resend dashboard.
+2. Set `EMAIL_FROM=noreply@arrexia.app`.
 3. Optionally set workspace **From name** / **From email** in Settings → Email.
 
 SMTP remains available as an optional fallback when a workspace explicitly selects **Custom SMTP** in settings.

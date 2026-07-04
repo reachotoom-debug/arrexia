@@ -17,7 +17,7 @@ export default async function AdminUsersPage() {
   return (
     <AdminPageShell
       title="Users"
-      description="Registered FlowCollect accounts."
+      description="Registered Arrexia accounts."
       adminEmail={access.user.email}
       adminRole={access.role}
       bootstrapAllowed={access.bootstrapAllowed}

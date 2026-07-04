@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 import { cn } from "@/lib/utils";
 import { LogOut } from "lucide-react";
 
@@ -49,10 +50,7 @@ export function Sidebar({ workspaceId, user }: SidebarProps) {
     <aside className="flex h-screen w-72 flex-col bg-slate-50">
       {/* Brand / Logo */}
       <div className="flex items-center gap-3 px-5 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
-          FC
-        </div>
-        <div className="text-lg font-semibold text-gray-900">FlowCollect</div>
+        <ArrexiaLogo variant="light" height={42} className="max-h-[42px] shrink-0 w-auto" />
       </div>
 
       {/* Navigation */}

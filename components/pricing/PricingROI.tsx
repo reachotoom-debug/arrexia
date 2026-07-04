@@ -4,10 +4,10 @@ export function PricingROI() {
       <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm lg:p-12">
         <div className="mx-auto max-w-3xl space-y-8 text-center">
           <h2 className="text-2xl font-semibold text-slate-900 sm:text-3xl lg:text-4xl">
-            FlowCollect pays for itself
+            Arrexia pays for itself
           </h2>
           <p className="text-base leading-relaxed text-slate-600 sm:text-lg">
-            If FlowCollect helps you recover just one overdue invoice faster, the
+            If Arrexia helps you recover just one overdue invoice faster, the
             subscription can already pay for itself.
           </p>
 
@@ -33,7 +33,7 @@ export function PricingROI() {
           This isn&apos;t invoicing software.
         </h3>
         <p className="text-base leading-relaxed text-slate-600 sm:text-lg">
-          FlowCollect focuses on collections, reminders, payment tracking, and cash
+          Arrexia focuses on collections, reminders, payment tracking, and cash
           recovery — helping businesses get paid faster.
         </p>
       </div>

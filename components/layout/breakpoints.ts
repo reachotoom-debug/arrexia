@@ -1,5 +1,5 @@
 /**
- * FlowCollect responsive breakpoints (Tailwind defaults: md=768, lg=1024).
+ * Arrexia responsive breakpoints (Tailwind defaults: md=768, lg=1024).
  * Use `md:` for tablet+ and `lg:` for desktop+ in class strings.
  */
 export const BP = {

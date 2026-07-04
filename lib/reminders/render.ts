@@ -1,5 +1,7 @@
 // lib/reminders/render.ts
 
+import { buildAppUrl } from "@/lib/config/appUrl";
+
 interface InvoiceForRender {
   invoice_number?: string | null;
   due_date?: string | null;
@@ -35,9 +37,11 @@ export type ReminderTemplateContext = {
 export function buildReminderTemplateContext(args: {
   invoiceView: InvoiceForRender;
   client: { name?: string | null; email?: string | null } | null;
+  workspaceId?: string;
+  invoiceId?: string;
   now?: Date;
 }): ReminderTemplateContext {
-  const { invoiceView, client, now = new Date() } = args;
+  const { invoiceView, client, workspaceId, invoiceId, now = new Date() } = args;
 
   const clientName = client?.name ?? "";
   const clientEmail = client?.email ?? "";
@@ -75,6 +79,11 @@ export function buildReminderTemplateContext(args: {
     return diffDays > 0 ? diffDays : 0;
   })();
 
+  const paymentLink =
+    workspaceId && invoiceId
+      ? buildAppUrl(`/${workspaceId}/invoices/${invoiceId}`)
+      : "";
+
   const replacements: Record<string, string> = {
     client_name: clientName,
     invoice_number: invoiceNumber,
@@ -87,6 +96,7 @@ export function buildReminderTemplateContext(args: {
     currency: currency,
     workspace_name: workspaceName,
     days_overdue: String(daysOverdue),
+    payment_link: paymentLink,
   };
 
   return {

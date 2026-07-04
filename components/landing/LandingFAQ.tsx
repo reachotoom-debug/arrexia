@@ -1,18 +1,18 @@
 const FAQ_ITEMS = [
   {
-    question: "Is FlowCollect a replacement for accounting software?",
+    question: "Is Arrexia a replacement for accounting software?",
     answer:
-      "No. FlowCollect focuses on invoice collection, accounts receivable, reminders, and cash flow visibility. It complements your accounting stack rather than replacing it.",
+      "No. Arrexia focuses on invoice collection, accounts receivable, reminders, and cash flow visibility. It complements your accounting stack rather than replacing it.",
   },
   {
     question: "Can I send invoice reminders by email?",
     answer:
-      "Yes. FlowCollect supports reminder workflows and email templates so you can follow up on due and overdue invoices consistently.",
+      "Yes. Arrexia supports reminder workflows and email templates so you can follow up on due and overdue invoices consistently.",
   },
   {
     question: "Do I need Stripe?",
     answer:
-      "FlowCollect does not require Stripe to track invoices or send reminders. Online subscription billing/payment provider integration will be added later.",
+      "Arrexia does not require Stripe to track invoices or send reminders. Online subscription billing/payment provider integration will be added later.",
   },
   {
     question: "Can I change plans later?",

@@ -18,7 +18,7 @@ export default async function AdminOverviewPage() {
   return (
     <AdminPageShell
       title="Overview"
-      description="FlowCollect SaaS business metrics. No customer financial data."
+      description="Arrexia SaaS business metrics. No customer financial data."
       adminEmail={access.user.email}
       adminRole={access.role}
       bootstrapAllowed={access.bootstrapAllowed}

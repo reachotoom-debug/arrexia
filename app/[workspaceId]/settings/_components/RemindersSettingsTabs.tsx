@@ -21,11 +21,13 @@ export function RemindersSettingsTabs({
   settings,
   templates,
   rules,
+  canManageRules,
 }: {
   workspaceId: string;
   settings: WorkspaceSettings;
   templates: ReminderTemplateRow[];
   rules: ReminderRuleRow[];
+  canManageRules: boolean;
 }) {
   const [tab, setTab] = useState<TabId>("automation");
 
@@ -58,7 +60,12 @@ export function RemindersSettingsTabs({
         <ReminderTemplatesSection workspaceId={workspaceId} templates={templates} />
       </div>
       <div className={cn(tab !== "rules" && "hidden")}>
-        <ReminderRulesSection workspaceId={workspaceId} rules={rules} templates={templates} />
+        <ReminderRulesSection
+          workspaceId={workspaceId}
+          rules={rules}
+          templates={templates}
+          canManageRules={canManageRules}
+        />
       </div>
     </div>
   );

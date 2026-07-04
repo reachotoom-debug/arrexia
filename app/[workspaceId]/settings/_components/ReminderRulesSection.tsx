@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { ReminderRuleForm } from "./ReminderRuleForm";
 import { ReminderRuleToggle } from "./ReminderRuleToggle";
 import { SettingsCard } from "./SettingsCard";
+import { REMINDER_RULES_PAID_PLAN_MESSAGE } from "@/lib/billing/reminderRulesAccess";
 import { formatRuleWhenText } from "@/lib/reminders/shared";
 import type { Database } from "@/types/supabase/index";
 
@@ -13,6 +15,7 @@ interface ReminderRulesSectionProps {
   workspaceId: string;
   rules: ReminderRuleRow[];
   templates: ReminderTemplateRow[];
+  canManageRules: boolean;
 }
 
 function formatStatusLabel(forStatus: string): string {
@@ -63,6 +66,7 @@ export function ReminderRulesSection({
   workspaceId,
   rules,
   templates,
+  canManageRules,
 }: ReminderRulesSectionProps) {
   const sortedRules = [...rules].sort(sortOffsetAscending);
 
@@ -71,21 +75,37 @@ export function ReminderRulesSection({
       title="Rules"
       description="Define when to send each reminder."
     >
+      {!canManageRules ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>{REMINDER_RULES_PAID_PLAN_MESSAGE}</p>
+          <Link
+            href={`/${workspaceId}/settings?section=billing`}
+            className="mt-2 inline-block font-semibold text-amber-950 underline underline-offset-4"
+          >
+            View plans
+          </Link>
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-muted-foreground">
           Rules determine when reminders are sent based on invoice status and due date.
         </p>
-        <ReminderRuleForm
-          workspaceId={workspaceId}
-          templates={templates}
-          existingRules={rules}
-        />
+        {canManageRules ? (
+          <ReminderRuleForm
+            workspaceId={workspaceId}
+            templates={templates}
+            existingRules={rules}
+          />
+        ) : null}
       </div>
 
       {sortedRules.length === 0 ? (
         <div className="text-center py-8 text-sm text-slate-500">
           <p>No reminder rules yet.</p>
-          <p className="mt-1">Create your first rule to get started.</p>
+          {canManageRules ? (
+            <p className="mt-1">Create your first rule to get started.</p>
+          ) : null}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -107,9 +127,11 @@ export function ReminderRulesSection({
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Enabled
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Actions
-                </th>
+                {canManageRules ? (
+                  <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -134,17 +156,20 @@ export function ReminderRulesSection({
                       workspaceId={workspaceId}
                       ruleId={rule.id}
                       enabled={rule.is_enabled ?? true}
+                      readOnly={!canManageRules}
                     />
                   </td>
-                  <td className="px-4 py-3 text-right text-sm">
-                    <ReminderRuleForm
-                      workspaceId={workspaceId}
-                      rule={rule}
-                      templates={templates}
-                      existingRules={rules}
-                      iconOnly
-                    />
-                  </td>
+                  {canManageRules ? (
+                    <td className="px-4 py-3 text-right text-sm">
+                      <ReminderRuleForm
+                        workspaceId={workspaceId}
+                        rule={rule}
+                        templates={templates}
+                        existingRules={rules}
+                        iconOnly
+                      />
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

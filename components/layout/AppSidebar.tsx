@@ -12,6 +12,7 @@ import {
   Settings as SettingsIcon,
   LogOut,
 } from "lucide-react";
+import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 import { DEFAULT_AVATAR_URL } from "@/lib/constants";
 
 type AppSidebarProps = {
@@ -80,14 +81,7 @@ export function AppSidebar({
       <div className="flex h-screen flex-col">
         {/* Top: App logo */}
         <div className="flex items-center gap-3 px-4 pb-2.5 pt-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white">
-            FC
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-slate-900">
-              FlowCollect
-            </span>
-          </div>
+          <ArrexiaLogo variant="light" height={42} className="max-h-[42px] shrink-0 w-auto" />
         </div>
 
         {/* Separator */}

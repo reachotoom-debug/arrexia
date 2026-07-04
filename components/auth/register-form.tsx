@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, type RegisterFormValues } from "@/lib/schemas/auth";
+import { buildAuthCallbackUrl } from "@/lib/config/appUrl";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function RegisterForm() {
@@ -23,14 +24,14 @@ export default function RegisterForm() {
   const onSubmit = async (data: RegisterFormValues) => {
     const supabase = supabaseBrowser();
     const next = nextUrl || "/start";
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const emailRedirectTo = buildAuthCallbackUrl({ next });
     
     // Try sign up first
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: origin ? `${origin}/auth/callback?next=${encodeURIComponent(next)}` : undefined,
+        emailRedirectTo,
       },
     });
 
@@ -73,15 +74,6 @@ export default function RegisterForm() {
   return (
     <div className="flex justify-center">
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            FlowCollect
-          </h1>
-          <p className="text-sm text-slate-500">
-            Cash Solved.
-          </p>
-        </div>
-
         <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">

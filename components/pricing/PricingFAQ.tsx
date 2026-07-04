@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const FAQ = [
   {
-    q: "Is FlowCollect just an invoice generator?",
-    a: "No. FlowCollect is built around payment collection, overdue tracking, reminders, and receivables visibility.",
+    q: "Is Arrexia just an invoice generator?",
+    a: "No. Arrexia is built around payment collection, overdue tracking, reminders, and receivables visibility.",
   },
   {
     q: "Do I need a credit card for trial?",
@@ -15,7 +15,7 @@ const FAQ = [
   },
   {
     q: "Is this for freelancers only?",
-    a: "No — freelancers, agencies, consultants, and SMBs use FlowCollect.",
+    a: "No — freelancers, agencies, consultants, and SMBs use Arrexia.",
   },
   {
     q: "What happens after trial?",

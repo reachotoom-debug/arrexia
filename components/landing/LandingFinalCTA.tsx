@@ -11,7 +11,7 @@ export function LandingFinalCTA() {
             Ready to reduce overdue invoices?
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-300">
-            Start with FlowCollect and build a healthier cash flow process. Stop leaving money on
+            Start with Arrexia and build a healthier cash flow process. Stop leaving money on
             the table.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3">

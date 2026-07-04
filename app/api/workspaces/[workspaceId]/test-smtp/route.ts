@@ -58,9 +58,9 @@ export async function POST(
     const info = await transporter.sendMail({
       from: `"${validatedData.from_name}" <${validatedData.from_email}>`,
       to: testEmail,
-      subject: "SMTP Test - FlowCollect",
-      text: "This is a test email from FlowCollect to verify your SMTP settings are configured correctly.",
-      html: "<p>This is a test email from FlowCollect to verify your SMTP settings are configured correctly.</p>",
+      subject: "SMTP Test - Arrexia",
+      text: "This is a test email from Arrexia to verify your SMTP settings are configured correctly.",
+      html: "<p>This is a test email from Arrexia to verify your SMTP settings are configured correctly.</p>",
     });
 
     return NextResponse.json({

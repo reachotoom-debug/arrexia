@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 
 const PRODUCT_LINKS = [
   { href: "/#features", label: "Features" },
@@ -21,18 +22,15 @@ export function LandingFooter() {
     <footer className="border-t border-slate-200 bg-white py-12">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
         <div>
-          <Link
-            href="/"
-            className="text-lg font-semibold text-slate-900 transition-colors hover:text-blue-600"
-          >
-            FlowCollect
+          <Link href="/" className="inline-flex shrink-0 transition-opacity hover:opacity-90">
+            <ArrexiaLogo variant="light" height={48} className="h-10 w-auto md:h-12" />
           </Link>
-          <p className="mt-2 text-sm font-medium text-blue-600">Cash Solved.</p>
+          <p className="mt-3 text-sm font-medium text-blue-600">Cash Solved.</p>
           <Link
             href="/"
             className="mt-3 inline-block text-sm text-slate-500 transition-colors hover:text-blue-600"
           >
-            flowcollect.app
+            arrexia.app
           </Link>
         </div>
 
@@ -87,7 +85,7 @@ export function LandingFooter() {
 
       <div className="mx-auto mt-10 max-w-7xl border-t border-slate-200 px-4 pt-6 sm:px-6">
         <p className="text-center text-sm text-slate-500">
-          © {new Date().getFullYear()} FlowCollect. All rights reserved.
+          © {new Date().getFullYear()} Arrexia. All rights reserved.
         </p>
       </div>
     </footer>

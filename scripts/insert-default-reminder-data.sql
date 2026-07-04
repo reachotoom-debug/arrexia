@@ -22,7 +22,7 @@ We hope you are well. This is a friendly reminder that invoice {{invoice_number}
 We would appreciate your prompt attention.
 
 Thank you,
-FlowCollect',
+Arrexia',
     NOW()
   )
   RETURNING id

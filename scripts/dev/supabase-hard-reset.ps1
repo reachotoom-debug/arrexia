@@ -114,7 +114,7 @@ Invoke-Step "[1/5] Stop Supabase (no backup)" {
   Invoke-Safely { npx supabase stop --no-backup | Out-Host }
 }
 
-Invoke-Step "[2/5] Remove FlowCollect Supabase containers (if any)" {
+Invoke-Step "[2/5] Remove Arrexia local Supabase containers (if any)" {
   $names = @(
     docker ps -a --format "{{.ID}} {{.Names}}" |
       Select-String -Pattern "supabase|flowcollect" -CaseSensitive:$false |
@@ -134,7 +134,7 @@ Invoke-Step "[2/5] Remove FlowCollect Supabase containers (if any)" {
   }
 }
 
-Invoke-Step "[3/5] Remove FlowCollect Supabase volumes (if any)" {
+Invoke-Step "[3/5] Remove Arrexia local Supabase volumes (if any)" {
   $vols = @(
     docker volume ls --format "{{.Name}}" |
       Select-String -Pattern "supabase|flowcollect" -CaseSensitive:$false |

@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 import { trialHref } from "@/lib/billing/plans";
 import { Button } from "@/components/ui/button";
 
@@ -15,20 +15,13 @@ export function PublicNavbar() {
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:py-4">
         <div className="flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Image
-              src="/brand/icon-logo.png"
-              alt=""
-              width={36}
-              height={36}
-              className="h-9 w-9 object-contain"
+          <Link href="/" className="inline-flex shrink-0 items-center">
+            <ArrexiaLogo
+              variant="light"
+              height={64}
+              className="h-12 w-auto md:h-16"
+              priority
             />
-            <div className="leading-tight">
-              <span className="block text-lg font-semibold tracking-tight text-slate-900">
-                FlowCollect
-              </span>
-              <span className="block text-xs font-medium text-blue-600">Cash Solved.</span>
-            </div>
           </Link>
 
           <div className="flex items-center gap-2 lg:hidden">

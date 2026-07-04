@@ -48,7 +48,7 @@ const CARD_GROUPS: { group: string; cards: SettingsCardItem[] }[] = [
     cards: [
       {
         title: "Payments & billing",
-        description: "Your FlowCollect subscription plan.",
+        description: "Your Arrexia subscription plan.",
         href: (w) => `/${w}/settings?section=billing`,
       },
     ],
@@ -58,7 +58,7 @@ const CARD_GROUPS: { group: string; cards: SettingsCardItem[] }[] = [
     cards: [
       {
         title: "Account",
-        description: "Your profile name, email, and avatar in FlowCollect.",
+        description: "Your profile name, email, and avatar in Arrexia.",
         href: (w) => `/${w}/settings?section=account`,
       },
     ],

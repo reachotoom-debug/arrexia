@@ -15,7 +15,7 @@ const COPY: Record<
   },
   email: {
     title: "Email & sending",
-    description: "How FlowCollect sends reminders and invoice emails.",
+    description: "How Arrexia sends reminders and invoice emails.",
   },
   reminders: {
     title: "Reminders",
@@ -27,7 +27,7 @@ const COPY: Record<
   },
   account: {
     title: "Account",
-    description: "Your personal profile and avatar in FlowCollect.",
+    description: "Your personal profile and avatar in Arrexia.",
   },
 };
 

@@ -232,7 +232,7 @@ export async function GET(req: NextRequest) {
 
     // Generate filename
     const today = new Date().toISOString().split("T")[0];
-    const filename = `FlowCollect_${workspaceId}_invoices_${today}.csv`;
+    const filename = `Arrexia_${workspaceId}_invoices_${today}.csv`;
 
     // Return CSV file
     return new NextResponse(csv, {

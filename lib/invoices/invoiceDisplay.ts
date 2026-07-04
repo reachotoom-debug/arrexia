@@ -141,7 +141,7 @@ export function companyInitials(name: string): string {
   if (words.length >= 2) {
     return `${words[0]![0] ?? ""}${words[1]![0] ?? ""}`.toUpperCase();
   }
-  return name.trim().slice(0, 2).toUpperCase() || "FC";
+  return name.trim().slice(0, 2).toUpperCase() || "A";
 }
 
 export function buildHeaderContactLine(

@@ -550,6 +550,8 @@ export async function sendReminderForInvoice(
           name: client.name,
           email: client.email || "",
         },
+        workspaceId,
+        invoiceId: invoice.id,
       });
 
       const rendered = renderReminderTemplateFromContext({
@@ -593,7 +595,7 @@ export async function sendReminderForInvoice(
     emailSettings?.from_name ||
     settings?.from_name ||
     workspaceRow?.name ||
-    "FlowCollect";
+    "Arrexia";
 
   const currency = invoiceView.currency || "USD";
   const totalAmountFormatted = formatCurrency(Number(invoiceView.total ?? invoice.amount ?? 0), {
@@ -667,7 +669,7 @@ export async function sendReminderForInvoice(
   const EMAIL_TIMEOUT_MS = 9000; // 9 seconds
 
   const fromEmail = emailSettings?.from_email || settings?.from_email || null;
-  const fromName = emailSettings?.from_name || settings?.from_name || "FlowCollect";
+  const fromName = emailSettings?.from_name || settings?.from_name || "Arrexia";
   const toEmail = client.email!;
 
   try {

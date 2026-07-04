@@ -10,11 +10,26 @@ import { LandingPaysForItself } from "@/components/landing/LandingPaysForItself"
 import { LandingPricingTeaser } from "@/components/landing/LandingPricingTeaser";
 import { LandingValueStrip } from "@/components/landing/LandingValueStrip";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
+import { ARREXIA_BRAND } from "@/lib/brand/assets";
 
 export const metadata: Metadata = {
-  title: "FlowCollect | Invoice Collection & Accounts Receivable Software",
+  title: "Arrexia | Invoice Collection & Accounts Receivable Software",
   description:
-    "Track invoices, send payment reminders, manage overdue balances, and improve cash flow with FlowCollect.",
+    "Track invoices, send payment reminders, manage overdue balances, and improve cash flow with Arrexia.",
+  openGraph: {
+    title: "Arrexia | Invoice Collection & Accounts Receivable Software",
+    description:
+      "Track invoices, send payment reminders, manage overdue balances, and improve cash flow with Arrexia.",
+    siteName: "Arrexia",
+    images: [{ url: ARREXIA_BRAND.ogImage, width: 1200, height: 630, alt: "Arrexia" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Arrexia | Invoice Collection & Accounts Receivable Software",
+    description:
+      "Track invoices, send payment reminders, manage overdue balances, and improve cash flow with Arrexia.",
+    images: [ARREXIA_BRAND.ogImage],
+  },
 };
 
 export default function HomePage() {

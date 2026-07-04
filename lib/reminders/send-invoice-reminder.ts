@@ -150,6 +150,8 @@ export async function sendInvoiceReminder(
         workspace_name: null, // Not available in minimal invoice object
       },
       client: invoice.client || null,
+      workspaceId: invoice.workspace_id,
+      invoiceId: invoice.id,
     });
 
     const rendered = renderReminderTemplateFromContext({
