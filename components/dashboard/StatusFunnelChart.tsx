@@ -15,11 +15,11 @@ import { CHART_COLORS, formatCurrencyAxis, ChartTooltip } from "@/app/[workspace
 import { ChartEmptyState } from "@/app/[workspaceId]/dashboard/_components/ChartEmptyState";
 
 interface StatusFunnelChartProps {
-  data: Array<{ status: string; count: number; amount: number }>;
+  data?: Array<{ status: string; count: number; amount: number }>;
   workspaceId?: string;
 }
 
-export function StatusFunnelChart({ data, workspaceId }: StatusFunnelChartProps) {
+export function StatusFunnelChart({ data = [], workspaceId }: StatusFunnelChartProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -39,11 +39,14 @@ export function StatusFunnelChart({ data, workspaceId }: StatusFunnelChartProps)
     return CHART_COLORS.statusDraft;
   };
 
-  const chartData = data.map((item) => ({
-    status: item.status.charAt(0).toUpperCase() + item.status.slice(1),
-    count: item.count,
-    amount: item.amount,
-  }));
+  const chartData = data.map((item) => {
+    const status = item.status?.trim() || "Draft";
+    return {
+      status: status.charAt(0).toUpperCase() + status.slice(1),
+      count: item.count ?? 0,
+      amount: item.amount ?? 0,
+    };
+  });
 
   if (!mounted) {
     return (

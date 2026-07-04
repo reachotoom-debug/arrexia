@@ -17,13 +17,18 @@ import { CHART_COLORS, formatCurrencyAxis, ChartTooltip } from "@/app/[workspace
 import { ChartEmptyState } from "@/app/[workspaceId]/dashboard/_components/ChartEmptyState";
 
 interface RevenueOverviewChartProps {
-  data: { month: string; invoiced: number; collected: number }[];
+  data?: { month: string; invoiced: number; collected: number }[];
   workspaceId?: string;
   totalInvoiced?: number;
   paymentsCount?: number;
 }
 
-export function RevenueOverviewChart({ data }: RevenueOverviewChartProps) {
+export function RevenueOverviewChart({
+  data = [],
+  workspaceId,
+  totalInvoiced = 0,
+  paymentsCount = 0,
+}: RevenueOverviewChartProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
