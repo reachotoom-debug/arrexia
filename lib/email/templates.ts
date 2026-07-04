@@ -262,13 +262,13 @@ export function renderFooter(): { html: string; text: string } {
   const appUrl = escapeHtml(`https://${APP_DOMAIN}`);
 
   const html = `
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0;border-top:1px solid ${BORDER};">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:30px 0 0 0;border-top:1px solid ${BORDER};">
       <tr>
         <td align="center" style="padding:28px 24px 24px 24px;background-color:#fafbfc;">
           <p style="margin:0 0 12px 0;font-size:11px;line-height:1.4;color:${SUBTLE};letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">
             Powered by
           </p>
-          <img src="${logoUrl}" alt="Arrexia" width="120" style="display:block;margin:0 auto;height:auto;border:0;outline:none;text-decoration:none;" />
+          <img src="${logoUrl}" alt="Arrexia" width="145" style="display:block;margin:0 auto;height:auto;border:0;outline:none;text-decoration:none;" />
           <a href="${appUrl}" style="font-size:13px;line-height:1.5;color:${MUTED};text-decoration:none;font-weight:500;">
             ${APP_DOMAIN}
           </a>
