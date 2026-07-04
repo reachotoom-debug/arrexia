@@ -23,6 +23,8 @@ import {
 } from "@/lib/billing/plans";
 import { assertReminderRulesManageAllowed } from "@/lib/billing/reminderRulesAccess";
 import { sendEmail } from "@/lib/email/sendEmail";
+import { renderTestEmail } from "@/lib/email/templates";
+import { buildInvoiceBranding } from "@/app/[workspaceId]/invoices/_utils/branding";
 
 /**
  * Save workspace profile settings
@@ -248,11 +250,24 @@ export async function testEmailSettings(
       };
     }
 
+    const supabase = await supabaseServer();
+    const { data: settings } = await supabase
+      .from("settings")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    const branding = buildInvoiceBranding(settings);
+    const { html, text, subject } = renderTestEmail({
+      businessName: branding.fromName,
+      logoUrl: branding.logoUrl,
+    });
+
     const result = await sendEmail({
       to: user.email,
-      subject: "Arrexia email test",
-      text: "Email delivery is configured for this workspace.",
-      html: "<p>Email delivery is configured for this workspace.</p>",
+      subject,
+      text,
+      html,
     });
 
     if (!result.success) {

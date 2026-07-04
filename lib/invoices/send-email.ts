@@ -318,6 +318,7 @@ export async function sendInvoiceEmail(options: {
 
     const { html: bodyHtml, text: bodyText, subject } = renderInvoiceEmail({
       businessName: workspaceName,
+      logoUrl: branding.logoUrl,
       clientName,
       invoiceNumber,
       issueDate: invoice.issue_date,

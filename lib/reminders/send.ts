@@ -574,7 +574,7 @@ export async function sendReminderForInvoice(
   const { data: settings } = await supabase
     .from("settings")
     .select(
-      "email_provider, from_name, from_email, workspace_display_name, branding_business_legal_name, business_name"
+      "email_provider, from_name, from_email, workspace_display_name, branding_business_legal_name, business_name, workspace_logo_url, logo_url"
     )
     .eq("workspace_id", workspaceId)
     .maybeSingle();
@@ -623,8 +623,11 @@ export async function sendReminderForInvoice(
     return diffDays > 0 ? diffDays : 0;
   })();
 
+  const workspaceLogoUrl = settings?.workspace_logo_url || settings?.logo_url || null;
+
   const emailContent = renderReminderEmail({
     businessName,
+    logoUrl: workspaceLogoUrl,
     clientName: client.name || "Client",
     invoiceNumber: invoiceNumberLabel,
     dueDate: invoiceView.due_date,

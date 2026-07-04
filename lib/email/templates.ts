@@ -1,22 +1,53 @@
 /**
  * Shared transactional email HTML/text templates.
- * Email-client safe: inline styles, no external CSS/images.
+ * Email-client safe: inline styles, table layout, absolute image URLs.
  */
+
+import { ARREXIA_BRAND } from "@/lib/brand/assets";
+import { getConfiguredAppUrl } from "@/lib/config/appUrl";
 
 const NAVY = "#0f172a";
 const BLUE = "#2563eb";
 const BG = "#f8fafc";
 const BORDER = "#e2e8f0";
 const MUTED = "#64748b";
+const SUBTLE = "#94a3b8";
 const FONT =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const MAX_WIDTH = 600;
+const APP_DOMAIN = "arrexia.app";
 
+/** @deprecated Use renderFooter() output instead. Kept for callers that reference the constant. */
 export const PLATFORM_EMAIL_FOOTER = "Powered by Arrexia";
+
+export type EmailBadge = "invoice" | "payment_reminder" | "test_email";
+
+const BADGE_LABELS: Record<EmailBadge, string> = {
+  invoice: "INVOICE",
+  payment_reminder: "PAYMENT REMINDER",
+  test_email: "TEST EMAIL",
+};
 
 const LEGACY_BRAND_PATTERN = /flowcollect/gi;
 const LEADING_GREETING_PATTERN = /^\s*(dear|hi|hello)\s+[^\n,]+,?\s*\n+/i;
 const TRAILING_CLOSING_PATTERN =
   /\n\s*(thank you|thanks|best regards|kind regards|sincerely|regards|yours truly),?\s*(?:\n[^\n]+)?\s*$/i;
+
+export type SummaryRow = {
+  label: string;
+  value: string | null | undefined;
+};
+
+export type EmailShellOptions = {
+  businessName: string;
+  logoUrl?: string | null;
+  badge: EmailBadge;
+  greeting: string;
+  mainMessage: string;
+  summaryRows?: SummaryRow[];
+  infoBoxNote?: string;
+  ctaButton?: { label: string; url: string } | null;
+};
 
 export function escapeHtml(value: string | null | undefined): string {
   if (value == null) return "";
@@ -47,6 +78,40 @@ function formatDisplayDate(value: string | null | undefined): string {
   return escapeHtml(formatDisplayDatePlain(value));
 }
 
+/** Resolve relative asset paths to absolute URLs for email clients. */
+export function resolveEmailImageUrl(url: string | null | undefined): string | null {
+  const trimmed = url?.trim();
+  if (!trimmed) return null;
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("/")) {
+    return `${getConfiguredAppUrl()}${trimmed}`;
+  }
+
+  return null;
+}
+
+function getArrexiaEmailLogoUrl(): string {
+  const dedicated = resolveEmailImageUrl("/brand/arrexia-logo-email.png");
+  if (dedicated) return dedicated;
+
+  return (
+    resolveEmailImageUrl(ARREXIA_BRAND.logoLight) ??
+    resolveEmailImageUrl(ARREXIA_BRAND.logoDark) ??
+    `${getConfiguredAppUrl()}${ARREXIA_BRAND.logoLight}`
+  );
+}
+
+function deriveInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "A";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
+}
+
 /** Strip legacy branding, greetings, and sign-offs from template body before the HTML shell wraps it. */
 export function sanitizeReminderMainMessage(message: string): string {
   let text = message
@@ -63,35 +128,64 @@ export function sanitizeReminderMainMessage(message: string): string {
   return text.replace(/\n{3,}/g, "\n\n").trim();
 }
 
-type SummaryRow = {
-  label: string;
-  value: string | null | undefined;
-};
-
-export type EmailShellOptions = {
+export function renderEmailHeader(options: {
   businessName: string;
-  badge: string;
-  greeting: string;
-  mainMessage: string;
-  summaryRows: SummaryRow[];
-  ctaNote: string;
-  signatureLine: string;
-  includeBusinessNameInSignature?: boolean;
-  platformFooter?: string;
-};
+  logoUrl?: string | null;
+}): string {
+  const businessName = escapeHtml(options.businessName);
+  const resolvedLogo = resolveEmailImageUrl(options.logoUrl);
+  const initials = escapeHtml(deriveInitials(options.businessName));
 
-function buildSummaryRowsHtml(rows: SummaryRow[]): string {
+  const avatarCell = resolvedLogo
+    ? `<img src="${escapeHtml(resolvedLogo)}" alt="" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:8px;object-fit:contain;border:0;" />`
+    : `<table role="presentation" width="48" height="48" cellspacing="0" cellpadding="0" style="width:48px;height:48px;border-radius:8px;background-color:#eff6ff;">
+        <tr>
+          <td align="center" valign="middle" style="width:48px;height:48px;border-radius:8px;font-size:16px;font-weight:700;color:${BLUE};line-height:48px;">
+            ${initials}
+          </td>
+        </tr>
+      </table>`;
+
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td width="48" valign="middle" style="width:48px;padding-right:16px;vertical-align:middle;">
+          ${avatarCell}
+        </td>
+        <td valign="middle" style="vertical-align:middle;">
+          <div style="font-size:30px;font-weight:700;color:${NAVY};line-height:1.2;letter-spacing:-0.02em;">
+            ${businessName}
+          </div>
+        </td>
+      </tr>
+    </table>`;
+}
+
+export function renderEmailBadge(badge: EmailBadge): string {
+  const label = escapeHtml(BADGE_LABELS[badge]);
+
+  return `
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px 0;">
+      <tr>
+        <td style="padding:6px 12px;border-radius:999px;background-color:#eff6ff;color:${BLUE};font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">
+          ${label}
+        </td>
+      </tr>
+    </table>`;
+}
+
+export function renderSummaryTable(rows: SummaryRow[]): string {
   const visible = rows.filter((row) => row.value != null && row.value !== "");
   if (visible.length === 0) return "";
 
   const rowsHtml = visible
     .map(
-      (row) => `
+      (row, index) => `
         <tr>
-          <td style="padding:8px 0;border-bottom:1px solid ${BORDER};font-size:14px;color:${MUTED};width:42%;vertical-align:top;">
+          <td style="padding:12px 0;${index < visible.length - 1 ? `border-bottom:1px solid ${BORDER};` : ""}font-size:14px;color:${MUTED};width:44%;vertical-align:top;line-height:1.5;">
             ${escapeHtml(row.label)}
           </td>
-          <td style="padding:8px 0;border-bottom:1px solid ${BORDER};font-size:14px;color:${NAVY};font-weight:600;text-align:right;vertical-align:top;">
+          <td style="padding:12px 0;${index < visible.length - 1 ? `border-bottom:1px solid ${BORDER};` : ""}font-size:14px;color:${NAVY};font-weight:600;text-align:right;vertical-align:top;line-height:1.5;">
             ${escapeHtml(row.value)}
           </td>
         </tr>`
@@ -99,9 +193,9 @@ function buildSummaryRowsHtml(rows: SummaryRow[]): string {
     .join("");
 
   return `
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0 0 0;border:1px solid ${BORDER};border-radius:8px;background-color:${BG};">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:28px 0 0 0;border:1px solid ${BORDER};border-radius:12px;background-color:#ffffff;overflow:hidden;">
       <tr>
-        <td style="padding:16px 20px;">
+        <td style="padding:4px 20px 8px 20px;background-color:${BG};">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
             ${rowsHtml}
           </table>
@@ -116,22 +210,103 @@ function buildSummaryRowsText(rows: SummaryRow[]): string {
   return `\n\n${visible.map((row) => `${row.label}: ${row.value}`).join("\n")}`;
 }
 
+export function renderInfoBox(note: string | null | undefined): string {
+  const trimmed = note?.trim();
+  if (!trimmed) return "";
+
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:28px 0 0 0;">
+      <tr>
+        <td style="padding:16px 18px;border:1px solid #dbeafe;border-left:4px solid ${BLUE};background-color:#eff6ff;border-radius:10px;font-size:14px;line-height:1.65;color:${NAVY};">
+          ${escapeHtml(trimmed)}
+        </td>
+      </tr>
+    </table>`;
+}
+
+/** Reusable CTA button — returns empty output when URL is missing or not public-safe. */
+export function renderEmailButton(
+  label: string,
+  url: string | null | undefined
+): { html: string; text: string } {
+  const trimmedUrl = url?.trim();
+  if (!trimmedUrl) {
+    return { html: "", text: "" };
+  }
+
+  const safeUrl = escapeHtml(trimmedUrl);
+  const safeLabel = escapeHtml(label);
+
+  const html = `
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px 0 0 0;">
+      <tr>
+        <td align="left" bgcolor="${BLUE}" style="border-radius:8px;background-color:${BLUE};">
+          <a href="${safeUrl}" target="_blank" style="display:inline-block;padding:12px 18px;font-size:14px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;border-radius:8px;">
+            ${safeLabel}
+          </a>
+        </td>
+      </tr>
+    </table>`;
+
+  return { html, text: `\n${label}: ${trimmedUrl}` };
+}
+
+export function renderSignature(businessName: string): { html: string; text: string } {
+  const safeName = escapeHtml(businessName);
+
+  return {
+    html: `
+      <p style="margin:32px 0 0 0;font-size:15px;line-height:1.6;color:#334155;">
+        Thank you,<br />
+        <span style="font-weight:600;color:${NAVY};">${safeName}</span>
+      </p>`,
+    text: `Thank you,\n${businessName}`,
+  };
+}
+
+export function renderFooter(): { html: string; text: string } {
+  const logoUrl = escapeHtml(getArrexiaEmailLogoUrl());
+  const appUrl = escapeHtml(`https://${APP_DOMAIN}`);
+
+  const html = `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0;border-top:1px solid ${BORDER};">
+      <tr>
+        <td align="center" style="padding:28px 24px 24px 24px;background-color:#fafbfc;">
+          <p style="margin:0 0 12px 0;font-size:11px;line-height:1.4;color:${SUBTLE};letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">
+            Powered by
+          </p>
+          <img src="${logoUrl}" alt="Arrexia" width="120" style="display:block;width:120px;max-width:120px;height:auto;margin:0 auto 10px auto;border:0;" />
+          <a href="${appUrl}" style="font-size:13px;line-height:1.5;color:${MUTED};text-decoration:none;font-weight:500;">
+            ${APP_DOMAIN}
+          </a>
+        </td>
+      </tr>
+    </table>`;
+
+  return {
+    html,
+    text: `Powered by Arrexia\n${APP_DOMAIN}`,
+  };
+}
+
 export function renderEmailShell(options: EmailShellOptions): { html: string; text: string } {
-  const businessName = escapeHtml(options.businessName);
-  const badge = escapeHtml(options.badge);
+  const badgeLabel = BADGE_LABELS[options.badge];
   const greeting = escapeHtml(options.greeting);
   const mainMessageHtml = plainMultilineToHtml(options.mainMessage);
-  const ctaNote = escapeHtml(options.ctaNote);
-  const platformFooter = escapeHtml(options.platformFooter ?? PLATFORM_EMAIL_FOOTER);
-  const summaryHtml = buildSummaryRowsHtml(options.summaryRows);
-
-  const signatureHtml = options.includeBusinessNameInSignature
-    ? `${escapeHtml(options.signatureLine)}<br />${businessName}`
-    : escapeHtml(options.signatureLine);
-
-  const signatureText = options.includeBusinessNameInSignature
-    ? `${options.signatureLine}\n${options.businessName}`
-    : options.signatureLine;
+  const summaryRows = options.summaryRows ?? [];
+  const summaryHtml = renderSummaryTable(summaryRows);
+  const infoBoxHtml = renderInfoBox(options.infoBoxNote);
+  const button = renderEmailButton(
+    options.ctaButton?.label ?? "View Invoice",
+    options.ctaButton?.url
+  );
+  const signature = renderSignature(options.businessName);
+  const footer = renderFooter();
+  const header = renderEmailHeader({
+    businessName: options.businessName,
+    logoUrl: options.logoUrl,
+  });
+  const badge = renderEmailBadge(options.badge);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -139,35 +314,32 @@ export function renderEmailShell(options: EmailShellOptions): { html: string; te
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>${badge}</title>
+  <title>${escapeHtml(badgeLabel)}</title>
 </head>
 <body style="margin:0;padding:0;background-color:${BG};font-family:${FONT};color:${NAVY};">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:${BG};padding:24px 12px;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:${BG};padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background-color:#ffffff;border:1px solid ${BORDER};border-radius:8px;overflow:hidden;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:${MAX_WIDTH}px;background-color:#ffffff;border:1px solid ${BORDER};border-radius:16px;overflow:hidden;">
           <tr>
-            <td style="padding:28px 28px 20px 28px;border-bottom:1px solid ${BORDER};">
-              <div style="font-size:22px;font-weight:700;color:${NAVY};line-height:1.3;">${businessName}</div>
+            <td style="padding:32px 32px 28px 32px;border-bottom:1px solid ${BORDER};">
+              ${header}
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 28px 28px 28px;">
-              <div style="display:inline-block;padding:6px 12px;border-radius:999px;background-color:#eff6ff;color:${BLUE};font-size:12px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;">
-                ${badge}
-              </div>
-              <p style="margin:20px 0 12px 0;font-size:16px;line-height:1.6;color:${NAVY};">${greeting}</p>
-              <p style="margin:0 0 0 0;font-size:15px;line-height:1.7;color:#334155;">${mainMessageHtml}</p>
+            <td style="padding:32px 32px 8px 32px;">
+              ${badge}
+              <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;color:${NAVY};font-weight:500;">${greeting}</p>
+              <p style="margin:0;font-size:15px;line-height:1.75;color:#334155;">${mainMessageHtml}</p>
               ${summaryHtml}
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0 0 0;">
-                <tr>
-                  <td style="padding:14px 16px;border-left:4px solid ${BLUE};background-color:#eff6ff;border-radius:6px;font-size:14px;line-height:1.6;color:${NAVY};">
-                    ${ctaNote}
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:28px 0 0 0;font-size:14px;line-height:1.6;color:#334155;">${signatureHtml}</p>
-              <p style="margin:16px 0 0 0;font-size:12px;line-height:1.5;color:${MUTED};">${platformFooter}</p>
+              ${infoBoxHtml}
+              ${button.html}
+              ${signature.html}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0;">
+              ${footer.html}
             </td>
           </tr>
         </table>
@@ -179,16 +351,16 @@ export function renderEmailShell(options: EmailShellOptions): { html: string; te
 
   const text = [
     options.businessName,
-    options.badge,
+    badgeLabel,
     "",
     options.greeting,
     options.mainMessage,
-    buildSummaryRowsText(options.summaryRows),
+    buildSummaryRowsText(summaryRows),
+    options.infoBoxNote?.trim() ? `\n${options.infoBoxNote.trim()}` : "",
+    button.text,
+    signature.text,
     "",
-    options.ctaNote,
-    "",
-    signatureText,
-    options.platformFooter ?? PLATFORM_EMAIL_FOOTER,
+    footer.text,
   ]
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -199,6 +371,7 @@ export function renderEmailShell(options: EmailShellOptions): { html: string; te
 
 export type InvoiceEmailOptions = {
   businessName: string;
+  logoUrl?: string | null;
   clientName: string;
   invoiceNumber: string;
   issueDate?: string | null;
@@ -207,6 +380,8 @@ export type InvoiceEmailOptions = {
   amountPaid?: string | null;
   outstandingAmount?: string | null;
   notes?: string | null;
+  /** Optional public-safe invoice URL for future CTA support. */
+  invoiceViewUrl?: string | null;
 };
 
 export function renderInvoiceEmail(
@@ -234,14 +409,15 @@ export function renderInvoiceEmail(
 
   const rendered = renderEmailShell({
     businessName: options.businessName,
-    badge: "Invoice",
+    logoUrl: options.logoUrl,
+    badge: "invoice",
     greeting: `Dear ${options.clientName},`,
     mainMessage,
     summaryRows,
-    ctaNote: "Please review the attached PDF invoice.",
-    signatureLine: "Thank you for your business.",
-    includeBusinessNameInSignature: false,
-    platformFooter: PLATFORM_EMAIL_FOOTER,
+    infoBoxNote: "Please review the attached PDF invoice.",
+    ctaButton: options.invoiceViewUrl
+      ? { label: "View Invoice", url: options.invoiceViewUrl }
+      : null,
   });
 
   return { ...rendered, subject };
@@ -249,6 +425,7 @@ export function renderInvoiceEmail(
 
 export type ReminderEmailOptions = {
   businessName: string;
+  logoUrl?: string | null;
   clientName: string;
   invoiceNumber: string;
   dueDate?: string | null;
@@ -256,6 +433,8 @@ export type ReminderEmailOptions = {
   outstandingAmount?: string | null;
   daysOverdue?: number | null;
   mainMessage?: string | null;
+  /** Optional public-safe invoice URL for future CTA support. */
+  invoiceViewUrl?: string | null;
 };
 
 function buildDefaultReminderMainMessage(options: ReminderEmailOptions): string {
@@ -303,15 +482,40 @@ export function renderReminderEmail(
 
   const rendered = renderEmailShell({
     businessName: options.businessName,
-    badge: "Payment reminder",
+    logoUrl: options.logoUrl,
+    badge: "payment_reminder",
     greeting: `Hello ${options.clientName},`,
     mainMessage,
     summaryRows,
-    ctaNote: "Please arrange payment at your earliest convenience.",
-    signatureLine: "Thank you,",
-    includeBusinessNameInSignature: true,
-    platformFooter: PLATFORM_EMAIL_FOOTER,
+    infoBoxNote: "Please arrange payment at your earliest convenience.",
+    ctaButton: options.invoiceViewUrl
+      ? { label: "View Invoice", url: options.invoiceViewUrl }
+      : null,
   });
 
   return { ...rendered, subject };
+}
+
+export type TestEmailOptions = {
+  businessName: string;
+  logoUrl?: string | null;
+};
+
+export function renderTestEmail(
+  options: TestEmailOptions
+): { html: string; text: string; subject: string } {
+  const rendered = renderEmailShell({
+    businessName: options.businessName,
+    logoUrl: options.logoUrl,
+    badge: "test_email",
+    greeting: "Hello,",
+    mainMessage:
+      "This is a test email from your Arrexia workspace. If you received this message, email delivery is configured correctly.",
+    infoBoxNote: "No action is required. You can continue sending invoices and reminders as usual.",
+  });
+
+  return {
+    ...rendered,
+    subject: "Arrexia email test",
+  };
 }
