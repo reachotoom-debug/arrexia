@@ -3,7 +3,6 @@
  * Email-client safe: inline styles, table layout, absolute image URLs.
  */
 
-import { ARREXIA_BRAND } from "@/lib/brand/assets";
 import { getConfiguredAppUrl } from "@/lib/config/appUrl";
 
 const NAVY = "#0f172a";
@@ -16,6 +15,7 @@ const FONT =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const MAX_WIDTH = 600;
 const APP_DOMAIN = "arrexia.app";
+const ARREXIA_EMAIL_LOGO_URL = "https://arrexia.app/brand/arrexia-logo-email.png";
 
 /** @deprecated Use renderFooter() output instead. Kept for callers that reference the constant. */
 export const PLATFORM_EMAIL_FOOTER = "Powered by Arrexia";
@@ -95,14 +95,7 @@ export function resolveEmailImageUrl(url: string | null | undefined): string | n
 }
 
 function getArrexiaEmailLogoUrl(): string {
-  const dedicated = resolveEmailImageUrl("/brand/arrexia-logo-email.png");
-  if (dedicated) return dedicated;
-
-  return (
-    resolveEmailImageUrl(ARREXIA_BRAND.logoLight) ??
-    resolveEmailImageUrl(ARREXIA_BRAND.logoDark) ??
-    `${getConfiguredAppUrl()}${ARREXIA_BRAND.logoLight}`
-  );
+  return ARREXIA_EMAIL_LOGO_URL;
 }
 
 function deriveInitials(name: string): string {
@@ -275,7 +268,7 @@ export function renderFooter(): { html: string; text: string } {
           <p style="margin:0 0 12px 0;font-size:11px;line-height:1.4;color:${SUBTLE};letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">
             Powered by
           </p>
-          <img src="${logoUrl}" alt="Arrexia" width="120" style="display:block;width:120px;max-width:120px;height:auto;margin:0 auto 10px auto;border:0;" />
+          <img src="${logoUrl}" alt="Arrexia" width="120" style="display:block;margin:0 auto;height:auto;border:0;outline:none;text-decoration:none;" />
           <a href="${appUrl}" style="font-size:13px;line-height:1.5;color:${MUTED};text-decoration:none;font-weight:500;">
             ${APP_DOMAIN}
           </a>
