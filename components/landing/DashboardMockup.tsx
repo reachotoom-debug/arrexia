@@ -24,7 +24,11 @@ const SIDEBAR_ITEMS = ["Dashboard", "Clients", "Invoices", "Payments", "Collecti
 
 export function DashboardMockup() {
   return (
-    <div className="relative mx-auto w-full max-w-xl lg:max-w-none">
+      <div
+        className="relative mx-auto w-full max-w-xl lg:max-w-none"
+        role="img"
+        aria-label="Preview of the Arrexia accounts receivable dashboard showing invoices, cash flow, and payment reminders"
+      >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-blue-500/20 via-cyan-400/10 to-violet-500/20 blur-2xl"

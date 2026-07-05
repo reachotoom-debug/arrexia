@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Bell,
   FileText,
@@ -62,8 +63,16 @@ export function LandingFeatures() {
             Everything you need to get paid faster
           </h2>
           <p className="mt-4 text-lg text-slate-600">
-            Invoice collection, accounts receivable, and cash flow visibility — built for teams
-            that want clarity without accounting complexity.
+            Invoice collection, accounts receivable automation, and cash flow visibility — built for
+            teams that want clarity without accounting complexity. See{" "}
+            <Link href="/pricing" className="font-medium text-blue-600 hover:text-blue-700">
+              pricing
+            </Link>{" "}
+            or read about{" "}
+            <Link href="/security" className="font-medium text-blue-600 hover:text-blue-700">
+              security
+            </Link>
+            .
           </p>
         </div>
 

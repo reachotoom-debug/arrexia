@@ -1,13 +1,8 @@
 import { LegalDocument } from "@/components/public/LegalDocument";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
-import { buildPublicPageMetadata } from "@/lib/public/pageMetadata";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata = buildPublicPageMetadata({
-  title: "Arrexia Cookie Policy | Cookies & Sessions",
-  description:
-    "Understand how Arrexia uses cookies and similar technologies for authentication, sessions, and preferences.",
-  path: "/cookies",
-});
+export const metadata = buildPageMetadata("cookies");
 
 const SUPPORT_EMAIL = "support@arrexia.app";
 

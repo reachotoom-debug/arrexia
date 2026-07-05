@@ -1,13 +1,8 @@
 import { LegalDocument } from "@/components/public/LegalDocument";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
-import { buildPublicPageMetadata } from "@/lib/public/pageMetadata";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata = buildPublicPageMetadata({
-  title: "Arrexia Privacy Policy | Data Protection & Privacy",
-  description:
-    "Learn how Arrexia collects, uses, and protects your account, business, and technical data.",
-  path: "/privacy",
-});
+export const metadata = buildPageMetadata("privacy");
 
 const SUPPORT_EMAIL = "support@arrexia.app";
 

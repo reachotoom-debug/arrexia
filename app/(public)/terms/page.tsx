@@ -1,13 +1,8 @@
 import { LegalDocument } from "@/components/public/LegalDocument";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
-import { buildPublicPageMetadata } from "@/lib/public/pageMetadata";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata = buildPublicPageMetadata({
-  title: "Arrexia Terms of Service | Usage Terms",
-  description:
-    "Read the terms governing your use of Arrexia, including accounts, workspaces, subscriptions, and acceptable use.",
-  path: "/terms",
-});
+export const metadata = buildPageMetadata("terms");
 
 const SUPPORT_EMAIL = "support@arrexia.app";
 

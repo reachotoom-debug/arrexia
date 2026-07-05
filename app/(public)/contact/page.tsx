@@ -3,14 +3,9 @@ import { ExternalLink, Linkedin, Mail } from "lucide-react";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { Button } from "@/components/ui/button";
 import { trialHref } from "@/lib/billing/plans";
-import { buildPublicPageMetadata } from "@/lib/public/pageMetadata";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata = buildPublicPageMetadata({
-  title: "Contact Arrexia | Support & Business Inquiries",
-  description:
-    "Reach the Arrexia team for support, product questions, and business inquiries. We usually respond within 1–2 business days.",
-  path: "/contact",
-});
+export const metadata = buildPageMetadata("contact");
 
 const HELLO_EMAIL = "hello@arrexia.app";
 const SUPPORT_EMAIL = "support@arrexia.app";

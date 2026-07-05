@@ -6,7 +6,11 @@ import { PricingROI } from "@/components/pricing/PricingROI";
 import { PricingWhy } from "@/components/pricing/PricingWhy";
 import { trialHref } from "@/components/pricing/pricingPlans";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 import { Button } from "@/components/ui/button";
+import { buildPageMetadata } from "@/lib/seo/metadata";
+
+export const metadata = buildPageMetadata("pricing");
 
 export default function PricingPage() {
   return (
@@ -46,6 +50,7 @@ export default function PricingPage() {
           </div>
         </section>
       </div>
+      <LandingFooter />
     </div>
   );
 }

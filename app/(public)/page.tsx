@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import { JsonLd } from "@/components/seo/JsonLd";
 import { LandingAudience } from "@/components/landing/LandingAudience";
 import { LandingFAQ } from "@/components/landing/LandingFAQ";
 import { LandingFeatures } from "@/components/landing/LandingFeatures";
@@ -10,31 +10,15 @@ import { LandingPaysForItself } from "@/components/landing/LandingPaysForItself"
 import { LandingPricingTeaser } from "@/components/landing/LandingPricingTeaser";
 import { LandingValueStrip } from "@/components/landing/LandingValueStrip";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
-import { ARREXIA_BRAND } from "@/lib/brand/assets";
+import { buildPageMetadata } from "@/lib/seo/metadata";
+import { buildSoftwareApplicationSchema } from "@/lib/seo/structured-data";
 
-export const metadata: Metadata = {
-  title: "Arrexia | Invoice Collection & Accounts Receivable Software",
-  description:
-    "Track invoices, send payment reminders, manage overdue balances, and improve cash flow with Arrexia.",
-  openGraph: {
-    title: "Arrexia | Invoice Collection & Accounts Receivable Software",
-    description:
-      "Track invoices, send payment reminders, manage overdue balances, and improve cash flow with Arrexia.",
-    siteName: "Arrexia",
-    images: [{ url: ARREXIA_BRAND.ogImage, width: 1200, height: 630, alt: "Arrexia" }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Arrexia | Invoice Collection & Accounts Receivable Software",
-    description:
-      "Track invoices, send payment reminders, manage overdue balances, and improve cash flow with Arrexia.",
-    images: [ARREXIA_BRAND.ogImage],
-  },
-};
+export const metadata = buildPageMetadata("home");
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-white text-slate-900">
+      <JsonLd data={buildSoftwareApplicationSchema()} />
       <PublicNavbar />
       <main>
         <LandingHero />

@@ -2,14 +2,9 @@ import Link from "next/link";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { Button } from "@/components/ui/button";
 import { trialHref } from "@/lib/billing/plans";
-import { buildPublicPageMetadata } from "@/lib/public/pageMetadata";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata = buildPublicPageMetadata({
-  title: "About Arrexia | Accounts Receivable Software",
-  description:
-    "Arrexia helps businesses get paid faster with invoice tracking, payment reminders, and accounts receivable visibility.",
-  path: "/about",
-});
+export const metadata = buildPageMetadata("about");
 
 const VALUES = [
   {

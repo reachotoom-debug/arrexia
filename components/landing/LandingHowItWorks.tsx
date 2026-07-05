@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const STEPS = [
   {
     step: "1",
@@ -21,14 +23,23 @@ const STEPS = [
 
 export function LandingHowItWorks() {
   return (
-    <section id="how-it-works" className="scroll-mt-24 bg-slate-50 py-20 sm:py-24">
+    <section
+      id="how-it-works"
+      className="scroll-mt-24 bg-slate-50 py-20 sm:py-24"
+      aria-labelledby="how-it-works-heading"
+    >
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+          <h2 id="how-it-works-heading" className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
             How it works
           </h2>
           <p className="mt-4 text-lg text-slate-600">
-            A simple flow from invoice to reminder to payment — without the spreadsheet chaos.
+            A simple flow from invoice tracking to payment reminders and cash collection — without
+            the spreadsheet chaos. Questions? Visit our{" "}
+            <Link href="/contact" className="font-medium text-blue-600 hover:text-blue-700">
+              contact page
+            </Link>
+            .
           </p>
         </div>
 

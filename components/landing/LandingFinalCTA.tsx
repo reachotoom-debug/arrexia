@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 import { trialHref } from "@/lib/billing/plans";
 import { Button } from "@/components/ui/button";
 
@@ -13,6 +14,21 @@ export function LandingFinalCTA() {
           <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-300">
             Start with Arrexia and build a healthier cash flow process. Stop leaving money on
             the table.
+          </p>
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-400">
+            Explore{" "}
+            <Link href="/pricing" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
+              pricing
+            </Link>
+            , read our{" "}
+            <Link href="/blog" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
+              blog
+            </Link>
+            , or{" "}
+            <Link href="/contact" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
+              contact us
+            </Link>
+            .
           </p>
           <div className="mt-8 flex flex-col items-center gap-3">
             <Link href={trialHref("starter")}>

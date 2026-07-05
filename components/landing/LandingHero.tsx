@@ -20,23 +20,23 @@ export function LandingHero() {
       <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:gap-16 lg:py-24">
         <div className="max-w-xl lg:max-w-none">
           <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-sm font-semibold text-blue-700">
-            Smart invoicing &amp; collections
+            Accounts receivable &amp; invoice tracking
           </span>
 
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl lg:leading-[1.08]">
-            Get{" "}
+            Accounts receivable software to{" "}
             <span className="bg-gradient-to-r from-blue-600 via-cyan-600 to-violet-600 bg-clip-text text-transparent">
-              paid faster.
+              get paid faster.
             </span>
-            <br />
-            Stay organized.
-            <br />
-            Grow your business.
           </h1>
 
           <p className="mt-6 text-lg leading-relaxed text-slate-600 sm:text-xl">
-            Arrexia helps businesses track invoices, follow up on overdue payments, and
-            improve cash flow without complex accounting software.
+            Arrexia is invoice management software for tracking invoices, sending payment reminders,
+            managing overdue balances, and improving cash flow—without complex accounting software.{" "}
+            <Link href="/about" className="font-medium text-blue-600 hover:text-blue-700">
+              Learn about Arrexia
+            </Link>
+            .
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">

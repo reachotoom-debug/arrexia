@@ -17,6 +17,7 @@ type ArrexiaLogoProps = {
   height: number;
   className?: string;
   priority?: boolean;
+  alt?: string;
 };
 
 function hasCssHeightControl(className?: string): boolean {
@@ -60,6 +61,7 @@ export function ArrexiaLogo({
   height,
   className,
   priority,
+  alt = "Arrexia accounts receivable software logo",
 }: ArrexiaLogoProps) {
   const isIcon = variant === "icon";
   const intrinsicWidth = isIcon ? height : FULL_LOGO_WIDTH;
@@ -68,7 +70,7 @@ export function ArrexiaLogo({
   return (
     <Image
       src={LOGO_SOURCES[variant]}
-      alt="Arrexia"
+      alt={alt}
       width={intrinsicWidth}
       height={intrinsicHeight}
       priority={priority}
