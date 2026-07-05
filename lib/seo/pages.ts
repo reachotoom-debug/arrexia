@@ -97,7 +97,7 @@ export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
     path: "/blog",
     title: "Arrexia Blog | Accounts Receivable & Cash Flow Insights",
     description:
-      "Articles and product updates from Arrexia on accounts receivable, invoice collection, payment reminders, and cash flow.",
+      "Practical guides on invoice tracking, payment reminders, overdue invoice management, and accounts receivable automation for growing businesses.",
     priority: 0.7,
     changeFrequency: "weekly",
   },
@@ -105,7 +105,7 @@ export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
     path: "/tools",
     title: "Free Accounts Receivable Tools | Arrexia",
     description:
-      "Free accounts receivable tools from Arrexia to measure DSO, understand overdue invoices, and improve cash flow management.",
+      "Free calculators and tools to improve cash flow, analyze collections performance, and make smarter AR decisions. Start with the DSO calculator.",
     priority: 0.75,
     changeFrequency: "monthly",
   },
@@ -113,7 +113,7 @@ export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
     path: "/tools/dso-calculator",
     title: "DSO Calculator | Days Sales Outstanding Tool",
     description:
-      "Calculate days sales outstanding (DSO) with net credit sales, average accounts receivable, and period length. Free DSO calculator from Arrexia.",
+      "Calculate your Days Sales Outstanding (DSO) with net credit sales, average accounts receivable, and period length. Free DSO calculator from Arrexia.",
     keywords: ["DSO calculator", "days sales outstanding", "cash flow management"],
     priority: 0.7,
     changeFrequency: "monthly",

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { BlogCoverImage } from "@/components/blog/BlogImage";
-import { BlogAuthorBlock, BlogPostMeta } from "@/components/blog/BlogPostMeta";
+import { BlogAuthorBlock } from "@/components/blog/BlogAuthor";
+import { BlogPostMeta } from "@/components/blog/BlogPostMeta";
 import type { BlogPost } from "@/lib/blog/types";
 
 type BlogFeaturedPostProps = {

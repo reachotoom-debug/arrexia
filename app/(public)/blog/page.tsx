@@ -27,9 +27,9 @@ export default function BlogPage() {
             collections, and growing your business.
           </p>
           <p className="mt-4 text-sm text-slate-600">
-            Need a quick metric? Try our{" "}
-            <Link href="/tools/dso-calculator" className="font-medium text-blue-600 hover:text-blue-700">
-              free DSO calculator
+            Explore free calculators on our{" "}
+            <Link href="/tools" className="font-medium text-blue-600 hover:text-blue-700">
+              tools hub
             </Link>
             .
           </p>
@@ -37,28 +37,47 @@ export default function BlogPage() {
 
         {featuredPost ? (
           <section className="mt-14">
-            <BlogFeaturedPost post={featuredPost} />
-          </section>
-        ) : null}
+            <div className="grid gap-8 xl:grid-cols-12 xl:items-start">
+              <div className="xl:col-span-7">
+                <BlogFeaturedPost post={featuredPost} />
+              </div>
+              <div className="hidden xl:block xl:col-span-5">
+                <div className="mb-5">
+                  <h2 className="text-xl font-semibold tracking-tight text-slate-900">
+                    Recent articles
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-600">
+                    More on invoice tracking, reminders, and cash flow.
+                  </p>
+                </div>
+                <div className="grid gap-6">
+                  {recentPosts.map((post) => (
+                    <BlogPostCard key={post.slug} post={post} compact />
+                  ))}
+                </div>
+              </div>
+            </div>
 
-        <section className="mt-16">
-          <div className="flex items-end justify-between gap-4">
-            <div>
+            <div className="mt-10 xl:hidden">
               <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
                 Recent articles
               </h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Accounts receivable, reminders, and cash flow management.
-              </p>
+              <div className="mt-6 grid gap-6 md:grid-cols-2">
+                {recentPosts.map((post) => (
+                  <BlogPostCard key={post.slug} post={post} />
+                ))}
+              </div>
             </div>
-          </div>
-
-          <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {recentPosts.map((post) => (
-              <BlogPostCard key={post.slug} post={post} />
-            ))}
-          </div>
-        </section>
+          </section>
+        ) : (
+          <section className="mt-14">
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {recentPosts.map((post) => (
+                <BlogPostCard key={post.slug} post={post} />
+              ))}
+            </div>
+          </section>
+        )}
       </main>
     </PublicPageShell>
   );

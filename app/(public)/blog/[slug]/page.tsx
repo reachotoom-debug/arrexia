@@ -1,15 +1,18 @@
 import { notFound } from "next/navigation";
+import { BlogAboutAuthor, BlogAuthorBlock } from "@/components/blog/BlogAuthor";
 import { BlogArticleContent, BlogTableOfContents } from "@/components/blog/BlogArticleContent";
-import { BlogAuthorBlock, BlogPostMeta } from "@/components/blog/BlogPostMeta";
-import { BlogBreadcrumb } from "@/components/blog/BlogBreadcrumb";
+import { BlogPostMeta } from "@/components/blog/BlogPostMeta";
 import { BlogCoverImage } from "@/components/blog/BlogImage";
 import { BlogCta } from "@/components/blog/BlogCta";
+import { BlogShareLinks } from "@/components/blog/BlogShareLinks";
 import { RelatedPosts } from "@/components/blog/RelatedPosts";
+import { PageBreadcrumb } from "@/components/public/PageBreadcrumb";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { getAllBlogPosts, getBlogPost, getRelatedPosts } from "@/lib/blog";
 import { getCategoryLabel } from "@/lib/blog/format";
 import { buildBlogPostMetadata, buildBlogPostStructuredData } from "@/lib/seo/blog";
+import { buildBreadcrumbSchema } from "@/lib/seo/structured-data";
 
 type BlogPostPageProps = {
   params: Promise<{ slug: string }>;
@@ -32,15 +35,30 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     notFound();
   }
 
-  const structuredData = buildBlogPostStructuredData(slug);
+  const blogSchema = buildBlogPostStructuredData(slug);
+  const breadcrumbSchema = buildBreadcrumbSchema([
+    { name: "Home", path: "/" },
+    { name: "Blog", path: "/blog" },
+    { name: post.title, path: `/blog/${post.slug}` },
+  ]);
+  const structuredData = [blogSchema, breadcrumbSchema].filter(
+    (item) => item !== null,
+  ) as Record<string, unknown>[];
+
   const relatedPosts = getRelatedPosts(slug);
 
   return (
     <PublicPageShell>
-      {structuredData ? <JsonLd data={structuredData} /> : null}
+      {structuredData.length > 0 ? <JsonLd data={structuredData} /> : null}
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
         <div className="mx-auto max-w-3xl">
-          <BlogBreadcrumb postTitle={post.title} />
+          <PageBreadcrumb
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Blog", href: "/blog" },
+              { label: post.title },
+            ]}
+          />
 
           <header className="mt-8">
             <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
@@ -51,9 +69,12 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-slate-600 sm:text-xl">{post.excerpt}</p>
 
-            <div className="mt-8 flex flex-col gap-5 border-y border-slate-200 py-5 sm:flex-row sm:items-center sm:justify-between">
-              <BlogAuthorBlock post={post} />
-              <BlogPostMeta post={post} />
+            <div className="mt-8 flex flex-col gap-5 border-y border-slate-200 py-5 lg:flex-row lg:items-center lg:justify-between">
+              <BlogAuthorBlock post={post} size="article" />
+              <div className="flex flex-col gap-4 sm:items-end">
+                <BlogPostMeta post={post} />
+                <BlogShareLinks title={post.title} slug={post.slug} />
+              </div>
             </div>
           </header>
 
@@ -68,6 +89,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         <div className="mx-auto mt-12 grid max-w-6xl gap-10 xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-14">
           <article className="min-w-0 max-w-3xl xl:max-w-none">
             <BlogArticleContent post={post} />
+            <BlogAboutAuthor />
             <BlogCta />
             <RelatedPosts posts={relatedPosts} />
           </article>

@@ -1,4 +1,5 @@
 import type { BlogPost } from "@/lib/blog/types";
+import { BLOG_AUTHOR } from "@/lib/blog/author";
 
 export function formatPublishedDate(isoDate: string): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -16,8 +17,8 @@ export function getCategoryLabel(post: BlogPost): string {
   return post.categoryLabel ?? post.category;
 }
 
-export function getAuthorRole(post: BlogPost): string {
-  return post.authorRole ?? "Founder of Arrexia";
+export function getAuthorRole(post?: Pick<BlogPost, "authorRole">): string {
+  return post?.authorRole ?? BLOG_AUTHOR.role;
 }
 
 export function slugifyHeading(text: string): string {

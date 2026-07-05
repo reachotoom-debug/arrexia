@@ -4,6 +4,7 @@ import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 const PRODUCT_LINKS = [
   { href: "/#features", label: "Features" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/tools", label: "Tools" },
   { href: "/blog", label: "Blog" },
 ] as const;
 

@@ -3,13 +3,20 @@ import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 import { trialHref } from "@/lib/billing/plans";
 import { Button } from "@/components/ui/button";
 
-const NAV_LINKS = [
+type NavLink = {
+  href: string;
+  label: string;
+  badge?: string;
+};
+
+const NAV_LINKS: NavLink[] = [
   { href: "/#features", label: "Features" },
   { href: "/#how-it-works", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/#faq", label: "FAQ" },
+  { href: "/tools", label: "Tools", badge: "New" },
   { href: "/blog", label: "Blog" },
-] as const;
+  { href: "/#faq", label: "FAQ" },
+];
 
 export function PublicNavbar() {
   return (
@@ -39,15 +46,20 @@ export function PublicNavbar() {
 
         <nav
           aria-label="Primary"
-          className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-medium text-slate-600 lg:flex-1"
+          className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm font-medium text-slate-600 lg:flex-1 lg:gap-x-6"
         >
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="transition-colors hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 transition-colors hover:text-slate-900"
             >
               {link.label}
+              {link.badge ? (
+                <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                  {link.badge}
+                </span>
+              ) : null}
             </Link>
           ))}
         </nav>

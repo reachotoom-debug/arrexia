@@ -19,4 +19,4 @@ export const BLOG_COVER_HEIGHT = 630;
 export const BLOG_INLINE_WIDTH = 1200;
 export const BLOG_INLINE_HEIGHT = 675;
 
-export const DEFAULT_AUTHOR_AVATAR = "/brand/arrexia-icon.png";
+export const DEFAULT_AUTHOR_AVATAR = "/authors/mohammed-otoom.png";
