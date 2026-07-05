@@ -12,29 +12,24 @@ export const metadata = buildPublicPageMetadata({
   path: "/contact",
 });
 
+const HELLO_EMAIL = "hello@arrexia.app";
 const SUPPORT_EMAIL = "support@arrexia.app";
 
 const FOUNDER_LINKEDIN = "https://www.linkedin.com/in/mohammed-otoom-84501561";
 const FOUNDER_X = "https://x.com/Otoomai";
 
-const CONTACT_CARDS = [
+const CONTACT_CHANNELS = [
   {
-    title: "Support",
+    title: "General inquiries, partnerships, and sales",
+    description: "Product questions, partnerships, press, and business opportunities.",
+    email: HELLO_EMAIL,
+    subject: "General inquiry",
+  },
+  {
+    title: "Technical support",
     description: "Help with your workspace, imports, reminders, invoices, or setup.",
     email: SUPPORT_EMAIL,
     subject: "Support request",
-  },
-  {
-    title: "Business inquiries",
-    description: "Partnerships, press, or general business questions.",
-    email: SUPPORT_EMAIL,
-    subject: "Business inquiry",
-  },
-  {
-    title: "Product questions",
-    description: "Learn how Arrexia fits your invoicing and collections workflow.",
-    email: SUPPORT_EMAIL,
-    subject: "Product question",
   },
 ] as const;
 
@@ -49,35 +44,27 @@ export default function ContactPage() {
           <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
             Questions, feedback, or business inquiries? We&apos;d love to hear from you.
           </p>
-          <p className="mt-6">
-            <a
-              href={`mailto:${SUPPORT_EMAIL}`}
-              className="text-lg font-semibold text-blue-600 hover:text-blue-700"
-            >
-              {SUPPORT_EMAIL}
-            </a>
-          </p>
           <p className="mt-3 text-sm text-slate-500">
             We usually respond within 1–2 business days.
           </p>
         </div>
 
-        <div className="mt-12 grid gap-5 sm:grid-cols-3">
-          {CONTACT_CARDS.map((card) => (
+        <div className="mt-12 grid gap-5 sm:grid-cols-2">
+          {CONTACT_CHANNELS.map((channel) => (
             <article
-              key={card.title}
+              key={channel.title}
               className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                 <Mail className="h-5 w-5" aria-hidden="true" />
               </div>
-              <h2 className="mt-4 text-base font-semibold text-slate-900">{card.title}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">{card.description}</p>
+              <h2 className="mt-4 text-base font-semibold text-slate-900">{channel.title}</h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">{channel.description}</p>
               <a
-                href={`mailto:${card.email}?subject=${encodeURIComponent(card.subject)}`}
-                className="mt-4 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
+                href={`mailto:${channel.email}?subject=${encodeURIComponent(channel.subject)}`}
+                className="mt-4 inline-block text-sm font-semibold text-blue-600 hover:text-blue-700"
               >
-                Email us
+                {channel.email}
               </a>
             </article>
           ))}

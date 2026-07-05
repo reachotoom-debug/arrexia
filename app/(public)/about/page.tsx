@@ -75,13 +75,22 @@ export default function AboutPage() {
         </section>
 
         <section className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-          <h2 className="text-2xl font-semibold text-slate-900">Founder note</h2>
-          <p className="mt-4 text-base leading-relaxed text-slate-600">
-            Arrexia is built by Mohammed Otoom, a founder and operator with decades of experience
-            building businesses and software products across SaaS, fintech, education, and business
-            operations. The product reflects practical lessons from running teams that depend on timely
-            payments — not abstract theory.
-          </p>
+          <h2 className="text-2xl font-semibold text-slate-900">Founder Note</h2>
+          <div className="mt-4 space-y-4 text-base leading-relaxed text-slate-600">
+            <p>
+              Arrexia was built by Mohammed Otoom, a founder, CEO, COO, and product strategist with
+              more than three decades of experience building businesses, high-tech companies, and
+              software products across SaaS, fintech, education, eCommerce, and enterprise technology.
+            </p>
+            <p>
+              Throughout his career, he has helped companies transform ideas into commercial products,
+              improve operational performance, and scale through disciplined execution.
+            </p>
+            <p>
+              Arrexia reflects practical lessons learned from working with businesses that rely on
+              healthy cash flow and timely customer payments—not abstract theory.
+            </p>
+          </div>
         </section>
 
         <section className="border-y border-slate-200 bg-white">

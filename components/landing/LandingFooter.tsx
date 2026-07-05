@@ -28,20 +28,26 @@ const SOCIAL_LINKS = [
 ] as const;
 
 export function LandingFooter() {
+  const currentYear = new Date().getFullYear();
+
   return (
-    <footer className="border-t border-slate-200 bg-white py-12">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
-        <div className="md:col-span-2 lg:col-span-1">
-          <Link href="/" className="inline-flex shrink-0 transition-opacity hover:opacity-90">
-            <ArrexiaLogo variant="light" height={48} className="h-11 w-auto sm:h-12" />
-          </Link>
-          <p className="mt-3 text-sm font-medium text-blue-600">Cash Flow. Clarity. Confidence.</p>
-          <Link
-            href="/"
-            className="mt-2 inline-block text-sm text-slate-500 transition-colors hover:text-blue-600"
-          >
-            arrexia.app
-          </Link>
+    <footer className="border-t border-slate-200 bg-white py-14 sm:py-16">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:gap-12">
+        <div className="sm:col-span-2 lg:col-span-1">
+          <div className="flex max-w-xs flex-col items-start gap-1">
+            <Link href="/" className="inline-flex shrink-0 items-center leading-none transition-opacity hover:opacity-90">
+              <ArrexiaLogo variant="light" height={64} className="h-14 w-auto sm:h-16" />
+            </Link>
+            <p className="text-sm font-medium leading-snug text-blue-600">
+              Cash Flow. Clarity. Confidence.
+            </p>
+            <Link
+              href="/"
+              className="text-sm leading-snug text-slate-500 transition-colors hover:text-blue-600"
+            >
+              arrexia.app
+            </Link>
+          </div>
         </div>
 
         <div>
@@ -76,7 +82,7 @@ export function LandingFooter() {
           </ul>
         </div>
 
-        <div>
+        <div className="sm:col-span-2 lg:col-span-1">
           <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Social</p>
           <ul className="mt-4 space-y-2">
             {SOCIAL_LINKS.map((link) => (
@@ -95,8 +101,10 @@ export function LandingFooter() {
         </div>
       </div>
 
-      <div className="mx-auto mt-10 max-w-7xl border-t border-slate-200 px-4 pt-6 sm:px-6">
-        <p className="text-center text-sm text-slate-500">© 2026 Arrexia. All rights reserved.</p>
+      <div className="mx-auto mt-12 max-w-7xl border-t border-slate-200 px-4 pt-6 sm:px-6">
+        <p className="text-center text-sm text-slate-500">
+          © {currentYear} Arrexia. All rights reserved.
+        </p>
       </div>
     </footer>
   );

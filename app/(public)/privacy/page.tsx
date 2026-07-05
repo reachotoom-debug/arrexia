@@ -186,7 +186,6 @@ export default function PrivacyPage() {
               ),
             },
           ]}
-          disclaimer="This policy is provided for general informational purposes and should be reviewed by legal counsel before commercial use."
         />
       </main>
     </PublicPageShell>

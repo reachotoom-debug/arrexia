@@ -226,7 +226,6 @@ export default function TermsPage() {
               ),
             },
           ]}
-          disclaimer="These terms are a practical starting point and should be reviewed by legal counsel before commercial use."
         />
       </main>
     </PublicPageShell>
