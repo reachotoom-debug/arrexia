@@ -1,16 +1,21 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BlogArticleContent } from "@/components/blog/BlogArticleContent";
+import { BlogCta } from "@/components/blog/BlogCta";
+import { RelatedPosts } from "@/components/blog/RelatedPosts";
+import { formatPublishedDate } from "@/components/blog/BlogPostCard";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
-import {
-  buildBlogPostMetadata,
-  buildBlogPostStructuredData,
-  getBlogPost,
-} from "@/lib/seo/blog";
+import { getAllBlogPosts, getBlogPost, getRelatedPosts } from "@/lib/blog";
+import { buildBlogPostMetadata, buildBlogPostStructuredData } from "@/lib/seo/blog";
 
 type BlogPostPageProps = {
   params: Promise<{ slug: string }>;
 };
+
+export function generateStaticParams() {
+  return getAllBlogPosts().map((post) => ({ slug: post.slug }));
+}
 
 export async function generateMetadata({ params }: BlogPostPageProps) {
   const { slug } = await params;
@@ -26,6 +31,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   }
 
   const structuredData = buildBlogPostStructuredData(slug);
+  const relatedPosts = getRelatedPosts(slug);
 
   return (
     <PublicPageShell>
@@ -36,14 +42,22 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             ← Back to blog
           </Link>
         </p>
+
         <article className="mt-6">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{post.category}</span>
+            <span>{formatPublishedDate(post.publishedAt)}</span>
+            <span>By {post.author}</span>
+          </div>
+
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
             {post.title}
           </h1>
-          <p className="mt-4 text-lg leading-relaxed text-slate-600">{post.description}</p>
-          <p className="mt-8 text-sm text-slate-500">
-            Full article content will appear here when blog publishing is enabled.
-          </p>
+          <p className="mt-4 text-lg leading-relaxed text-slate-600">{post.excerpt}</p>
+
+          <BlogArticleContent sections={post.sections} />
+          <BlogCta />
+          <RelatedPosts posts={relatedPosts} />
         </article>
       </main>
     </PublicPageShell>

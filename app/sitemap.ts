@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getAllBlogPosts } from "@/lib/seo/blog";
+import { getAllBlogPosts } from "@/lib/blog";
 import { PUBLIC_SITEMAP_PAGE_IDS, SEO_PAGES } from "@/lib/seo/pages";
 import { SEO_SITE, absoluteUrl } from "@/lib/seo/site";
 

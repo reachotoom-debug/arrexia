@@ -116,3 +116,42 @@ export function buildBlogPostingSchema(input: {
 export function buildHomeStructuredData() {
   return [buildOrganizationSchema(), buildWebsiteSchema(), buildSoftwareApplicationSchema()];
 }
+
+export function buildBreadcrumbSchema(items: { name: string; path: string }[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: absoluteUrl(item.path),
+    })),
+  };
+}
+
+export function buildWebApplicationSchema(input: {
+  name: string;
+  description: string;
+  path: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: input.name,
+    description: input.description,
+    url: absoluteUrl(input.path),
+    applicationCategory: "FinanceApplication",
+    operatingSystem: "Web",
+    offers: {
+      "@type": "Offer",
+      price: 0,
+      priceCurrency: "USD",
+    },
+    provider: {
+      "@type": "Organization",
+      name: SEO_SITE.name,
+      url: SEO_SITE.url,
+    },
+  };
+}

@@ -9,7 +9,9 @@ export type SeoPageId =
   | "terms"
   | "cookies"
   | "security"
-  | "blog";
+  | "blog"
+  | "tools"
+  | "toolsDsoCalculator";
 
 export type SeoPageConfig = {
   path: string;
@@ -99,6 +101,23 @@ export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
     priority: 0.7,
     changeFrequency: "weekly",
   },
+  tools: {
+    path: "/tools",
+    title: "Free Accounts Receivable Tools | Arrexia",
+    description:
+      "Free accounts receivable tools from Arrexia to measure DSO, understand overdue invoices, and improve cash flow management.",
+    priority: 0.75,
+    changeFrequency: "monthly",
+  },
+  toolsDsoCalculator: {
+    path: "/tools/dso-calculator",
+    title: "DSO Calculator | Days Sales Outstanding Tool",
+    description:
+      "Calculate days sales outstanding (DSO) with net credit sales, average accounts receivable, and period length. Free DSO calculator from Arrexia.",
+    keywords: ["DSO calculator", "days sales outstanding", "cash flow management"],
+    priority: 0.7,
+    changeFrequency: "monthly",
+  },
 } as const;
 
 export const PUBLIC_SITEMAP_PAGE_IDS: SeoPageId[] = [
@@ -111,4 +130,6 @@ export const PUBLIC_SITEMAP_PAGE_IDS: SeoPageId[] = [
   "cookies",
   "security",
   "blog",
+  "tools",
+  "toolsDsoCalculator",
 ];

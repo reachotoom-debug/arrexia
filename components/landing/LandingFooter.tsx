@@ -9,6 +9,7 @@ const PRODUCT_LINKS = [
 
 const RESOURCE_LINKS = [
   { href: "/about", label: "About" },
+  { href: "/tools", label: "Free Tools" },
   { href: "/security", label: "Security" },
   { href: "/privacy", label: "Privacy Policy" },
   { href: "/terms", label: "Terms of Service" },

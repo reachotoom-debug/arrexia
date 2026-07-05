@@ -24,6 +24,10 @@ export function LandingFinalCTA() {
             <Link href="/blog" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
               blog
             </Link>
+            , try our{" "}
+            <Link href="/tools" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
+              free tools
+            </Link>
             , or{" "}
             <Link href="/contact" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
               contact us
