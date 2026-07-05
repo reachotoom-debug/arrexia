@@ -33,11 +33,11 @@ export function LandingFooter() {
   return (
     <footer className="border-t border-slate-200 bg-white py-14 sm:py-16">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:gap-12">
-        <div className="sm:col-span-2 lg:col-span-1">
-          <div className="flex max-w-xs flex-col items-center text-center sm:items-start sm:text-left">
+        <div className="self-start sm:col-span-2 lg:col-span-1">
+          <div className="flex w-full max-w-xs flex-col items-center text-center sm:items-start sm:text-left">
             <Link
               href="/"
-              className="block shrink-0 leading-[0] transition-opacity hover:opacity-90"
+              className="-mb-1.5 block shrink-0 leading-[0] transition-opacity hover:opacity-90"
             >
               <ArrexiaLogo
                 variant="light"
@@ -45,15 +45,18 @@ export function LandingFooter() {
                 className="block h-14 w-auto sm:h-16"
               />
             </Link>
-            <p className="mt-2 text-sm font-medium leading-none text-blue-600">
+            <p className="mt-2 text-sm font-medium leading-snug text-slate-700">
               Cash Flow. Clarity. Confidence.
             </p>
             <a
               href="https://arrexia.app"
-              className="mt-3.5 text-sm font-normal leading-none text-slate-500 transition-colors hover:text-blue-600"
+              className="mt-3 text-xs font-normal leading-none text-slate-500 transition-colors hover:text-slate-600"
             >
               arrexia.app
             </a>
+            <p className="mt-3 text-xs font-normal leading-snug text-slate-400">
+              Built for growing businesses.
+            </p>
           </div>
         </div>
 
