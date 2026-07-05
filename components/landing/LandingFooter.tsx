@@ -34,19 +34,26 @@ export function LandingFooter() {
     <footer className="border-t border-slate-200 bg-white py-14 sm:py-16">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:gap-12">
         <div className="sm:col-span-2 lg:col-span-1">
-          <div className="flex max-w-xs flex-col items-start gap-1">
-            <Link href="/" className="inline-flex shrink-0 items-center leading-none transition-opacity hover:opacity-90">
-              <ArrexiaLogo variant="light" height={64} className="h-14 w-auto sm:h-16" />
-            </Link>
-            <p className="text-sm font-medium leading-snug text-blue-600">
-              Cash Flow. Clarity. Confidence.
-            </p>
+          <div className="flex max-w-xs flex-col items-center text-center sm:items-start sm:text-left">
             <Link
               href="/"
-              className="text-sm leading-snug text-slate-500 transition-colors hover:text-blue-600"
+              className="block shrink-0 leading-[0] transition-opacity hover:opacity-90"
+            >
+              <ArrexiaLogo
+                variant="light"
+                height={64}
+                className="block h-14 w-auto sm:h-16"
+              />
+            </Link>
+            <p className="mt-2 text-sm font-medium leading-none text-blue-600">
+              Cash Flow. Clarity. Confidence.
+            </p>
+            <a
+              href="https://arrexia.app"
+              className="mt-3.5 text-sm font-normal leading-none text-slate-500 transition-colors hover:text-blue-600"
             >
               arrexia.app
-            </Link>
+            </a>
           </div>
         </div>
 
