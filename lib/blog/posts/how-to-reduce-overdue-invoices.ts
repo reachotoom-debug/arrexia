@@ -1,4 +1,5 @@
 import type { BlogPost } from "@/lib/blog/types";
+import { BLOG_IMAGES } from "@/lib/blog/assets";
 
 export const howToReduceOverdueInvoices: BlogPost = {
   slug: "how-to-reduce-overdue-invoices",
@@ -6,8 +7,15 @@ export const howToReduceOverdueInvoices: BlogPost = {
   excerpt:
     "A practical framework for overdue invoice management: visibility, timing, escalation, and follow-up workflows that protect cash flow and client trust.",
   category: "Collections",
+  categoryLabel: "Collections",
   author: "Mohammed Otoom",
+  authorRole: "Founder of Arrexia",
   publishedAt: "2026-06-10",
+  readTimeMinutes: 8,
+  coverImage: BLOG_IMAGES.overdueInvoices.cover,
+  coverImageAlt: "Dashboard view of overdue invoices and aging balances for collections follow-up",
+  inArticleImage: BLOG_IMAGES.overdueInvoices.inline,
+  inArticleImageAlt: "Finance team reviewing overdue invoice list and payment reminder schedule",
   seoTitle: "How to Reduce Overdue Invoices | Overdue Invoice Management Guide",
   seoDescription:
     "Learn practical overdue invoice management tactics—tracking, reminder timing, escalation paths, and cash flow visibility—to get paid faster.",
@@ -30,6 +38,11 @@ export const howToReduceOverdueInvoices: BlogPost = {
       type: "heading",
       level: 2,
       text: "Define reminder timing before invoices go overdue",
+    },
+    {
+      type: "callout",
+      title: "Quick win",
+      text: "Teams that define reminder timing upfront typically see fewer awkward conversations later—because follow-up feels expected, not personal.",
     },
     {
       type: "paragraph",

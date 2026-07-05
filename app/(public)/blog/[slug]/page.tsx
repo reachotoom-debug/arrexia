@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { BlogArticleContent } from "@/components/blog/BlogArticleContent";
+import { BlogArticleContent, BlogTableOfContents } from "@/components/blog/BlogArticleContent";
+import { BlogAuthorBlock, BlogPostMeta } from "@/components/blog/BlogPostMeta";
+import { BlogBreadcrumb } from "@/components/blog/BlogBreadcrumb";
+import { BlogCoverImage } from "@/components/blog/BlogImage";
 import { BlogCta } from "@/components/blog/BlogCta";
 import { RelatedPosts } from "@/components/blog/RelatedPosts";
-import { formatPublishedDate } from "@/components/blog/BlogPostCard";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { getAllBlogPosts, getBlogPost, getRelatedPosts } from "@/lib/blog";
+import { getCategoryLabel } from "@/lib/blog/format";
 import { buildBlogPostMetadata, buildBlogPostStructuredData } from "@/lib/seo/blog";
 
 type BlogPostPageProps = {
@@ -36,29 +38,42 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   return (
     <PublicPageShell>
       {structuredData ? <JsonLd data={structuredData} /> : null}
-      <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
-        <p className="text-sm font-medium text-blue-600">
-          <Link href="/blog" className="hover:text-blue-700">
-            ← Back to blog
-          </Link>
-        </p>
+      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
+        <div className="mx-auto max-w-3xl">
+          <BlogBreadcrumb postTitle={post.title} />
 
-        <article className="mt-6">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{post.category}</span>
-            <span>{formatPublishedDate(post.publishedAt)}</span>
-            <span>By {post.author}</span>
-          </div>
+          <header className="mt-8">
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+              {getCategoryLabel(post)}
+            </span>
+            <h1 className="mt-5 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl lg:text-5xl lg:leading-tight">
+              {post.title}
+            </h1>
+            <p className="mt-5 text-lg leading-relaxed text-slate-600 sm:text-xl">{post.excerpt}</p>
 
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            {post.title}
-          </h1>
-          <p className="mt-4 text-lg leading-relaxed text-slate-600">{post.excerpt}</p>
+            <div className="mt-8 flex flex-col gap-5 border-y border-slate-200 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <BlogAuthorBlock post={post} />
+              <BlogPostMeta post={post} />
+            </div>
+          </header>
 
-          <BlogArticleContent sections={post.sections} />
-          <BlogCta />
-          <RelatedPosts posts={relatedPosts} />
-        </article>
+          <BlogCoverImage
+            src={post.coverImage}
+            alt={post.coverImageAlt}
+            priority
+            className="mt-8 aspect-[16/9] w-full"
+          />
+        </div>
+
+        <div className="mx-auto mt-12 grid max-w-6xl gap-10 xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-14">
+          <article className="min-w-0 max-w-3xl xl:max-w-none">
+            <BlogArticleContent post={post} />
+            <BlogCta />
+            <RelatedPosts posts={relatedPosts} />
+          </article>
+
+          <BlogTableOfContents post={post} />
+        </div>
       </main>
     </PublicPageShell>
   );

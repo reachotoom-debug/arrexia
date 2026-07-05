@@ -4,4 +4,5 @@ export {
   getAllBlogPosts,
   getBlogPost,
   getRelatedPosts,
+  getFeaturedBlogPost,
 } from "@/lib/blog/posts";

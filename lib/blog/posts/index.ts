@@ -19,6 +19,12 @@ export function getAllBlogPosts(): BlogPost[] {
   );
 }
 
+export function getFeaturedBlogPost(): BlogPost | undefined {
+  const featured = BLOG_POSTS.find((post) => post.featured);
+  if (featured) return featured;
+  return getAllBlogPosts()[0];
+}
+
 export function getRelatedPosts(slug: string, limit = 2): BlogPost[] {
   const post = getBlogPost(slug);
   if (!post) return [];

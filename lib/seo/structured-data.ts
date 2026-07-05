@@ -85,6 +85,7 @@ export function buildBlogPostingSchema(input: {
   slug: string;
   publishedAt: string;
   modifiedAt?: string;
+  image?: string;
 }) {
   const url = absoluteUrl(`/blog/${input.slug}`);
 
@@ -97,6 +98,7 @@ export function buildBlogPostingSchema(input: {
     mainEntityOfPage: url,
     datePublished: input.publishedAt,
     dateModified: input.modifiedAt ?? input.publishedAt,
+    image: input.image ? absoluteAssetUrl(input.image) : absoluteAssetUrl(SEO_ASSETS.ogImage),
     author: {
       "@type": "Person",
       name: SEO_SITE.founder.name,

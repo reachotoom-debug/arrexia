@@ -1,4 +1,5 @@
 import type { BlogPost } from "@/lib/blog/types";
+import { BLOG_IMAGES } from "@/lib/blog/assets";
 
 export const invoiceReminderEmailBestPractices: BlogPost = {
   slug: "invoice-reminder-email-best-practices",
@@ -6,8 +7,15 @@ export const invoiceReminderEmailBestPractices: BlogPost = {
   excerpt:
     "Write invoice reminder emails that are clear, professional, and effective—without sounding aggressive or damaging long-term client relationships.",
   category: "Reminders",
+  categoryLabel: "Payment Reminders",
   author: "Mohammed Otoom",
+  authorRole: "Founder of Arrexia",
   publishedAt: "2026-06-18",
+  readTimeMinutes: 7,
+  coverImage: BLOG_IMAGES.reminderEmails.cover,
+  coverImageAlt: "Professional invoice reminder email template on a laptop screen",
+  inArticleImage: BLOG_IMAGES.reminderEmails.inline,
+  inArticleImageAlt: "Payment reminder workflow with email calendar and invoice details",
   seoTitle: "Invoice Reminder Email Best Practices | Payment Reminder Templates",
   seoDescription:
     "Improve invoice reminder emails with proven structure, timing, tone, and follow-up practices for overdue invoice management and faster collections.",

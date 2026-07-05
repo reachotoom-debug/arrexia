@@ -1,4 +1,5 @@
 import type { BlogPost } from "@/lib/blog/types";
+import { BLOG_IMAGES } from "@/lib/blog/assets";
 
 export const whatIsAccountsReceivableAutomation: BlogPost = {
   slug: "what-is-accounts-receivable-automation",
@@ -6,8 +7,16 @@ export const whatIsAccountsReceivableAutomation: BlogPost = {
   excerpt:
     "Understand accounts receivable automation, what to automate first, and how invoice tracking and payment reminders improve cash flow without adding complexity.",
   category: "Guides",
+  categoryLabel: "Accounts Receivable",
   author: "Mohammed Otoom",
+  authorRole: "Founder of Arrexia",
   publishedAt: "2026-06-25",
+  readTimeMinutes: 6,
+  featured: true,
+  coverImage: BLOG_IMAGES.arAutomation.cover,
+  coverImageAlt: "Accounts receivable automation dashboard with invoice tracking and cash flow charts",
+  inArticleImage: BLOG_IMAGES.arAutomation.inline,
+  inArticleImageAlt: "Automated invoice reminder and collections workflow overview",
   seoTitle: "What Is Accounts Receivable Automation? | AR Software Guide",
   seoDescription:
     "Learn what accounts receivable automation means, which workflows to automate first, and how invoice reminder software supports cash flow management.",
