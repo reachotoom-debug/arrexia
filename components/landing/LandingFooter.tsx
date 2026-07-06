@@ -29,6 +29,9 @@ const SOCIAL_LINKS = [
   },
 ] as const;
 
+const FOOTER_LINK_CLASS =
+  "inline-flex min-h-11 items-center py-1 text-sm text-slate-600 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2";
+
 export function LandingFooter() {
   const currentYear = new Date().getFullYear();
 
@@ -39,7 +42,7 @@ export function LandingFooter() {
           <div className="flex w-full max-w-xs flex-col items-center text-center sm:items-start sm:text-left">
             <Link
               href="/"
-              className="-mb-1.5 block shrink-0 leading-[0] transition-opacity hover:opacity-90"
+              className="-mb-1.5 block shrink-0 rounded-md leading-[0] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
             >
               <ArrexiaLogo
                 variant="light"
@@ -52,25 +55,22 @@ export function LandingFooter() {
             </p>
             <a
               href="https://arrexia.app"
-              className="mt-3 text-xs font-normal leading-none text-slate-500 transition-colors hover:text-slate-600"
+              className={`mt-3 ${FOOTER_LINK_CLASS} text-slate-600`}
             >
               arrexia.app
             </a>
-            <p className="mt-3 text-xs font-normal leading-snug text-slate-400">
+            <p className="mt-3 text-xs font-normal leading-snug text-slate-500">
               Built for growing businesses.
             </p>
           </div>
         </div>
 
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Product</p>
-          <ul className="mt-4 space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Product</p>
+          <ul className="mt-3 space-y-1">
             {PRODUCT_LINKS.map((link) => (
               <li key={link.label}>
-                <Link
-                  href={link.href}
-                  className="text-sm text-slate-600 transition-colors hover:text-slate-900"
-                >
+                <Link href={link.href} className={FOOTER_LINK_CLASS}>
                   {link.label}
                 </Link>
               </li>
@@ -79,14 +79,11 @@ export function LandingFooter() {
         </div>
 
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Resources</p>
-          <ul className="mt-4 space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Resources</p>
+          <ul className="mt-3 space-y-1">
             {RESOURCE_LINKS.map((link) => (
               <li key={link.label}>
-                <Link
-                  href={link.href}
-                  className="text-sm text-slate-600 transition-colors hover:text-slate-900"
-                >
+                <Link href={link.href} className={FOOTER_LINK_CLASS}>
                   {link.label}
                 </Link>
               </li>
@@ -95,15 +92,15 @@ export function LandingFooter() {
         </div>
 
         <div className="sm:col-span-2 lg:col-span-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Social</p>
-          <ul className="mt-4 space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Social</p>
+          <ul className="mt-3 space-y-1">
             {SOCIAL_LINKS.map((link) => (
               <li key={link.label}>
                 <a
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-slate-600 transition-colors hover:text-slate-900"
+                  className={FOOTER_LINK_CLASS}
                 >
                   {link.label}
                 </a>
@@ -114,7 +111,7 @@ export function LandingFooter() {
       </div>
 
       <div className="mx-auto mt-12 max-w-7xl border-t border-slate-200 px-4 pt-6 sm:px-6">
-        <p className="text-center text-sm text-slate-500">
+        <p className="text-center text-sm text-slate-600">
           © {currentYear} Arrexia. All rights reserved.
         </p>
       </div>

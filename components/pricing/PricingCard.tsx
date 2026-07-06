@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FeatureItem, FeatureList } from "./FeatureList";
 import Link from "next/link";
 
@@ -47,9 +47,9 @@ export function PricingCard({
     >
       <CardHeader className="space-y-4 p-7 lg:space-y-5 lg:p-9">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <CardTitle className="text-2xl font-semibold text-slate-900 lg:text-3xl">
+          <h3 className="text-2xl font-semibold text-slate-900 lg:text-3xl">
             {name}
-          </CardTitle>
+          </h3>
           <div className="flex flex-wrap justify-end gap-2">
             {highlight ? (
               <Badge className="bg-blue-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
@@ -70,7 +70,7 @@ export function PricingCard({
               {price}
             </span>
             {period ? (
-              <span className="text-base text-slate-500 lg:text-lg">{period}</span>
+              <span className="text-base text-slate-600 lg:text-lg">{period}</span>
             ) : null}
           </div>
           {equivalentSubtext ? (
@@ -111,13 +111,13 @@ export function PricingCard({
           )}
 
           {showTrialMicrocopy ? (
-            <p className="text-center text-xs text-slate-500">
+            <p className="text-center text-xs text-slate-600">
               14-day free trial • No credit card required
             </p>
           ) : null}
 
           {footnote ? (
-            <p className="text-center text-xs text-slate-500 sm:text-sm">{footnote}</p>
+            <p className="text-center text-xs text-slate-600 sm:text-sm">{footnote}</p>
           ) : null}
         </div>
       </CardContent>

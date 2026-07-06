@@ -36,7 +36,7 @@ export function LandingHowItWorks() {
           <p className="mt-4 text-lg text-slate-600">
             A simple flow from invoice tracking to payment reminders and cash collection — without
             the spreadsheet chaos. Questions? Visit our{" "}
-            <Link href="/contact" className="font-medium text-blue-600 hover:text-blue-700">
+            <Link href="/contact" className="font-medium text-blue-700 hover:text-blue-800">
               contact page
             </Link>
             .

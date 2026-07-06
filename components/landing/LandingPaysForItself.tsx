@@ -1,15 +1,15 @@
 const STATEMENTS = [
   <>
-    Recover just <span className="font-semibold text-cyan-300">one overdue invoice</span> and the
+    Recover just <span className="font-semibold text-cyan-200">one overdue invoice</span> and the
     plan can cover itself.
   </>,
   <>Stop leaving money on the table.</>,
   <>
-    Strong follow-up. <span className="font-semibold text-cyan-300">Faster payments</span>.
+    Strong follow-up. <span className="font-semibold text-cyan-200">Faster payments</span>.
     Healthier cash flow.
   </>,
   <>
-    <span className="font-semibold text-cyan-300">No setup fees</span>. No surprises.
+    <span className="font-semibold text-cyan-200">No setup fees</span>. No surprises.
   </>,
 ] as const;
 
@@ -20,7 +20,7 @@ export function LandingPaysForItself() {
         <div className="text-center">
           <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             Arrexia{" "}
-            <span className="bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-300 to-cyan-200 bg-clip-text text-transparent">
               pays for itself.
             </span>
           </h2>
@@ -30,7 +30,7 @@ export function LandingPaysForItself() {
           {STATEMENTS.map((statement, index) => (
             <li
               key={index}
-              className="rounded-xl border border-white/10 bg-white/5 px-5 py-4 text-base leading-relaxed text-slate-200 backdrop-blur-sm"
+              className="rounded-xl border border-white/10 bg-white/5 px-5 py-4 text-base leading-relaxed text-slate-100 backdrop-blur-sm"
             >
               {statement}
             </li>

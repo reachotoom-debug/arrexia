@@ -1,14 +1,40 @@
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { PricingFAQ } from "@/components/pricing/PricingFAQ";
 import { PricingHero } from "@/components/pricing/PricingHero";
-import { PricingPlansSection } from "@/components/pricing/PricingPlansSection";
-import { PricingROI } from "@/components/pricing/PricingROI";
-import { PricingWhy } from "@/components/pricing/PricingWhy";
 import { trialHref } from "@/components/pricing/pricingPlans";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
-import { LandingFooter } from "@/components/landing/LandingFooter";
 import { Button } from "@/components/ui/button";
 import { buildPageMetadata } from "@/lib/seo/metadata";
+
+const LandingFooter = dynamic(() =>
+  import("@/components/landing/LandingFooter").then((module) => ({
+    default: module.LandingFooter,
+  })),
+);
+
+const PricingWhy = dynamic(() =>
+  import("@/components/pricing/PricingWhy").then((module) => ({
+    default: module.PricingWhy,
+  })),
+);
+
+const PricingPlansSection = dynamic(() =>
+  import("@/components/pricing/PricingPlansSection").then((module) => ({
+    default: module.PricingPlansSection,
+  })),
+);
+
+const PricingROI = dynamic(() =>
+  import("@/components/pricing/PricingROI").then((module) => ({
+    default: module.PricingROI,
+  })),
+);
+
+const PricingFAQ = dynamic(() =>
+  import("@/components/pricing/PricingFAQ").then((module) => ({
+    default: module.PricingFAQ,
+  })),
+);
 
 export const metadata = buildPageMetadata("pricing");
 

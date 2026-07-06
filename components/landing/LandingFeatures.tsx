@@ -65,11 +65,11 @@ export function LandingFeatures() {
           <p className="mt-4 text-lg text-slate-600">
             Invoice collection, accounts receivable automation, and cash flow visibility — built for
             teams that want clarity without accounting complexity. See{" "}
-            <Link href="/pricing" className="font-medium text-blue-600 hover:text-blue-700">
+            <Link href="/pricing" className="font-medium text-blue-700 hover:text-blue-800">
               pricing
             </Link>{" "}
             or read about{" "}
-            <Link href="/security" className="font-medium text-blue-600 hover:text-blue-700">
+            <Link href="/security" className="font-medium text-blue-700 hover:text-blue-800">
               security
             </Link>
             .

@@ -31,7 +31,7 @@ export function LandingAudience() {
     <section className="border-y border-slate-200 bg-slate-50 py-16 sm:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
             Built for businesses that need better cash flow
           </p>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">

@@ -9,7 +9,7 @@ export function PricingHero({ trialHref }: PricingHeroProps) {
   return (
     <section className="relative text-center">
       <div className="mx-auto max-w-4xl space-y-6 lg:space-y-8">
-        <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-sm font-semibold tracking-wide text-blue-700">
+        <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-sm font-semibold tracking-wide text-blue-800">
           Cash Solved.
         </span>
 
@@ -41,7 +41,7 @@ export function PricingHero({ trialHref }: PricingHeroProps) {
               </Button>
             </Link>
           </div>
-          <p className="text-sm text-slate-500">No credit card required</p>
+          <p className="text-sm text-slate-600">No credit card required</p>
           <p className="max-w-xl text-sm text-slate-600 sm:text-base">
             Recover overdue invoices. Automate reminders. Get paid faster.
           </p>

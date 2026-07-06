@@ -20,10 +20,10 @@ export function PricingBillingToggle({ value, onChange }: PricingBillingTogglePr
           role="tab"
           aria-selected={value === "monthly"}
           onClick={() => onChange("monthly")}
-          className={`rounded-full px-5 py-2.5 text-sm font-medium transition-colors sm:px-6 ${
+          className={`min-h-11 rounded-full px-5 py-2.5 text-sm font-medium transition-colors sm:px-6 ${
             value === "monthly"
               ? "bg-white text-slate-900 shadow-sm"
-              : "text-slate-600 hover:text-slate-900"
+              : "text-slate-700 hover:text-slate-900"
           }`}
         >
           Monthly
@@ -33,17 +33,17 @@ export function PricingBillingToggle({ value, onChange }: PricingBillingTogglePr
           role="tab"
           aria-selected={value === "annual"}
           onClick={() => onChange("annual")}
-          className={`rounded-full px-5 py-2.5 text-sm font-medium transition-colors sm:px-6 ${
+          className={`min-h-11 rounded-full px-5 py-2.5 text-sm font-medium transition-colors sm:px-6 ${
             value === "annual"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-900"
+              ? "bg-blue-700 text-white shadow-sm"
+              : "text-slate-700 hover:text-slate-900"
           }`}
         >
           <span className="flex flex-col items-center gap-0.5 sm:flex-row sm:gap-2">
             <span>Annual</span>
             <span
               className={`text-xs font-semibold ${
-                value === "annual" ? "text-blue-100" : "text-blue-600"
+                value === "annual" ? "text-blue-50" : "text-blue-700"
               }`}
             >
               Save 2 months

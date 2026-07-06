@@ -25,7 +25,7 @@ export function LandingValueStrip() {
           <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             Cash Solved.
           </h2>
-          <p className="mt-4 text-lg text-slate-300">
+          <p className="mt-4 text-lg text-slate-200">
             Arrexia helps turn overdue invoices into a clear follow-up process.
           </p>
         </div>
@@ -37,7 +37,7 @@ export function LandingValueStrip() {
               className="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm"
             >
               <h3 className="text-base font-semibold text-white">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-300">{item.copy}</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-200">{item.copy}</p>
             </article>
           ))}
         </div>

@@ -42,7 +42,9 @@ export function LandingFAQ() {
               key={item.question}
               className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
             >
-              <dt className="text-base font-semibold text-slate-900">{item.question}</dt>
+              <dt>
+                <h3 className="text-base font-semibold text-slate-900">{item.question}</h3>
+              </dt>
               <dd className="mt-2 text-sm leading-relaxed text-slate-600">{item.answer}</dd>
             </div>
           ))}

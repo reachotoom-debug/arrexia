@@ -75,7 +75,7 @@ function CellContent({ value, emphasized }: { value: string; emphasized?: boolea
 
   if (value === "—") {
     return (
-      <span className="text-base font-light text-slate-300" aria-label="Not included">
+      <span className="text-base font-light text-slate-400" aria-label="Not included">
         —
       </span>
     );
@@ -124,7 +124,7 @@ export function PricingComparison() {
             <tr className="border-b border-slate-200">
               <th
                 scope="col"
-                className="py-5 pr-6 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                className="py-5 pr-6 text-left text-xs font-semibold uppercase tracking-wide text-slate-600"
               >
                 Feature
               </th>

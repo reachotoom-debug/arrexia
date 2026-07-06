@@ -88,7 +88,7 @@ export function LandingPricingTeaser() {
               <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
                 {plan.price}
                 {plan.suffix ? (
-                  <span className="text-base font-medium text-slate-500">{plan.suffix}</span>
+                  <span className="text-base font-medium text-slate-600">{plan.suffix}</span>
                 ) : null}
               </p>
               <p className="mt-3 text-sm text-slate-600">{plan.copy}</p>
@@ -97,7 +97,7 @@ export function LandingPricingTeaser() {
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-2 text-sm text-slate-700">
                     <Check
-                      className="mt-0.5 h-4 w-4 shrink-0 text-blue-600"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-blue-700"
                       aria-hidden="true"
                     />
                     {feature}

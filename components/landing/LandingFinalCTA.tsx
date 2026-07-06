@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { LandingFooter } from "@/components/landing/LandingFooter";
 import { trialHref } from "@/lib/billing/plans";
 import { Button } from "@/components/ui/button";
 
@@ -11,25 +10,25 @@ export function LandingFinalCTA() {
           <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             Ready to reduce overdue invoices?
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-300">
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-200">
             Start with Arrexia and build a healthier cash flow process. Stop leaving money on
             the table.
           </p>
-          <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-400">
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-300">
             Explore{" "}
-            <Link href="/pricing" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
+            <Link href="/pricing" className="text-slate-100 underline-offset-2 hover:text-white hover:underline">
               pricing
             </Link>
             , read our{" "}
-            <Link href="/blog" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
+            <Link href="/blog" className="text-slate-100 underline-offset-2 hover:text-white hover:underline">
               blog
             </Link>
             , try our{" "}
-            <Link href="/tools" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
+            <Link href="/tools" className="text-slate-100 underline-offset-2 hover:text-white hover:underline">
               free tools
             </Link>
             , or{" "}
-            <Link href="/contact" className="text-slate-200 underline-offset-2 hover:text-white hover:underline">
+            <Link href="/contact" className="text-slate-100 underline-offset-2 hover:text-white hover:underline">
               contact us
             </Link>
             .
@@ -43,7 +42,7 @@ export function LandingFinalCTA() {
                 Start 14-day free trial
               </Button>
             </Link>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-300">
               No credit card required. Cancel anytime.
             </p>
           </div>

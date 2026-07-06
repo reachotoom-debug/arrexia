@@ -56,12 +56,12 @@ export function DashboardMockup() {
           <div className="min-w-0 flex-1 bg-slate-50 p-4 sm:p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-600">
                   Dashboard
                 </p>
-                <h3 className="text-sm font-semibold text-slate-900 sm:text-base">
+                <p className="text-sm font-semibold text-slate-900 sm:text-base">
                   Cash flow overview
-                </h3>
+                </p>
               </div>
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
                 Healthy AR
@@ -86,7 +86,7 @@ export function DashboardMockup() {
               <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm lg:col-span-3">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs font-semibold text-slate-900">Recent invoices</p>
-                  <span className="text-[10px] text-slate-400">This month</span>
+                  <span className="text-[10px] text-slate-600">This month</span>
                 </div>
                 <ul className="space-y-2">
                   {RECENT_INVOICES.map((row) => (
