@@ -38,6 +38,15 @@ export const LIVE_TOOLS: ToolDefinition[] = [
     href: "/tools/invoice-aging-calculator",
     icon: "aging",
   },
+  {
+    id: "payment-terms",
+    title: "Payment Terms Calculator",
+    description: "Determine the best payment terms for your business and customers.",
+    estimatedTime: "30 seconds",
+    status: "live",
+    href: "/tools/payment-terms-calculator",
+    icon: "terms",
+  },
 ];
 
 export const COMING_SOON_TOOLS: ToolDefinition[] = [
@@ -64,14 +73,6 @@ export const COMING_SOON_TOOLS: ToolDefinition[] = [
     estimatedTime: "Coming soon",
     status: "coming-soon",
     icon: "interest",
-  },
-  {
-    id: "payment-terms",
-    title: "Payment Terms Calculator",
-    description: "Determine the best payment terms for your business and customers.",
-    estimatedTime: "Coming soon",
-    status: "coming-soon",
-    icon: "terms",
   },
   {
     id: "working-capital",
