@@ -3,10 +3,10 @@ import { ArrowRight } from "lucide-react";
 import { BlogCoverImage } from "@/components/blog/BlogImage";
 import { BlogAuthorBlock } from "@/components/blog/BlogAuthor";
 import { BlogPostMeta } from "@/components/blog/BlogPostMeta";
-import type { BlogPost } from "@/lib/blog/types";
+import type { BlogListPost } from "@/lib/blog/search";
 
 type BlogFeaturedPostProps = {
-  post: BlogPost;
+  post: BlogListPost;
 };
 
 export function BlogFeaturedPost({ post }: BlogFeaturedPostProps) {

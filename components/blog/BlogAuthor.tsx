@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Linkedin } from "lucide-react";
 import { BLOG_AUTHOR, AUTHOR_AVATAR_SIZES } from "@/lib/blog/author";
-import type { BlogPost } from "@/lib/blog/types";
+import type { BlogListPost } from "@/lib/blog/search";
 import { getAuthorRole } from "@/lib/blog/format";
 
 type AuthorAvatarProps = {
@@ -26,7 +26,7 @@ export function AuthorAvatar({ size = "card", className = "" }: AuthorAvatarProp
 }
 
 type BlogAuthorBlockProps = {
-  post?: BlogPost;
+  post?: BlogListPost;
   size?: keyof typeof AUTHOR_AVATAR_SIZES;
   className?: string;
 };

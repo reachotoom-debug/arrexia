@@ -1,4 +1,4 @@
-import type { BlogPost } from "@/lib/blog/types";
+import type { BlogListPost } from "@/lib/blog/search";
 import {
   formatPublishedDate,
   formatReadTime,
@@ -6,7 +6,7 @@ import {
 } from "@/lib/blog/format";
 
 type BlogPostMetaProps = {
-  post: BlogPost;
+  post: BlogListPost;
   className?: string;
 };
 

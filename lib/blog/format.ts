@@ -13,7 +13,7 @@ export function formatReadTime(minutes: number): string {
   return `${minutes} min read`;
 }
 
-export function getCategoryLabel(post: BlogPost): string {
+export function getCategoryLabel(post: Pick<BlogPost, "category" | "categoryLabel">): string {
   return post.categoryLabel ?? post.category;
 }
 

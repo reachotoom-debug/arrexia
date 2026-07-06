@@ -3,10 +3,10 @@ import { ArrowUpRight } from "lucide-react";
 import { BlogThumbnailImage } from "@/components/blog/BlogImage";
 import { BlogAuthorBlock } from "@/components/blog/BlogAuthor";
 import { BlogPostMeta } from "@/components/blog/BlogPostMeta";
-import type { BlogPost } from "@/lib/blog/types";
+import type { BlogListPost } from "@/lib/blog/search";
 
 type BlogPostCardProps = {
-  post: BlogPost;
+  post: BlogListPost;
   compact?: boolean;
 };
 

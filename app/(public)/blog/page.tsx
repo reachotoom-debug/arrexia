@@ -1,18 +1,15 @@
 import Link from "next/link";
-import { BlogFeaturedPost } from "@/components/blog/BlogFeaturedPost";
-import { BlogPostCard } from "@/components/blog/BlogPostCard";
+import { BlogListing } from "@/components/blog/BlogListing";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { getAllBlogPosts, getFeaturedBlogPost } from "@/lib/blog";
+import { toBlogListPost } from "@/lib/blog/search";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 
 export const metadata = buildPageMetadata("blog");
 
 export default function BlogPage() {
-  const posts = getAllBlogPosts();
+  const posts = getAllBlogPosts().map(toBlogListPost);
   const featuredPost = getFeaturedBlogPost();
-  const recentPosts = featuredPost
-    ? posts.filter((post) => post.slug !== featuredPost.slug)
-    : posts;
 
   return (
     <PublicPageShell>
@@ -35,49 +32,7 @@ export default function BlogPage() {
           </p>
         </section>
 
-        {featuredPost ? (
-          <section className="mt-14">
-            <div className="grid gap-8 xl:grid-cols-12 xl:items-start">
-              <div className="xl:col-span-7">
-                <BlogFeaturedPost post={featuredPost} />
-              </div>
-              <div className="hidden xl:block xl:col-span-5">
-                <div className="mb-5">
-                  <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-                    Recent articles
-                  </h2>
-                  <p className="mt-2 text-sm text-slate-600">
-                    More on invoice tracking, reminders, and cash flow.
-                  </p>
-                </div>
-                <div className="grid gap-6">
-                  {recentPosts.map((post) => (
-                    <BlogPostCard key={post.slug} post={post} compact />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-10 xl:hidden">
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-                Recent articles
-              </h2>
-              <div className="mt-6 grid gap-6 md:grid-cols-2">
-                {recentPosts.map((post) => (
-                  <BlogPostCard key={post.slug} post={post} />
-                ))}
-              </div>
-            </div>
-          </section>
-        ) : (
-          <section className="mt-14">
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {recentPosts.map((post) => (
-                <BlogPostCard key={post.slug} post={post} />
-              ))}
-            </div>
-          </section>
-        )}
+        <BlogListing posts={posts} featuredSlug={featuredPost?.slug ?? null} />
       </main>
     </PublicPageShell>
   );
