@@ -47,6 +47,15 @@ export const LIVE_TOOLS: ToolDefinition[] = [
     href: "/tools/payment-terms-calculator",
     icon: "terms",
   },
+  {
+    id: "late-payment-interest",
+    title: "Late Payment Interest Calculator",
+    description: "Estimate late payment interest based on amount, rate, and days overdue.",
+    estimatedTime: "1 minute",
+    status: "live",
+    href: "/tools/late-payment-interest-calculator",
+    icon: "interest",
+  },
 ];
 
 export const COMING_SOON_TOOLS: ToolDefinition[] = [
@@ -65,14 +74,6 @@ export const COMING_SOON_TOOLS: ToolDefinition[] = [
     estimatedTime: "Coming soon",
     status: "coming-soon",
     icon: "risk",
-  },
-  {
-    id: "late-payment-interest",
-    title: "Late Payment Interest Calculator",
-    description: "Estimate late payment interest based on amount, rate, and days overdue.",
-    estimatedTime: "Coming soon",
-    status: "coming-soon",
-    icon: "interest",
   },
   {
     id: "working-capital",
