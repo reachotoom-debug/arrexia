@@ -3,17 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { BlogCategoryNav } from "@/components/blog/BlogCategoryNav";
-import { BlogFeaturedPost } from "@/components/blog/BlogFeaturedPost";
-import { BlogPostCard } from "@/components/blog/BlogPostCard";
+import { BlogPostGrid } from "@/components/blog/BlogPostGrid";
 import { trackBlogSearch } from "@/lib/analytics/google";
 import { filterBlogPosts, type BlogListPost } from "@/lib/blog/search";
 
 type BlogListingProps = {
   posts: BlogListPost[];
-  featuredSlug: string | null;
 };
 
-export function BlogListing({ posts, featuredSlug }: BlogListingProps) {
+export function BlogListing({ posts }: BlogListingProps) {
   const [query, setQuery] = useState("");
   const trimmedQuery = query.trim();
   const isSearching = trimmedQuery.length > 0;
@@ -22,14 +20,6 @@ export function BlogListing({ posts, featuredSlug }: BlogListingProps) {
     () => filterBlogPosts(posts, query),
     [posts, query],
   );
-
-  const featuredPost = featuredSlug
-    ? posts.find((post) => post.slug === featuredSlug)
-    : undefined;
-
-  const recentPosts = featuredPost
-    ? posts.filter((post) => post.slug !== featuredPost.slug)
-    : posts;
 
   const lastTrackedQueryRef = useRef("");
 
@@ -96,11 +86,7 @@ export function BlogListing({ posts, featuredSlug }: BlogListingProps) {
               <p className="text-sm text-slate-600">
                 {filteredPosts.length} article{filteredPosts.length === 1 ? "" : "s"} found
               </p>
-              <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {filteredPosts.map((post) => (
-                  <BlogPostCard key={post.slug} post={post} />
-                ))}
-              </div>
+              <BlogPostGrid posts={filteredPosts} className="mt-6" />
             </>
           ) : (
             <div className="mx-auto max-w-lg rounded-2xl border border-slate-200 bg-slate-50 px-6 py-10 text-center">
@@ -118,45 +104,9 @@ export function BlogListing({ posts, featuredSlug }: BlogListingProps) {
             </div>
           )}
         </section>
-      ) : featuredPost ? (
-        <section className="mt-14">
-          <div className="grid gap-8 xl:grid-cols-12 xl:items-start">
-            <div className="xl:col-span-7">
-              <BlogFeaturedPost post={featuredPost} />
-            </div>
-            <div className="hidden xl:block xl:col-span-5">
-              <div className="mb-5">
-                <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-                  Recent articles
-                </h2>
-                <p className="mt-2 text-sm text-slate-600">
-                  More on invoice tracking, reminders, and cash flow.
-                </p>
-              </div>
-              <div className="grid gap-6">
-                {recentPosts.map((post) => (
-                  <BlogPostCard key={post.slug} post={post} compact />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-10 xl:hidden">
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Recent articles</h2>
-            <div className="mt-6 grid gap-6 md:grid-cols-2">
-              {recentPosts.map((post) => (
-                <BlogPostCard key={post.slug} post={post} />
-              ))}
-            </div>
-          </div>
-        </section>
       ) : (
         <section className="mt-14">
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {recentPosts.map((post) => (
-              <BlogPostCard key={post.slug} post={post} />
-            ))}
-          </div>
+          <BlogPostGrid posts={posts} />
         </section>
       )}
     </>

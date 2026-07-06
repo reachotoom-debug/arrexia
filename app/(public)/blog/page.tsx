@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BlogListing } from "@/components/blog/BlogListing";
 import { NewsletterSignup } from "@/components/newsletter/NewsletterSignup";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
-import { getAllBlogPosts, getFeaturedBlogPost } from "@/lib/blog";
+import { getAllBlogPosts } from "@/lib/blog";
 import { toBlogListPost } from "@/lib/blog/search";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 
@@ -10,7 +10,6 @@ export const metadata = buildPageMetadata("blog");
 
 export default function BlogPage() {
   const posts = getAllBlogPosts().map(toBlogListPost);
-  const featuredPost = getFeaturedBlogPost();
 
   return (
     <PublicPageShell>
@@ -33,7 +32,7 @@ export default function BlogPage() {
           </p>
         </section>
 
-        <BlogListing posts={posts} featuredSlug={featuredPost?.slug ?? null} />
+        <BlogListing posts={posts} />
 
         <NewsletterSignup source="blog" className="mt-16" />
       </main>
