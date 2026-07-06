@@ -13,9 +13,11 @@ export const howToReduceOverdueInvoices: BlogPost = {
   publishedAt: "2026-06-10",
   readTimeMinutes: 8,
   coverImage: BLOG_IMAGES.overdueInvoices.cover,
-  coverImageAlt: "Dashboard view of overdue invoices and aging balances for collections follow-up",
+  coverImageAlt:
+    "Arrexia-style overdue invoice dashboard with aging buckets, outstanding balances, and collections metrics",
   inArticleImage: BLOG_IMAGES.overdueInvoices.inline,
-  inArticleImageAlt: "Finance team reviewing overdue invoice list and payment reminder schedule",
+  inArticleImageAlt:
+    "Overdue invoice management workflow with aging report charts and structured collections follow-up steps",
   seoTitle: "How to Reduce Overdue Invoices | Overdue Invoice Management Guide",
   seoDescription:
     "Learn practical overdue invoice management tactics—tracking, reminder timing, escalation paths, and cash flow visibility—to get paid faster.",

@@ -14,9 +14,11 @@ export const whatIsAccountsReceivableAutomation: BlogPost = {
   readTimeMinutes: 6,
   featured: true,
   coverImage: BLOG_IMAGES.arAutomation.cover,
-  coverImageAlt: "Accounts receivable automation dashboard with invoice tracking and cash flow charts",
+  coverImageAlt:
+    "Arrexia-style accounts receivable automation dashboard with invoice tracking, workflow automation, and cash flow charts",
   inArticleImage: BLOG_IMAGES.arAutomation.inline,
-  inArticleImageAlt: "Automated invoice reminder and collections workflow overview",
+  inArticleImageAlt:
+    "Connected accounts receivable automation workflow showing invoice tracking, reminders, and collections modules",
   seoTitle: "What Is Accounts Receivable Automation? | AR Software Guide",
   seoDescription:
     "Learn what accounts receivable automation means, which workflows to automate first, and how invoice reminder software supports cash flow management.",

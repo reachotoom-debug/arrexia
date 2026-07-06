@@ -13,9 +13,11 @@ export const invoiceReminderEmailBestPractices: BlogPost = {
   publishedAt: "2026-06-18",
   readTimeMinutes: 7,
   coverImage: BLOG_IMAGES.reminderEmails.cover,
-  coverImageAlt: "Professional invoice reminder email template on a laptop screen",
+  coverImageAlt:
+    "Arrexia-style invoice reminder email interface with scheduled follow-ups and invoice summary cards",
   inArticleImage: BLOG_IMAGES.reminderEmails.inline,
-  inArticleImageAlt: "Payment reminder workflow with email calendar and invoice details",
+  inArticleImageAlt:
+    "Invoice reminder email workflow with timeline scheduling and payment follow-up UI elements",
   seoTitle: "Invoice Reminder Email Best Practices | Payment Reminder Templates",
   seoDescription:
     "Improve invoice reminder emails with proven structure, timing, tone, and follow-up practices for overdue invoice management and faster collections.",

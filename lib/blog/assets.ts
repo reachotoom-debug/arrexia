@@ -1,16 +1,16 @@
 /** Blog image paths under /public/blog — swap files without code changes. */
 export const BLOG_IMAGES = {
   overdueInvoices: {
-    cover: "/blog/overdue-invoices-cover.png",
-    inline: "/blog/overdue-invoices-inline.png",
+    cover: "/blog/overdue-invoice-relationships.png",
+    inline: "/blog/overdue-invoice-inline.png",
   },
   reminderEmails: {
-    cover: "/blog/reminder-emails-cover.png",
-    inline: "/blog/reminder-emails-inline.png",
+    cover: "/blog/invoice-reminder-best-practices.png",
+    inline: "/blog/invoice-reminder-inline.png",
   },
   arAutomation: {
-    cover: "/blog/ar-automation-cover.png",
-    inline: "/blog/ar-automation-inline.png",
+    cover: "/blog/accounts-receivable-automation.png",
+    inline: "/blog/accounts-receivable-automation-inline.png",
   },
 } as const;
 
