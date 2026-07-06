@@ -6,6 +6,7 @@ export const invoiceReminderEmailBestPractices: BlogPost = {
   title: "Invoice Reminder Email Best Practices That Actually Get Responses",
   excerpt:
     "Write invoice reminder emails that are clear, professional, and effective—without sounding aggressive or damaging long-term client relationships.",
+  categorySlug: "payment-reminders",
   category: "Reminders",
   categoryLabel: "Payment Reminders",
   author: "Mohammed Otoom",

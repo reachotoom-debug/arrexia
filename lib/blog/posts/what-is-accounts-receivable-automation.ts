@@ -6,6 +6,7 @@ export const whatIsAccountsReceivableAutomation: BlogPost = {
   title: "What Is Accounts Receivable Automation?",
   excerpt:
     "Understand accounts receivable automation, what to automate first, and how invoice tracking and payment reminders improve cash flow without adding complexity.",
+  categorySlug: "accounts-receivable",
   category: "Guides",
   categoryLabel: "Accounts Receivable",
   author: "Mohammed Otoom",

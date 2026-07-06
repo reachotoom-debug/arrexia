@@ -1,4 +1,5 @@
 import type { BlogPost } from "@/lib/blog/types";
+import { getBlogCategoryLabel } from "@/lib/blog/categories";
 import { BLOG_AUTHOR } from "@/lib/blog/author";
 
 export function formatPublishedDate(isoDate: string): string {
@@ -13,8 +14,10 @@ export function formatReadTime(minutes: number): string {
   return `${minutes} min read`;
 }
 
-export function getCategoryLabel(post: Pick<BlogPost, "category" | "categoryLabel">): string {
-  return post.categoryLabel ?? post.category;
+export function getCategoryLabel(
+  post: Pick<BlogPost, "categorySlug" | "category" | "categoryLabel">,
+): string {
+  return getBlogCategoryLabel(post.categorySlug) || post.categoryLabel || post.category;
 }
 
 export function getAuthorRole(post?: Pick<BlogPost, "authorRole">): string {

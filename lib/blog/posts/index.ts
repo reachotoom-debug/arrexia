@@ -1,3 +1,4 @@
+import type { BlogCategorySlug } from "@/lib/blog/categories";
 import type { BlogPost } from "@/lib/blog/types";
 import { howToReduceOverdueInvoices } from "@/lib/blog/posts/how-to-reduce-overdue-invoices";
 import { invoiceReminderEmailBestPractices } from "@/lib/blog/posts/invoice-reminder-email-best-practices";
@@ -33,4 +34,8 @@ export function getRelatedPosts(slug: string, limit = 2): BlogPost[] {
     .map((relatedSlug) => getBlogPost(relatedSlug))
     .filter((item): item is BlogPost => Boolean(item))
     .slice(0, limit);
+}
+
+export function getPostsByCategorySlug(categorySlug: BlogCategorySlug): BlogPost[] {
+  return getAllBlogPosts().filter((post) => post.categorySlug === categorySlug);
 }

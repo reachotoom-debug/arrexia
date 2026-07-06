@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
+import { BlogCategoryNav } from "@/components/blog/BlogCategoryNav";
 import { BlogFeaturedPost } from "@/components/blog/BlogFeaturedPost";
 import { BlogPostCard } from "@/components/blog/BlogPostCard";
 import { filterBlogPosts, type BlogListPost } from "@/lib/blog/search";
@@ -64,6 +65,8 @@ export function BlogListing({ posts, featuredSlug }: BlogListingProps) {
           ) : null}
         </div>
       </div>
+
+      <BlogCategoryNav className="mt-6" />
 
       {isSearching ? (
         <section className="mt-10" aria-live="polite">

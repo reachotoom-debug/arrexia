@@ -6,6 +6,7 @@ export const howToReduceOverdueInvoices: BlogPost = {
   title: "How to Reduce Overdue Invoices Without Damaging Client Relationships",
   excerpt:
     "A practical framework for overdue invoice management: visibility, timing, escalation, and follow-up workflows that protect cash flow and client trust.",
+  categorySlug: "collections",
   category: "Collections",
   categoryLabel: "Collections",
   author: "Mohammed Otoom",

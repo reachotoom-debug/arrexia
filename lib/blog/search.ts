@@ -1,4 +1,5 @@
 import type { BlogPost } from "@/lib/blog/types";
+import { getBlogCategoryLabel } from "@/lib/blog/categories";
 
 /** Serializable blog post for listing/search (no article body sections). */
 export type BlogListPost = Omit<BlogPost, "sections" | "relatedSlugs">;
@@ -14,6 +15,7 @@ function buildSearchHaystack(post: BlogListPost): string {
     post.excerpt,
     post.category,
     post.categoryLabel,
+    getBlogCategoryLabel(post.categorySlug),
     post.slug,
     post.seoTitle,
     post.seoDescription,
