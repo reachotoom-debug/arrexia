@@ -15,6 +15,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 import { getAdminRevalidatePaths } from "@/lib/admin/adminPaths";
 import { getAdminInfrastructureStatus } from "@/lib/admin/adminInfrastructure";
+import { repairUserWorkspace } from "@/lib/admin/repairUserWorkspace";
 
 function revalidateAdmin() {
   for (const path of getAdminRevalidatePaths()) {
@@ -314,6 +315,25 @@ export async function removeAdminUserAction(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Failed to remove admin",
+    };
+  }
+}
+
+export async function adminCreateWorkspaceForUserAction(
+  userId: string
+): Promise<{ ok: boolean; workspaceId?: string; error?: string }> {
+  try {
+    const result = await repairUserWorkspace(userId);
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
+
+    revalidateAdmin();
+    return { ok: true, workspaceId: result.workspaceId };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed to create workspace",
     };
   }
 }
