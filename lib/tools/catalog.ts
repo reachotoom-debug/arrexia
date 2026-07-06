@@ -29,17 +29,18 @@ export const LIVE_TOOLS: ToolDefinition[] = [
     href: "/tools/dso-calculator",
     icon: "calculator",
   },
+  {
+    id: "invoice-aging-calculator",
+    title: "Invoice Aging Calculator",
+    description: "Analyze your receivables by aging buckets and overdue exposure.",
+    estimatedTime: "1 minute",
+    status: "live",
+    href: "/tools/invoice-aging-calculator",
+    icon: "aging",
+  },
 ];
 
 export const COMING_SOON_TOOLS: ToolDefinition[] = [
-  {
-    id: "invoice-aging",
-    title: "Invoice Aging Calculator",
-    description: "Analyze your receivables by aging buckets.",
-    estimatedTime: "Coming soon",
-    status: "coming-soon",
-    icon: "aging",
-  },
   {
     id: "cash-flow-forecast",
     title: "Cash Flow Forecast Calculator",
