@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, type RegisterFormValues } from "@/lib/schemas/auth";
 import { buildAuthCallbackUrl } from "@/lib/config/appUrl";
+import { trackLogin, trackRegister } from "@/lib/analytics/google";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function RegisterForm() {
@@ -48,6 +49,7 @@ export default function RegisterForm() {
           return;
         }
 
+        trackLogin("email");
         // Sign in successful, redirect
         router.replace(next);
         return;
@@ -59,12 +61,14 @@ export default function RegisterForm() {
 
     // Check if session was created immediately (email confirmations off)
     if (signUpData.session) {
+      trackRegister({ method: "email" });
       // Session created, redirect immediately
       router.replace(next);
       return;
     }
 
     // Email confirmation required - show success message
+    trackRegister({ method: "email", requires_confirmation: true });
     setError("root", { 
       message: "Please check your email to confirm your account before signing in.",
       type: "info"

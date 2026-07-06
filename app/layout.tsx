@@ -1,6 +1,6 @@
-// app/layout.tsx
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { Toaster } from "@/components/ui/toaster";
 import { SupabaseAuthStabilizer } from "@/components/auth/SupabaseAuthStabilizer";
@@ -22,6 +22,7 @@ export default function RootLayout({
         <SupabaseAuthStabilizer />
         {children}
         <Toaster />
+        <GoogleAnalytics />
       </body>
     </html>
   );

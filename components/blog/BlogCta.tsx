@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StartTrialLink } from "@/components/analytics/StartTrialLink";
 import { Button } from "@/components/ui/button";
 import { trialHref } from "@/lib/billing/plans";
 
@@ -10,9 +11,9 @@ export function BlogCta({ variant = "default" }: BlogCtaProps) {
   if (variant === "compact") {
     return (
       <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-        <Link href={trialHref("starter")}>
+        <StartTrialLink href={trialHref("starter")} source="blog_cta_compact" plan="starter">
           <Button className="w-full sm:w-auto">Start Free Trial</Button>
-        </Link>
+        </StartTrialLink>
         <Link href="/pricing">
           <Button variant="outline" className="w-full sm:w-auto">
             View Pricing
@@ -31,11 +32,11 @@ export function BlogCta({ variant = "default" }: BlogCtaProps) {
         Automate reminders, track payments, and reduce overdue invoices.
       </p>
       <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <Link href={trialHref("starter")}>
+        <StartTrialLink href={trialHref("starter")} source="blog_cta" plan="starter">
           <Button size="lg" className="h-11 px-7">
             Start Free Trial
           </Button>
-        </Link>
+        </StartTrialLink>
         <Link
           href="/pricing"
           className="text-sm font-semibold text-blue-600 hover:text-blue-700"

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { StartTrialLink } from "@/components/analytics/StartTrialLink";
 import { trialHref } from "@/lib/billing/plans";
 import { Button } from "@/components/ui/button";
 import { DashboardMockup } from "./DashboardMockup";
@@ -40,11 +41,16 @@ export function LandingHero() {
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Link href={trialHref("starter")} className="w-full sm:w-auto">
+            <StartTrialLink
+              href={trialHref("starter")}
+              source="landing_hero"
+              plan="starter"
+              className="w-full sm:w-auto"
+            >
               <Button size="lg" className="h-12 w-full px-8 text-base sm:w-auto">
                 Start 14-day free trial
               </Button>
-            </Link>
+            </StartTrialLink>
             <Link href="/pricing" className="w-full sm:w-auto">
               <Button variant="outline" size="lg" className="h-12 w-full px-8 text-base sm:w-auto">
                 View pricing

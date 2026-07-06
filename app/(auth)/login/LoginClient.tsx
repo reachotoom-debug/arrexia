@@ -28,6 +28,7 @@ import {
   completeAuthRedirect,
   resolvePostLoginPath,
 } from "@/lib/auth/clientRedirect";
+import { trackLogin } from "@/lib/analytics/google";
 import { useAuthUrlSanitizer } from "@/lib/auth/useAuthUrlSanitizer";
 import { loginSchema, type LoginFormValues } from "@/lib/schemas/auth";
 
@@ -99,6 +100,7 @@ export function LoginClient() {
         return;
       }
 
+      trackLogin("email");
       completeAuthRedirect(router, redirectTo);
     } finally {
       submitLockRef.current = false;

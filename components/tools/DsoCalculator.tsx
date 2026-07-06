@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { trackToolUsed } from "@/lib/analytics/google";
 
 type DsoResult = {
   dso: number;
@@ -82,6 +83,7 @@ export function DsoCalculator() {
     }
 
     setResult(calculateDso(sales, receivables, days));
+    trackToolUsed("dso_calculator");
   }
 
   return (

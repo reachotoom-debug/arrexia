@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { BlogCategoryNav } from "@/components/blog/BlogCategoryNav";
 import { BlogFeaturedPost } from "@/components/blog/BlogFeaturedPost";
 import { BlogPostCard } from "@/components/blog/BlogPostCard";
+import { trackBlogSearch } from "@/lib/analytics/google";
 import { filterBlogPosts, type BlogListPost } from "@/lib/blog/search";
 
 type BlogListingProps = {
@@ -29,6 +30,26 @@ export function BlogListing({ posts, featuredSlug }: BlogListingProps) {
   const recentPosts = featuredPost
     ? posts.filter((post) => post.slug !== featuredPost.slug)
     : posts;
+
+  const lastTrackedQueryRef = useRef("");
+
+  useEffect(() => {
+    if (!trimmedQuery) {
+      lastTrackedQueryRef.current = "";
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      if (lastTrackedQueryRef.current === trimmedQuery) return;
+      lastTrackedQueryRef.current = trimmedQuery;
+      trackBlogSearch({
+        query_length: trimmedQuery.length,
+        result_count: filteredPosts.length,
+      });
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [trimmedQuery, filteredPosts.length]);
 
   function clearSearch() {
     setQuery("");

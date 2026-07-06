@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ExternalLink, Linkedin, Mail } from "lucide-react";
+import { StartTrialLink } from "@/components/analytics/StartTrialLink";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { Button } from "@/components/ui/button";
 import { trialHref } from "@/lib/billing/plans";
@@ -102,11 +103,11 @@ export default function ContactPage() {
             Start your free trial and bring clarity to invoices, reminders, and cash flow.
           </p>
           <div className="mt-6">
-            <Link href={trialHref("starter")}>
+            <StartTrialLink href={trialHref("starter")} source="contact_page" plan="starter">
               <Button size="lg" className="h-12 px-8 text-base">
                 Start free trial
               </Button>
-            </Link>
+            </StartTrialLink>
           </div>
         </div>
       </main>

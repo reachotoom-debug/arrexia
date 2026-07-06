@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BlogCategoryViewTracker } from "@/components/analytics/BlogCategoryViewTracker";
 import { BlogCategoryNav } from "@/components/blog/BlogCategoryNav";
 import { BlogPostCard } from "@/components/blog/BlogPostCard";
 import { NewsletterSignup } from "@/components/newsletter/NewsletterSignup";
@@ -48,6 +49,7 @@ export default async function BlogCategoryPage({ params }: BlogCategoryPageProps
 
   return (
     <PublicPageShell>
+      <BlogCategoryViewTracker categorySlug={slug} />
       {structuredData.length > 0 ? <JsonLd data={structuredData} /> : null}
       <main className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
         <PageBreadcrumb

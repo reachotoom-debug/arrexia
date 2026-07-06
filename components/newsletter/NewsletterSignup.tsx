@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useActionState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { trackNewsletterSignup } from "@/lib/analytics/google";
 import { subscribeToNewsletter } from "@/lib/newsletter/actions";
 import type { NewsletterSignupResult } from "@/lib/newsletter/subscribe";
 
@@ -24,6 +26,14 @@ function messageClassName(tone: NewsletterSignupResult["tone"]): string {
 export function NewsletterSignup({ source = "blog", className = "" }: NewsletterSignupProps) {
   const [state, formAction, pending] = useActionState(subscribeToNewsletter, initialState);
   const isComplete = state?.ok === true;
+  const trackedSignupRef = useRef(false);
+
+  useEffect(() => {
+    if (state?.ok && state.tone === "success" && !trackedSignupRef.current) {
+      trackedSignupRef.current = true;
+      trackNewsletterSignup(source);
+    }
+  }, [state, source]);
 
   return (
     <section
