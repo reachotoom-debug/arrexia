@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogCategoryNav } from "@/components/blog/BlogCategoryNav";
 import { BlogPostCard } from "@/components/blog/BlogPostCard";
+import { NewsletterSignup } from "@/components/newsletter/NewsletterSignup";
 import { PageBreadcrumb } from "@/components/public/PageBreadcrumb";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
@@ -95,6 +96,8 @@ export default async function BlogCategoryPage({ params }: BlogCategoryPageProps
             </div>
           </section>
         )}
+
+        <NewsletterSignup source={`blog-category-${slug}`} className="mt-16" />
       </main>
     </PublicPageShell>
   );

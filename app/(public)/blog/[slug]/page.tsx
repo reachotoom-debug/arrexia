@@ -6,6 +6,7 @@ import { BlogCoverImage } from "@/components/blog/BlogImage";
 import { BlogCta } from "@/components/blog/BlogCta";
 import { BlogShareLinks } from "@/components/blog/BlogShareLinks";
 import { RelatedPosts } from "@/components/blog/RelatedPosts";
+import { NewsletterSignup } from "@/components/newsletter/NewsletterSignup";
 import { PageBreadcrumb } from "@/components/public/PageBreadcrumb";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
@@ -92,6 +93,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             <article>
               <BlogArticleContent post={post} />
               <BlogAboutAuthor />
+              <NewsletterSignup source={`blog-article-${post.slug}`} className="mt-14" />
               <BlogCta />
               <RelatedPosts posts={relatedPosts} />
             </article>

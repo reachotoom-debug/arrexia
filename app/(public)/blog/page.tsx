@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BlogListing } from "@/components/blog/BlogListing";
+import { NewsletterSignup } from "@/components/newsletter/NewsletterSignup";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { getAllBlogPosts, getFeaturedBlogPost } from "@/lib/blog";
 import { toBlogListPost } from "@/lib/blog/search";
@@ -33,6 +34,8 @@ export default function BlogPage() {
         </section>
 
         <BlogListing posts={posts} featuredSlug={featuredPost?.slug ?? null} />
+
+        <NewsletterSignup source="blog" className="mt-16" />
       </main>
     </PublicPageShell>
   );

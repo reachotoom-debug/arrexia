@@ -20,12 +20,13 @@ const ARREXIA_EMAIL_LOGO_URL = "https://arrexia.app/brand/arrexia-logo-email.png
 /** @deprecated Use renderFooter() output instead. Kept for callers that reference the constant. */
 export const PLATFORM_EMAIL_FOOTER = "Powered by Arrexia";
 
-export type EmailBadge = "invoice" | "payment_reminder" | "test_email";
+export type EmailBadge = "invoice" | "payment_reminder" | "test_email" | "newsletter";
 
 const BADGE_LABELS: Record<EmailBadge, string> = {
   invoice: "INVOICE",
   payment_reminder: "PAYMENT REMINDER",
   test_email: "TEST EMAIL",
+  newsletter: "NEWSLETTER",
 };
 
 const LEGACY_BRAND_PATTERN = /flowcollect/gi;
@@ -511,4 +512,22 @@ export function renderTestEmail(
     ...rendered,
     subject: "Arrexia email test",
   };
+}
+
+export function renderNewsletterWelcomeEmail(): { html: string; text: string } {
+  const blogUrl = `${getConfiguredAppUrl()}/blog`;
+
+  return renderEmailShell({
+    businessName: "Arrexia",
+    logoUrl: ARREXIA_EMAIL_LOGO_URL,
+    badge: "newsletter",
+    greeting: "Hello,",
+    mainMessage:
+      "Thank you for subscribing to Arrexia updates.\n\nYou'll receive occasional practical guidance on accounts receivable, invoices, payment reminders, and cash flow.",
+    ctaButton: {
+      label: "Visit the blog",
+      url: blogUrl,
+    },
+    infoBoxNote: "You are receiving this because you subscribed to Arrexia updates.",
+  });
 }
