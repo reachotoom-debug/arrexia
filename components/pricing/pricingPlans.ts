@@ -2,6 +2,7 @@ import type { FeatureItem } from "./FeatureList";
 import {
   getPublicComparisonPrices,
   getPublicPlanPricing,
+  getPublicTeaserPriceDisplay,
   trialHref,
   type BillingInterval,
 } from "@/lib/billing/plans";
@@ -59,4 +60,4 @@ export function getComparisonPrices(interval: BillingInterval) {
   return getPublicComparisonPrices(interval);
 }
 
-export { trialHref };
+export { trialHref, getPublicTeaserPriceDisplay };

@@ -11,7 +11,7 @@ export type PlanDefinition = {
   description: string;
   monthlyPrice: number | null;
   annualPrice: number | null;
-  /** Display rate when billed annually, e.g. $32/mo on a $390/yr plan. */
+  /** Display rate when billed annually, e.g. $24/mo on a $290/yr plan. */
   annualMonthlyEquivalent: number | null;
   comingSoon: boolean;
   /** Shown on settings billing cards; business is preview-only. */
@@ -43,9 +43,9 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     id: "starter",
     name: "Starter",
     description: "For freelancers and small businesses.",
-    monthlyPrice: 39,
-    annualPrice: 390,
-    annualMonthlyEquivalent: 32,
+    monthlyPrice: 29,
+    annualPrice: 290,
+    annualMonthlyEquivalent: 24,
     comingSoon: false,
     selectableInBilling: true,
     mostPopular: false,
@@ -62,9 +62,9 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     id: "pro",
     name: "Pro",
     description: "For growing agencies and finance teams.",
-    monthlyPrice: 89,
-    annualPrice: 890,
-    annualMonthlyEquivalent: 74,
+    monthlyPrice: 79,
+    annualPrice: 790,
+    annualMonthlyEquivalent: 65,
     comingSoon: false,
     selectableInBilling: true,
     mostPopular: true,
@@ -175,18 +175,63 @@ export function getPublicPlanPricing(
 }
 
 export function getPublicComparisonPrices(interval: BillingInterval) {
+  const starter = PLAN_DEFINITIONS.starter;
+  const pro = PLAN_DEFINITIONS.pro;
+  const business = PLAN_DEFINITIONS.business;
+
   if (interval === "annual") {
     return {
-      starter: "$32/mo · $390/yr",
-      pro: "$74/mo · $890/yr",
-      business: "Coming soon",
+      starter: `$${starter.annualMonthlyEquivalent}/mo · $${starter.annualPrice}/yr`,
+      pro: `$${pro.annualMonthlyEquivalent}/mo · $${pro.annualPrice}/yr`,
+      business: `$${business.monthlyPrice}/mo · Coming soon`,
     };
   }
 
   return {
-    starter: "$39/mo",
-    pro: "$89/mo",
-    business: "Coming soon",
+    starter: `$${starter.monthlyPrice}/mo`,
+    pro: `$${pro.monthlyPrice}/mo`,
+    business: `$${business.monthlyPrice}/mo · Coming soon`,
+  };
+}
+
+/** Full comparison-table price cell (monthly + annual). */
+export function formatPublicComparisonPriceRow(
+  planId: "starter" | "pro" | "business",
+): string {
+  const plan = PLAN_DEFINITIONS[planId];
+
+  if (planId === "business") {
+    return `$${plan.monthlyPrice}/mo · Coming soon`;
+  }
+
+  if (plan.annualPrice && plan.annualMonthlyEquivalent) {
+    return `$${plan.monthlyPrice}/mo or $${plan.annualMonthlyEquivalent}/mo billed annually ($${plan.annualPrice}/yr)`;
+  }
+
+  return `$${plan.monthlyPrice}/mo`;
+}
+
+/** Homepage / marketing teaser price label, e.g. "$29" with optional "/month". */
+export function getPublicTeaserPriceDisplay(planId: PlanId): {
+  price: string;
+  suffix: string;
+} {
+  const plan = getPlanDefinition(planId);
+
+  if (plan.comingSoon && plan.monthlyPrice !== null) {
+    return {
+      price: `$${plan.monthlyPrice}`,
+      suffix: "/month",
+    };
+  }
+
+  if (plan.monthlyPrice === null) {
+    return { price: "Coming soon", suffix: "" };
+  }
+
+  return {
+    price: `$${plan.monthlyPrice}`,
+    suffix: "/month",
   };
 }
 

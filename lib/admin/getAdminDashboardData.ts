@@ -9,8 +9,8 @@ import {
   type WorkspacePlan,
 } from "@/lib/billing/plans";
 
-const STARTER_MRR = PLAN_DEFINITIONS.starter.monthlyPrice ?? 39;
-const PRO_MRR = PLAN_DEFINITIONS.pro.monthlyPrice ?? 89;
+const STARTER_MRR = PLAN_DEFINITIONS.starter.monthlyPrice ?? 29;
+const PRO_MRR = PLAN_DEFINITIONS.pro.monthlyPrice ?? 79;
 
 export type FounderOverviewData = {
   totalUsers: number;

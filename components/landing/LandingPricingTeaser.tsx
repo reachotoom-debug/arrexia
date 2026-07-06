@@ -1,13 +1,23 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { trialHref } from "@/lib/billing/plans";
+import {
+  getPlanDefinition,
+  getPublicTeaserPriceDisplay,
+  trialHref,
+  type PlanId,
+} from "@/lib/billing/plans";
 import { Button } from "@/components/ui/button";
 
-const PLANS = [
+type TeaserPlanConfig = {
+  id: PlanId;
+  copy: string;
+  features: readonly string[];
+  cta: { label: string; href: string; disabled: boolean };
+};
+
+const TEASER_PLAN_CONFIG: TeaserPlanConfig[] = [
   {
-    name: "Starter",
-    price: "$39",
-    suffix: "/month",
+    id: "starter",
     copy: "Everything you need to get organized and get paid.",
     features: [
       "Up to 25 clients",
@@ -16,13 +26,9 @@ const PLANS = [
       "Basic risk score",
     ],
     cta: { label: "Start free trial", href: trialHref("starter"), disabled: false },
-    highlighted: false,
-    badge: null,
   },
   {
-    name: "Pro",
-    price: "$89",
-    suffix: "/month",
+    id: "pro",
     copy: "For growing businesses that want smarter collections.",
     features: [
       "Everything in Starter",
@@ -32,13 +38,9 @@ const PLANS = [
       "Advanced risk analysis",
     ],
     cta: { label: "Start Pro trial", href: trialHref("pro"), disabled: false },
-    highlighted: true,
-    badge: "Most Popular",
   },
   {
-    name: "Business",
-    price: "Coming soon",
-    suffix: "",
+    id: "business",
     copy: "Advanced features for larger teams and scale.",
     features: [
       "Team permissions",
@@ -46,11 +48,9 @@ const PLANS = [
       "API access",
       "Priority support",
     ],
-    cta: { label: "Notify me", href: "#", disabled: true },
-    highlighted: false,
-    badge: null,
+    cta: { label: "Coming soon", href: "#", disabled: true },
   },
-] as const;
+];
 
 export function LandingPricingTeaser() {
   return (
@@ -66,58 +66,65 @@ export function LandingPricingTeaser() {
         </div>
 
         <div className="mt-14 grid gap-5 overflow-visible md:grid-cols-2 lg:grid-cols-3">
-          {PLANS.map((plan) => (
-            <article
-              key={plan.name}
-              className={`relative flex flex-col rounded-xl border bg-white p-6 shadow-sm ${
-                plan.highlighted ? "border-blue-500 ring-2 ring-blue-100" : "border-slate-200"
-              }`}
-            >
-              {plan.badge ? (
-                <div className="mb-4 flex justify-center">
-                  <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-                    {plan.badge}
-                  </span>
-                </div>
-              ) : null}
-              {plan.highlighted ? (
-                <div className="absolute inset-x-0 top-0 h-1 rounded-t-xl bg-gradient-to-r from-blue-600 to-cyan-500" />
-              ) : null}
+          {TEASER_PLAN_CONFIG.map((config) => {
+            const plan = getPlanDefinition(config.id);
+            const { price, suffix } = getPublicTeaserPriceDisplay(config.id);
+            const highlighted = plan.mostPopular;
+            const badge = plan.mostPopular ? "Most Popular" : null;
 
-              <h3 className="text-lg font-semibold text-slate-900">{plan.name}</h3>
-              <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
-                {plan.price}
-                {plan.suffix ? (
-                  <span className="text-base font-medium text-slate-600">{plan.suffix}</span>
+            return (
+              <article
+                key={config.id}
+                className={`relative flex flex-col rounded-xl border bg-white p-6 shadow-sm ${
+                  highlighted ? "border-blue-500 ring-2 ring-blue-100" : "border-slate-200"
+                }`}
+              >
+                {badge ? (
+                  <div className="mb-4 flex justify-center">
+                    <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                      {badge}
+                    </span>
+                  </div>
                 ) : null}
-              </p>
-              <p className="mt-3 text-sm text-slate-600">{plan.copy}</p>
+                {highlighted ? (
+                  <div className="absolute inset-x-0 top-0 h-1 rounded-t-xl bg-gradient-to-r from-blue-600 to-cyan-500" />
+                ) : null}
 
-              <ul className="mt-5 flex-1 space-y-2">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm text-slate-700">
-                    <Check
-                      className="mt-0.5 h-4 w-4 shrink-0 text-blue-700"
-                      aria-hidden="true"
-                    />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
+                <h3 className="text-lg font-semibold text-slate-900">{plan.name}</h3>
+                <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+                  {price}
+                  {suffix ? (
+                    <span className="text-base font-medium text-slate-600">{suffix}</span>
+                  ) : null}
+                </p>
+                <p className="mt-3 text-sm text-slate-600">{config.copy}</p>
 
-              <div className="mt-6">
-                {plan.cta.disabled ? (
-                  <Button variant="outline" className="w-full" disabled aria-disabled="true">
-                    {plan.cta.label}
-                  </Button>
-                ) : (
-                  <Link href={plan.cta.href} className="block">
-                    <Button className="w-full">{plan.cta.label}</Button>
-                  </Link>
-                )}
-              </div>
-            </article>
-          ))}
+                <ul className="mt-5 flex-1 space-y-2">
+                  {config.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2 text-sm text-slate-700">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-blue-700"
+                        aria-hidden="true"
+                      />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-6">
+                  {config.cta.disabled ? (
+                    <Button variant="outline" className="w-full" disabled aria-disabled="true">
+                      {config.cta.label}
+                    </Button>
+                  ) : (
+                    <Link href={config.cta.href} className="block">
+                      <Button className="w-full">{config.cta.label}</Button>
+                    </Link>
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </div>
 
         <div className="mt-10 text-center">

@@ -8,11 +8,11 @@ import {
   BUSINESS_FEATURES,
   getProPricing,
   getStarterPricing,
+  getPublicTeaserPriceDisplay,
   PRO_FEATURES,
   STARTER_FEATURES,
   trialHref,
 } from "./pricingPlans";
-import { PLAN_DEFINITIONS } from "@/lib/billing/plans";
 
 export function PricingPlansClient() {
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("monthly");
@@ -58,7 +58,7 @@ export function PricingPlansClient() {
 
         <PricingCard
           name="Business"
-          price={`$${PLAN_DEFINITIONS.business.monthlyPrice}`}
+          price={getPublicTeaserPriceDisplay("business").price}
           period="/mo"
           subtitle="For larger teams"
           features={BUSINESS_FEATURES}

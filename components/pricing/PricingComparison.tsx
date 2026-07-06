@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatPublicComparisonPriceRow } from "@/lib/billing/plans";
 import { Check } from "lucide-react";
 
 type ComparisonRow = {
@@ -12,9 +13,9 @@ type ComparisonRow = {
 const COMPARISON_ROWS: ComparisonRow[] = [
   {
     label: "Price",
-    starter: "$39/mo or $32/mo billed annually ($390/yr)",
-    pro: "$89/mo or $74/mo billed annually ($890/yr)",
-    business: "Coming soon",
+    starter: formatPublicComparisonPriceRow("starter"),
+    pro: formatPublicComparisonPriceRow("pro"),
+    business: formatPublicComparisonPriceRow("business"),
     highlight: true,
   },
   {
