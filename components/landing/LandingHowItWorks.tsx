@@ -34,7 +34,7 @@ export function LandingHowItWorks() {
             How it works
           </h2>
           <p className="mt-4 text-lg text-slate-600">
-            A simple flow from invoice tracking to payment reminders and cash collection — without
+            A simple flow from receivables tracking to payment follow-up and cash collection — without
             the spreadsheet chaos. Questions? Visit our{" "}
             <Link href="/contact" className="font-medium text-blue-700 hover:text-blue-800">
               contact page

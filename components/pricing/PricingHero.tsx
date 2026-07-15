@@ -25,7 +25,7 @@ export function PricingHero({ trialHref }: PricingHeroProps) {
         </div>
 
         <p className="text-base font-medium text-slate-800 sm:text-lg">
-          More than invoicing. Arrexia is cash collection automation.
+          Arrexia is a Cash Collection Operations Platform — not invoice or billing software.
         </p>
 
         <div className="flex flex-col items-center gap-4 pt-2">

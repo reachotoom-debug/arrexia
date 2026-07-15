@@ -32,7 +32,7 @@ export function ToolsCtaSection() {
         Ready to get paid faster?
       </h2>
       <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
-        Automate reminders, track payments, and reduce overdue invoices.
+        Automate payment follow-up, track receivables, and reduce overdue balances.
       </p>
       <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <Link href={trialHref("starter")}>

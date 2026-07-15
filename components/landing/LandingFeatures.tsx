@@ -60,11 +60,11 @@ export function LandingFeatures() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Everything you need to get paid faster
+            Cash collection operations to get paid faster
           </h2>
           <p className="mt-4 text-lg text-slate-600">
-            Invoice collection, accounts receivable automation, and cash flow visibility — built for
-            teams that want clarity without accounting complexity. See{" "}
+            Accounts receivable automation, payment follow-up, and collections visibility — built
+            for finance teams that need clarity without accounting complexity. See{" "}
             <Link href="/pricing" className="font-medium text-blue-700 hover:text-blue-800">
               pricing
             </Link>{" "}

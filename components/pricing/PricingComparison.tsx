@@ -65,8 +65,8 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   { label: "Email templates", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
   { label: "CSV import/export", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
   { label: "Priority support", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
-  { label: "Custom domain", starter: "—", pro: "—", business: "✓", enterprise: "✓" },
-  { label: "API access", starter: "—", pro: "—", business: "✓", enterprise: "✓" },
+  { label: "Custom domain", starter: "—", pro: "—", business: "—", enterprise: "Custom" },
+  { label: "API access", starter: "—", pro: "—", business: "—", enterprise: "Custom" },
 ];
 
 function CellContent({ value, emphasized }: { value: string; emphasized?: boolean }) {
@@ -115,8 +115,8 @@ export function PricingComparison() {
       <CardHeader className="p-7 lg:p-9">
         <CardTitle className="text-2xl text-slate-900 lg:text-3xl">Compare plans</CardTitle>
         <p className="max-w-2xl text-sm text-slate-600 sm:text-base">
-          Cash recovery, payment tracking, and collections — not just invoice generation.
-          See what each plan includes.
+          Cash collection operations, payment tracking, and receivables automation — built to help
+          businesses collect cash faster.
         </p>
       </CardHeader>
       <CardContent className="overflow-x-auto p-7 pt-0 lg:p-9 lg:pt-0">

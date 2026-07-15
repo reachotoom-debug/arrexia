@@ -30,11 +30,11 @@ export function PricingROI() {
 
       <div className="mx-auto max-w-3xl space-y-4 text-center">
         <h3 className="text-xl font-semibold text-slate-900 sm:text-2xl lg:text-3xl">
-          This isn&apos;t invoicing software.
+          A Cash Collection Operations Platform.
         </h3>
         <p className="text-base leading-relaxed text-slate-600 sm:text-lg">
-          Arrexia focuses on collections, reminders, payment tracking, and cash
-          recovery — helping businesses get paid faster.
+          Arrexia helps businesses reduce overdue receivables, automate payment follow-up, and
+          improve cash flow — not just generate invoices.
         </p>
       </div>
     </section>

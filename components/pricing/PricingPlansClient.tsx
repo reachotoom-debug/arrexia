@@ -56,7 +56,7 @@ export function PricingPlansClient() {
           badgeLabel="Most Popular"
           secondaryBadge={billingInterval === "annual" ? "Best value" : undefined}
           showTrialMicrocopy
-          footnote="Built for growing businesses managing real receivables."
+          footnote="Built for finance teams managing receivables at scale."
         />
 
         <PricingCard

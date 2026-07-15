@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const FAQ = [
   {
-    q: "Is Arrexia just an invoice generator?",
-    a: "No. Arrexia is built around payment collection, overdue tracking, reminders, and receivables visibility.",
+    q: "Is Arrexia just for creating invoices?",
+    a: "No. Arrexia is a Cash Collection Operations Platform built around receivables tracking, automated payment follow-up, overdue visibility, and cash flow recovery.",
   },
   {
     q: "Do I need a credit card for trial?",

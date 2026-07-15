@@ -1,18 +1,18 @@
 const FAQ_ITEMS = [
   {
-    question: "Is Arrexia a replacement for accounting software?",
+    question: "Is Arrexia accounting or billing software?",
     answer:
-      "No. Arrexia focuses on invoice collection, accounts receivable, reminders, and cash flow visibility. It complements your accounting stack rather than replacing it.",
+      "No. Arrexia is a Cash Collection Operations Platform focused on receivables visibility, automated payment follow-up, reminders, and cash flow — not general ledger or billing.",
   },
   {
     question: "Can I send invoice reminders by email?",
     answer:
-      "Yes. Arrexia supports reminder workflows and email templates so you can follow up on due and overdue invoices consistently.",
+      "Arrexia supports reminder workflows and email templates so you can automate payment follow-up on due and overdue receivables.",
   },
   {
     question: "Do I need Stripe?",
     answer:
-      "Arrexia does not require Stripe to track invoices or send reminders. Online subscription billing/payment provider integration will be added later.",
+      "No. Arrexia helps you track receivables and automate collections follow-up without requiring a payment processor.",
   },
   {
     question: "Can I change plans later?",

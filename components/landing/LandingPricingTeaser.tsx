@@ -42,11 +42,11 @@ const TEASER_PLAN_CONFIG: TeaserPlanConfig[] = [
   },
   {
     id: "business",
-    copy: "Advanced features for larger teams and scale.",
+    copy: "Higher-volume collections for growing finance teams.",
     features: [
-      "Team permissions",
-      "Custom domain",
-      "API access",
+      "Everything in Pro",
+      "Higher volume limits",
+      "Advanced collections workflows",
       "Priority support",
     ],
     cta: { label: "Start free trial", href: trialHref("business"), disabled: false },

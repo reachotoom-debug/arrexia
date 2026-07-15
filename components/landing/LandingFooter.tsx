@@ -60,7 +60,7 @@ export function LandingFooter() {
               arrexia.app
             </a>
             <p className="mt-3 text-xs font-normal leading-snug text-slate-500">
-              Built for growing businesses.
+              Helping businesses collect cash faster.
             </p>
           </div>
         </div>

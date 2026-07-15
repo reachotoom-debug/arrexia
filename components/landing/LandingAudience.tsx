@@ -35,7 +35,7 @@ export function LandingAudience() {
             Built for businesses that need better cash flow
           </p>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Designed for teams who send invoices and need to get paid.
+            Built for teams that need stronger cash collection operations.
           </h2>
         </div>
 

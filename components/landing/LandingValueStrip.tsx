@@ -26,7 +26,7 @@ export function LandingValueStrip() {
             Cash Solved.
           </h2>
           <p className="mt-4 text-lg text-slate-200">
-            Arrexia helps turn overdue invoices into a clear follow-up process.
+            Arrexia helps teams turn overdue receivables into a clear collection process.
           </p>
         </div>
 

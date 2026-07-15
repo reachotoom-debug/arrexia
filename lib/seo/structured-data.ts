@@ -65,11 +65,11 @@ export function buildSoftwareApplicationSchema() {
       },
     ],
     featureList: [
-      "Invoice tracking",
+      "Receivables tracking",
       "Payment reminder automation",
-      "Overdue invoice management",
+      "Overdue collections management",
       "Cash flow visibility",
-      "Accounts receivable dashboard",
+      "Collections dashboard",
     ],
     creator: {
       "@type": "Person",

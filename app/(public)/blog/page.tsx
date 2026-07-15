@@ -17,11 +17,11 @@ export default function BlogPage() {
         <section className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">Blog</p>
           <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl lg:text-5xl lg:leading-tight">
-            Insights to help you improve cash flow and get paid faster
+            Cash flow, collections, and accounts receivable insights
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-slate-600">
-            Practical guides, best practices, and strategies for managing invoices, simplifying
-            collections, and growing your business.
+            Practical guides and finance operations best practices for reducing overdue receivables,
+            automating follow-up, and improving cash flow.
           </p>
           <p className="mt-4 text-sm text-slate-600">
             Explore free calculators on our{" "}

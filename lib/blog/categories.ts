@@ -31,9 +31,9 @@ export const BLOG_CATEGORIES: BlogCategory[] = [
     slug: "invoices",
     label: "Invoices",
     intro:
-      "Practical advice on invoice tracking, billing clarity, and reducing friction from send to payment.",
+      "Practical advice on receivables documentation, billing clarity, and reducing friction from issue to payment.",
     seoDescription:
-      "Explore invoice management tips, billing best practices, and strategies to improve on-time payments.",
+      "Explore receivables and billing clarity tips, payment follow-up practices, and strategies to improve on-time collections.",
   },
   {
     slug: "payment-reminders",

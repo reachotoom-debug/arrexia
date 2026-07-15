@@ -25,12 +25,12 @@ export type SeoPageConfig = {
 export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
   home: {
     path: "/",
-    title: "Arrexia | Accounts Receivable & Invoice Collection Software",
+    title: "Arrexia | Cash Collection Operations Platform",
     description:
-      "Track invoices, send payment reminders, manage overdue balances, and improve cash flow with Arrexia — modern accounts receivable software built for growing businesses.",
+      "Reduce overdue receivables, automate payment follow-up, track collections, and improve cash flow with Arrexia — a modern Cash Collection Operations Platform.",
     keywords: [
-      "accounts receivable software",
-      "invoice management software",
+      "cash collection operations",
+      "accounts receivable automation",
       "payment reminder software",
       "cash flow management",
     ],
@@ -39,9 +39,9 @@ export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
   },
   about: {
     path: "/about",
-    title: "About Arrexia | Accounts Receivable Software",
+    title: "About Arrexia | Cash Collection Operations Platform",
     description:
-      "Learn how Arrexia helps businesses get paid faster with invoice tracking, payment reminders, collections workflows, and cash flow visibility.",
+      "Learn how Arrexia helps businesses improve cash flow through accounts receivable automation, collections workflows, and payment follow-up.",
     priority: 0.8,
     changeFrequency: "monthly",
   },
@@ -95,17 +95,17 @@ export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
   },
   blog: {
     path: "/blog",
-    title: "Arrexia Blog | Accounts Receivable & Cash Flow Insights",
+    title: "Arrexia Blog | Cash Flow & Collections Insights",
     description:
-      "Practical guides on invoice tracking, payment reminders, overdue invoice management, and accounts receivable automation for growing businesses.",
+      "Practical guides on cash flow, collections, accounts receivable automation, and finance operations for growing businesses.",
     priority: 0.7,
     changeFrequency: "weekly",
   },
   tools: {
     path: "/tools",
-    title: "Free Accounts Receivable Tools | Arrexia",
+    title: "Free Cash Collection Tools | Arrexia",
     description:
-      "Free calculators and tools to improve cash flow, analyze collections performance, and make smarter AR decisions. Start with the DSO calculator.",
+      "Free cash collection calculators for DSO, invoice aging, payment terms, and late payment interest — built to help finance teams make better collection decisions.",
     priority: 0.75,
     changeFrequency: "monthly",
   },

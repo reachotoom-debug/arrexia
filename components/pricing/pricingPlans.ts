@@ -41,12 +41,10 @@ export const PRO_FEATURES: readonly FeatureItem[] = [
 ];
 
 export const BUSINESS_FEATURES: readonly FeatureItem[] = [
-  { label: "Team permissions", comingSoon: true },
-  { label: "Custom domain", comingSoon: true },
-  { label: "Branded sending email", comingSoon: true },
-  { label: "API access", comingSoon: true },
-  { label: "Advanced analytics", comingSoon: true },
-  { label: "Higher usage limits", comingSoon: true },
+  { label: "Everything in Pro" },
+  { label: "Higher client and invoice volume" },
+  { label: "Advanced collections workflows" },
+  { label: "Priority support" },
 ];
 
 export function getStarterPricing(interval: BillingInterval) {
