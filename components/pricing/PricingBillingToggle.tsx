@@ -1,5 +1,6 @@
 "use client";
 
+import { PUBLIC_PRICING } from "@/lib/billing/plans";
 import type { BillingInterval } from "./pricingPlans";
 
 type PricingBillingToggleProps = {
@@ -46,7 +47,7 @@ export function PricingBillingToggle({ value, onChange }: PricingBillingTogglePr
                 value === "annual" ? "text-blue-50" : "text-blue-700"
               }`}
             >
-              Save 2 months
+              {PUBLIC_PRICING.annualSavingsLabel}
             </span>
           </span>
         </button>

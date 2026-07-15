@@ -6,6 +6,8 @@ import { PricingCard } from "./PricingCard";
 import {
   BillingInterval,
   BUSINESS_FEATURES,
+  getBusinessPricing,
+  getEnterpriseContactHref,
   getProPricing,
   getStarterPricing,
   getPublicTeaserPriceDisplay,
@@ -19,12 +21,13 @@ export function PricingPlansClient() {
 
   const starterPricing = getStarterPricing(billingInterval);
   const proPricing = getProPricing(billingInterval);
+  const businessPricing = getBusinessPricing(billingInterval);
 
   return (
     <>
       <PricingBillingToggle value={billingInterval} onChange={setBillingInterval} />
 
-      <div className="grid items-stretch gap-8 lg:grid-cols-3 lg:gap-6 xl:gap-8">
+      <div className="grid items-stretch gap-8 md:grid-cols-2 xl:grid-cols-4 xl:gap-6">
         <PricingCard
           name="Starter"
           price={starterPricing.price}
@@ -58,13 +61,32 @@ export function PricingPlansClient() {
 
         <PricingCard
           name="Business"
-          price={getPublicTeaserPriceDisplay("business").price}
-          period="/mo"
+          price={businessPricing.price}
+          period={businessPricing.period}
+          equivalentSubtext={businessPricing.equivalentSubtext}
+          savingsBadge={businessPricing.savingsBadge}
           subtitle="For larger teams"
           features={BUSINESS_FEATURES}
-          ctaLabel="Coming soon"
-          disabled
-          footnote="Higher limits and team controls — coming soon."
+          ctaLabel="Start Business Trial"
+          ctaHref={trialHref("business")}
+          showTrialMicrocopy
+          footnote="Higher limits and team controls for scaling collections."
+        />
+
+        <PricingCard
+          name="Enterprise"
+          price={getPublicTeaserPriceDisplay("enterprise").price}
+          period={null}
+          subtitle="For organizations with custom needs"
+          features={[
+            { label: "Custom usage limits" },
+            { label: "Dedicated onboarding" },
+            { label: "Security review support" },
+            { label: "Priority support" },
+          ]}
+          ctaLabel="Contact Sales"
+          ctaHref={getEnterpriseContactHref()}
+          footnote="Custom terms, security, and volume pricing."
         />
       </div>
     </>

@@ -1,4 +1,4 @@
-import { PLAN_DEFINITIONS } from "@/lib/billing/plans";
+import { PLAN_DEFINITIONS, PUBLIC_PRICING } from "@/lib/billing/plans";
 import { SEO_ASSETS, SEO_SITE, absoluteAssetUrl, absoluteUrl } from "@/lib/seo/site";
 
 export function buildOrganizationSchema() {
@@ -54,7 +54,7 @@ export function buildSoftwareApplicationSchema() {
         price: starterPrice ?? 0,
         priceCurrency: "USD",
         url: absoluteUrl("/pricing"),
-        description: "14-day free trial available. Paid plans start on Starter.",
+        description: `${PUBLIC_PRICING.trialLabel} available. Paid plans start on Starter.`,
       },
       {
         "@type": "Offer",

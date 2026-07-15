@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FeatureItem, FeatureList } from "./FeatureList";
 import Link from "next/link";
+import { PUBLIC_PRICING } from "@/lib/billing/plans";
 
 interface PricingCardProps {
   name: string;
@@ -112,7 +113,7 @@ export function PricingCard({
 
           {showTrialMicrocopy ? (
             <p className="text-center text-xs text-slate-600">
-              14-day free trial • No credit card required
+              {PUBLIC_PRICING.trialMicrocopy}
             </p>
           ) : null}
 

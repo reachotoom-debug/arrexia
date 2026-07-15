@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { PricingHero } from "@/components/pricing/PricingHero";
-import { trialHref } from "@/components/pricing/pricingPlans";
+import { PUBLIC_PRICING, trialHref } from "@/lib/billing/plans";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
 import { Button } from "@/components/ui/button";
 import { buildPageMetadata } from "@/lib/seo/metadata";
@@ -59,7 +59,7 @@ export default function PricingPage() {
               Ready to get paid faster?
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-base text-slate-600 sm:text-lg">
-              Start your 14-day free trial. No credit card required.
+              Start your {PUBLIC_PRICING.trialLabel}. No credit card required.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link href={trialHref("starter")}>

@@ -3,6 +3,7 @@ import {
   getPublicComparisonPrices,
   getPublicPlanPricing,
   getPublicTeaserPriceDisplay,
+  getEnterpriseContactHref,
   trialHref,
   type BillingInterval,
 } from "@/lib/billing/plans";
@@ -56,8 +57,12 @@ export function getProPricing(interval: BillingInterval) {
   return getPublicPlanPricing("pro", interval);
 }
 
+export function getBusinessPricing(interval: BillingInterval) {
+  return getPublicPlanPricing("business", interval);
+}
+
 export function getComparisonPrices(interval: BillingInterval) {
   return getPublicComparisonPrices(interval);
 }
 
-export { trialHref, getPublicTeaserPriceDisplay };
+export { trialHref, getPublicTeaserPriceDisplay, getEnterpriseContactHref };

@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 import {
   getPlanDefinition,
   getPublicTeaserPriceDisplay,
+  getEnterpriseContactHref,
   trialHref,
   type PlanId,
 } from "@/lib/billing/plans";
@@ -48,7 +49,18 @@ const TEASER_PLAN_CONFIG: TeaserPlanConfig[] = [
       "API access",
       "Priority support",
     ],
-    cta: { label: "Coming soon", href: "#", disabled: true },
+    cta: { label: "Start free trial", href: trialHref("business"), disabled: false },
+  },
+  {
+    id: "enterprise",
+    copy: "Custom terms, security, and volume pricing.",
+    features: [
+      "Custom usage limits",
+      "Dedicated onboarding",
+      "Security review support",
+      "Priority support",
+    ],
+    cta: { label: "Contact Sales", href: getEnterpriseContactHref(), disabled: false },
   },
 ];
 
@@ -65,7 +77,7 @@ export function LandingPricingTeaser() {
           </p>
         </div>
 
-        <div className="mt-14 grid gap-5 overflow-visible md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-14 grid gap-5 overflow-visible md:grid-cols-2 xl:grid-cols-4">
           {TEASER_PLAN_CONFIG.map((config) => {
             const plan = getPlanDefinition(config.id);
             const { price, suffix } = getPublicTeaserPriceDisplay(config.id);

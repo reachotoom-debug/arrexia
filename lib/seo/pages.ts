@@ -47,9 +47,9 @@ export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
   },
   pricing: {
     path: "/pricing",
-    title: "Arrexia Pricing | Plans for Invoice & Collections Teams",
+    title: "Arrexia Pricing | Cash Collection Operations Plans",
     description:
-      "Compare Arrexia pricing plans for invoice tracking, payment reminders, and accounts receivable automation. Start a 14-day free trial.",
+      "Compare Arrexia pricing for collections workflows, payment reminders, and accounts receivable operations. Start a 14-day free trial.",
     priority: 0.9,
     changeFrequency: "weekly",
   },

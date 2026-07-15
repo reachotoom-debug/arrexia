@@ -1,9 +1,17 @@
 export type WorkspacePlan = "free" | "starter" | "pro";
 
 /** Includes future tiers shown in marketing/billing UI but not yet stored in DB. */
-export type PlanId = WorkspacePlan | "business";
+export type PlanId = WorkspacePlan | "business" | "enterprise";
 
 export type BillingInterval = "monthly" | "annual";
+
+export const PUBLIC_PRICING = {
+  trialDays: 14,
+  trialLabel: "14-day free trial",
+  trialMicrocopy: "14-day free trial • No credit card required",
+  annualSavingsLabel: "Save 17% — 2 months free",
+  annualSavingsShortLabel: "Save 17%",
+} as const;
 
 export type PlanDefinition = {
   id: PlanId;
@@ -11,12 +19,12 @@ export type PlanDefinition = {
   description: string;
   monthlyPrice: number | null;
   annualPrice: number | null;
-  /** Display rate when billed annually, e.g. $24/mo on a $290/yr plan. */
-  annualMonthlyEquivalent: number | null;
   comingSoon: boolean;
-  /** Shown on settings billing cards; business is preview-only. */
+  contactSalesOnly: boolean;
+  /** Shown on settings billing cards; business/enterprise are preview-only. */
   selectableInBilling: boolean;
   mostPopular: boolean;
+  publicCtaLabel: string;
   limits: readonly string[];
   invoiceLimitMonthly: number | null;
   clientLimit: number | null;
@@ -30,10 +38,11 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     description: "Legacy trial tier for existing workspaces.",
     monthlyPrice: 0,
     annualPrice: 0,
-    annualMonthlyEquivalent: null,
     comingSoon: false,
+    contactSalesOnly: false,
     selectableInBilling: false,
     mostPopular: false,
+    publicCtaLabel: "Start free trial",
     limits: ["5 invoices / month", "5 clients"],
     invoiceLimitMonthly: 5,
     clientLimit: 5,
@@ -43,12 +52,13 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     id: "starter",
     name: "Starter",
     description: "For freelancers and small businesses.",
-    monthlyPrice: 29,
-    annualPrice: 290,
-    annualMonthlyEquivalent: 24,
+    monthlyPrice: 39,
+    annualPrice: 390,
     comingSoon: false,
+    contactSalesOnly: false,
     selectableInBilling: true,
     mostPopular: false,
+    publicCtaLabel: "Start free trial",
     limits: [
       "Up to 25 active clients",
       "Up to 50 invoices / month",
@@ -62,12 +72,13 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     id: "pro",
     name: "Pro",
     description: "For growing agencies and finance teams.",
-    monthlyPrice: 79,
-    annualPrice: 790,
-    annualMonthlyEquivalent: 65,
+    monthlyPrice: 89,
+    annualPrice: 890,
     comingSoon: false,
+    contactSalesOnly: false,
     selectableInBilling: true,
     mostPopular: true,
+    publicCtaLabel: "Start free trial",
     limits: [
       "Up to 250 active clients",
       "Up to 500 invoices / month",
@@ -82,11 +93,12 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     name: "Business",
     description: "For larger teams with advanced needs.",
     monthlyPrice: 199,
-    annualPrice: null,
-    annualMonthlyEquivalent: null,
-    comingSoon: true,
+    annualPrice: 1990,
+    comingSoon: false,
+    contactSalesOnly: false,
     selectableInBilling: false,
     mostPopular: false,
+    publicCtaLabel: "Start free trial",
     limits: [
       "Team permissions",
       "Custom domain",
@@ -97,7 +109,31 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     clientLimit: null,
     workspaceMemberLimit: null,
   },
+  enterprise: {
+    id: "enterprise",
+    name: "Enterprise",
+    description: "Custom terms, security, and volume pricing for larger organizations.",
+    monthlyPrice: null,
+    annualPrice: null,
+    comingSoon: false,
+    contactSalesOnly: true,
+    selectableInBilling: false,
+    mostPopular: false,
+    publicCtaLabel: "Contact Sales",
+    limits: [
+      "Custom usage limits",
+      "Dedicated onboarding",
+      "Security review support",
+      "Priority support",
+    ],
+    invoiceLimitMonthly: null,
+    clientLimit: null,
+    workspaceMemberLimit: null,
+  },
 };
+
+/** Plans rendered on the public pricing page. */
+export const PUBLIC_PRICING_PLANS: PlanId[] = ["starter", "pro", "business", "enterprise"];
 
 /** Plans rendered on the settings billing page. */
 export const BILLING_UI_PLANS: PlanId[] = ["starter", "pro", "business"];
@@ -120,8 +156,18 @@ export function formatPlanLabel(planId: string): string {
   return planId.charAt(0).toUpperCase() + planId.slice(1);
 }
 
+export function formatPublicUsd(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 export function formatMonthlyPrice(planId: PlanId): string {
   const plan = getPlanDefinition(planId);
+  if (plan.contactSalesOnly) return "Contact Sales";
   if (plan.comingSoon) return "Coming soon";
   if (plan.monthlyPrice === null || plan.monthlyPrice === 0) return "$0/mo";
   return `$${plan.monthlyPrice}/mo`;
@@ -151,20 +197,16 @@ export type PublicPlanPricingDisplay = {
 };
 
 export function getPublicPlanPricing(
-  planId: "starter" | "pro",
-  interval: BillingInterval
+  planId: "starter" | "pro" | "business",
+  interval: BillingInterval,
 ): PublicPlanPricingDisplay {
   const plan = PLAN_DEFINITIONS[planId];
-  if (interval === "annual" && plan.annualPrice && plan.annualMonthlyEquivalent) {
-    const annualSavings =
-      plan.monthlyPrice !== null
-        ? plan.monthlyPrice * 12 - plan.annualPrice
-        : 0;
+
+  if (interval === "annual" && plan.annualPrice) {
     return {
-      price: `$${plan.annualMonthlyEquivalent}`,
-      period: "/mo",
-      equivalentSubtext: `Billed annually at $${plan.annualPrice}/year`,
-      savingsBadge: annualSavings > 0 ? `Save $${annualSavings}/year` : undefined,
+      price: formatPublicUsd(plan.annualPrice),
+      period: "/year",
+      savingsBadge: PUBLIC_PRICING.annualSavingsLabel,
     };
   }
 
@@ -181,48 +223,47 @@ export function getPublicComparisonPrices(interval: BillingInterval) {
 
   if (interval === "annual") {
     return {
-      starter: `$${starter.annualMonthlyEquivalent}/mo · $${starter.annualPrice}/yr`,
-      pro: `$${pro.annualMonthlyEquivalent}/mo · $${pro.annualPrice}/yr`,
-      business: `$${business.monthlyPrice}/mo · Coming soon`,
+      starter: `${formatPublicUsd(starter.annualPrice!)}/yr`,
+      pro: `${formatPublicUsd(pro.annualPrice!)}/yr`,
+      business: `${formatPublicUsd(business.annualPrice!)}/yr`,
+      enterprise: "Contact Sales",
     };
   }
 
   return {
     starter: `$${starter.monthlyPrice}/mo`,
     pro: `$${pro.monthlyPrice}/mo`,
-    business: `$${business.monthlyPrice}/mo · Coming soon`,
+    business: `$${business.monthlyPrice}/mo`,
+    enterprise: "Contact Sales",
   };
 }
 
 /** Full comparison-table price cell (monthly + annual). */
 export function formatPublicComparisonPriceRow(
-  planId: "starter" | "pro" | "business",
+  planId: "starter" | "pro" | "business" | "enterprise",
 ): string {
   const plan = PLAN_DEFINITIONS[planId];
 
-  if (planId === "business") {
-    return `$${plan.monthlyPrice}/mo · Coming soon`;
+  if (plan.contactSalesOnly) {
+    return "Contact Sales";
   }
 
-  if (plan.annualPrice && plan.annualMonthlyEquivalent) {
-    return `$${plan.monthlyPrice}/mo or $${plan.annualMonthlyEquivalent}/mo billed annually ($${plan.annualPrice}/yr)`;
+  if (plan.annualPrice) {
+    return `$${plan.monthlyPrice}/mo or ${formatPublicUsd(plan.annualPrice)}/yr`;
   }
 
   return `$${plan.monthlyPrice}/mo`;
 }
 
-/** Homepage / marketing teaser price label, e.g. "$29" with optional "/month". */
+/** Homepage / marketing teaser price label. */
 export function getPublicTeaserPriceDisplay(planId: PlanId): {
   price: string;
   suffix: string;
 } {
   const plan = getPlanDefinition(planId);
 
-  if (plan.comingSoon && plan.monthlyPrice !== null) {
-    return {
-      price: `$${plan.monthlyPrice}`,
-      suffix: "/month",
-    };
+  if (plan.contactSalesOnly) {
+    return { price: "Contact Sales", suffix: "" };
   }
 
   if (plan.monthlyPrice === null) {
@@ -235,6 +276,10 @@ export function getPublicTeaserPriceDisplay(planId: PlanId): {
   };
 }
 
-export function trialHref(_plan?: "starter" | "pro") {
+export function getEnterpriseContactHref(): string {
+  return "/contact";
+}
+
+export function trialHref(_plan?: "starter" | "pro" | "business") {
   return "/register";
 }

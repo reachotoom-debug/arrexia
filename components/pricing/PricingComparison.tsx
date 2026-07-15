@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatPublicComparisonPriceRow } from "@/lib/billing/plans";
+import { formatPublicComparisonPriceRow, PUBLIC_PRICING } from "@/lib/billing/plans";
 import { Check } from "lucide-react";
 
 type ComparisonRow = {
@@ -7,6 +7,7 @@ type ComparisonRow = {
   starter: string;
   pro: string;
   business: string;
+  enterprise: string;
   highlight?: boolean;
 };
 
@@ -16,51 +17,56 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     starter: formatPublicComparisonPriceRow("starter"),
     pro: formatPublicComparisonPriceRow("pro"),
     business: formatPublicComparisonPriceRow("business"),
+    enterprise: formatPublicComparisonPriceRow("enterprise"),
     highlight: true,
   },
   {
     label: "Free trial",
-    starter: "✓ 14 days",
-    pro: "✓ 14 days",
-    business: "Coming soon",
+    starter: `✓ ${PUBLIC_PRICING.trialDays} days`,
+    pro: `✓ ${PUBLIC_PRICING.trialDays} days`,
+    business: `✓ ${PUBLIC_PRICING.trialDays} days`,
+    enterprise: "Contact Sales",
   },
   {
     label: "Active clients",
     starter: "Up to 25",
     pro: "Up to 250",
     business: "Higher limits",
+    enterprise: "Custom",
   },
   {
     label: "Invoices per month",
     starter: "Up to 50",
     pro: "Up to 500",
     business: "Higher limits",
+    enterprise: "Custom",
   },
   {
     label: "Workspace members",
     starter: "1",
     pro: "Up to 3",
     business: "Team permissions",
+    enterprise: "Custom",
   },
-  { label: "Client management", starter: "✓", pro: "✓", business: "✓" },
-  { label: "Invoice management", starter: "✓", pro: "✓", business: "✓" },
-  { label: "Branded PDF invoices", starter: "✓", pro: "✓", business: "✓" },
-  { label: "Manual payment tracking", starter: "✓", pro: "✓", business: "✓" },
-  { label: "Basic dashboard", starter: "✓", pro: "✓", business: "✓" },
-  { label: "Basic risk score", starter: "✓", pro: "✓", business: "✓" },
-  { label: "Manual reminders", starter: "✓", pro: "✓", business: "✓" },
-  { label: "Reminder history", starter: "✓", pro: "✓", business: "✓" },
-  { label: "Export data", starter: "✓", pro: "✓", business: "✓" },
-  { label: "Automated reminder rules", starter: "—", pro: "✓", business: "✓" },
-  { label: "Suggested reminders", starter: "—", pro: "✓", business: "✓" },
-  { label: "Collection workflows", starter: "—", pro: "✓", business: "✓" },
-  { label: "Advanced risk analysis", starter: "—", pro: "✓", business: "✓" },
-  { label: "Collections dashboard", starter: "—", pro: "✓", business: "✓" },
-  { label: "Email templates", starter: "—", pro: "✓", business: "✓" },
-  { label: "CSV import/export", starter: "—", pro: "✓", business: "✓" },
-  { label: "Priority support", starter: "—", pro: "✓", business: "✓" },
-  { label: "Custom domain", starter: "—", pro: "—", business: "✓" },
-  { label: "API access", starter: "—", pro: "—", business: "✓" },
+  { label: "Client management", starter: "✓", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Invoice management", starter: "✓", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Branded PDF invoices", starter: "✓", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Manual payment tracking", starter: "✓", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Basic dashboard", starter: "✓", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Basic risk score", starter: "✓", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Manual reminders", starter: "✓", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Reminder history", starter: "✓", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Export data", starter: "✓", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Automated reminder rules", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Suggested reminders", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Collection workflows", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Advanced risk analysis", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Collections dashboard", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Email templates", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "CSV import/export", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Priority support", starter: "—", pro: "✓", business: "✓", enterprise: "✓" },
+  { label: "Custom domain", starter: "—", pro: "—", business: "✓", enterprise: "✓" },
+  { label: "API access", starter: "—", pro: "—", business: "✓", enterprise: "✓" },
 ];
 
 function CellContent({ value, emphasized }: { value: string; emphasized?: boolean }) {
@@ -114,12 +120,13 @@ export function PricingComparison() {
         </p>
       </CardHeader>
       <CardContent className="overflow-x-auto p-7 pt-0 lg:p-9 lg:pt-0">
-        <table className="min-w-[720px] w-full table-fixed border-collapse text-sm lg:text-[15px]">
+        <table className="min-w-[880px] w-full table-fixed border-collapse text-sm lg:text-[15px]">
           <colgroup>
-            <col className="w-[38%]" />
-            <col className="w-[20.66%]" />
-            <col className="w-[20.66%]" />
-            <col className="w-[20.66%]" />
+            <col className="w-[30%]" />
+            <col className="w-[17.5%]" />
+            <col className="w-[17.5%]" />
+            <col className="w-[17.5%]" />
+            <col className="w-[17.5%]" />
           </colgroup>
           <thead>
             <tr className="border-b border-slate-200">
@@ -147,6 +154,12 @@ export function PricingComparison() {
               >
                 Business
               </th>
+              <th
+                scope="col"
+                className="px-3 py-5 text-center text-sm font-semibold text-slate-900 lg:text-base"
+              >
+                Enterprise
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -168,6 +181,9 @@ export function PricingComparison() {
                 </td>
                 <td className="px-3 py-4 text-center align-middle">
                   <CellContent value={row.business} emphasized={row.highlight} />
+                </td>
+                <td className="px-3 py-4 text-center align-middle">
+                  <CellContent value={row.enterprise} emphasized={row.highlight} />
                 </td>
               </tr>
             ))}
