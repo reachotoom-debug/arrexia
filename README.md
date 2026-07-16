@@ -26,14 +26,16 @@ NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ```
 
-Auth redirects (login, register, OAuth callback, email confirmation) use the **current browser origin** when available, and fall back to `NEXT_PUBLIC_APP_URL` (default `http://localhost:3000` in development). Production uses `https://arrexia.app` only when neither the request origin nor `NEXT_PUBLIC_APP_URL` is set.
+Auth redirects (login, register, OAuth callback, email confirmation, password reset) use the **current browser origin** when available via `getClientAppOrigin()`, and fall back to `NEXT_PUBLIC_APP_URL` (default `http://localhost:3000` in development). Production uses `https://arrexia.app` only when neither the request origin nor `NEXT_PUBLIC_APP_URL` is set.
 
 For **local Supabase** (`npm run supabase:start`), redirect URLs are configured in `supabase/config.toml` under `[auth]`. For **hosted Supabase** while testing on localhost, add these in the Supabase Dashboard → Authentication → URL configuration:
 
 - Site URL: `http://localhost:3000` (for local QA) or `https://arrexia.app` (production)
-- Redirect URLs: `http://localhost:3000/auth/callback`, `http://127.0.0.1:3000/auth/callback`, `https://arrexia.app/auth/callback`
+- Redirect URLs: `http://localhost:3000/auth/callback`, `http://127.0.0.1:3000/auth/callback`, `https://arrexia.app/auth/callback`, `https://arrexia.app/auth/callback?next=/reset-password`
 
 OAuth callback path: `{APP_URL}/auth/callback`
+
+See [Authentication Email Branding](docs/authentication-email-branding.md) for how Supabase auth emails differ from Resend application emails, reference templates in `supabase/templates/`, and Dashboard configuration steps.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
@@ -92,3 +94,9 @@ CRON_SECRET=your-random-secret
 3. Optionally set workspace **From name** / **From email** in Settings → Email.
 
 SMTP remains available as an optional fallback when a workspace explicitly selects **Custom SMTP** in settings.
+
+## Authentication email branding
+
+Supabase Auth sends signup confirmation and password-reset emails. Resend sends invoice, reminder, and newsletter emails only.
+
+Reference HTML templates for manual Dashboard sync: `supabase/templates/`. Full setup guide: [docs/authentication-email-branding.md](docs/authentication-email-branding.md).

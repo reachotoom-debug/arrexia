@@ -1,4 +1,4 @@
-import { buildAuthCallbackUrl, getConfiguredAppUrl } from "@/lib/config/appUrl";
+import { buildAuthCallbackUrl } from "@/lib/config/appUrl";
 import {
   AUTH_PASSWORD_RESET_SEND_FAILURE_MESSAGE,
   AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE,
@@ -22,7 +22,7 @@ export const PASSWORD_RESET_UPDATE_FAILURE_MESSAGE = AUTH_PASSWORD_RESET_UPDATE_
 /** Supabase password recovery redirect — must go through /auth/callback for PKCE. */
 export function buildPasswordResetCallbackUrl(origin?: string): string {
   const callbackUrl = buildAuthCallbackUrl({
-    origin: origin ?? getConfiguredAppUrl(),
+    origin,
     next: PASSWORD_RESET_NEXT_PATH,
   });
 

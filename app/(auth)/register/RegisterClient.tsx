@@ -34,6 +34,7 @@ import {
   type SignUpOutcome,
 } from "@/lib/auth/signUpResult";
 import { useAuthUrlSanitizer } from "@/lib/auth/useAuthUrlSanitizer";
+import { getClientAppOrigin } from "@/lib/config/appUrl";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 type SuccessState = {
@@ -103,8 +104,7 @@ export function RegisterClient() {
     setResendMessage(null);
 
     const supabase = supabaseBrowser();
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const emailRedirectTo = getEmailRedirectTo(origin);
+    const emailRedirectTo = getEmailRedirectTo(getClientAppOrigin());
 
     const { error } = await supabase.auth.resend({
       type: "signup",
@@ -137,8 +137,7 @@ export function RegisterClient() {
     setResendMessage(null);
 
     const supabase = supabaseBrowser();
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const emailRedirectTo = getEmailRedirectTo(origin);
+    const emailRedirectTo = getEmailRedirectTo(getClientAppOrigin());
 
     try {
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({

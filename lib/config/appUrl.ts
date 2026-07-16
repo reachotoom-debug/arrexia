@@ -22,7 +22,11 @@ export function getConfiguredAppUrl(): string {
   return DEFAULT_PRODUCTION_APP_URL;
 }
 
-/** Browser origin when available; otherwise configured app URL. */
+/**
+ * Origin for client-initiated auth redirects (signup, password reset, OAuth).
+ * Prefers the current browser origin so localhost and Vercel previews stay in sync
+ * with the page the user is on; falls back to getConfiguredAppUrl() on the server.
+ */
 export function getClientAppOrigin(): string {
   if (typeof window !== "undefined" && window.location.origin) {
     return window.location.origin;
@@ -56,7 +60,7 @@ export type AuthCallbackUrlOptions = {
   returnTo?: "/login" | "/register";
 };
 
-/** Supabase email/OAuth redirect target for this app. */
+/** Supabase email/OAuth redirect target for this app. Uses getClientAppOrigin() when origin is omitted. */
 export function buildAuthCallbackUrl(options: AuthCallbackUrlOptions = {}): string | undefined {
   const base = (options.origin?.trim() || getClientAppOrigin()).replace(/\/+$/, "");
   if (!base) return undefined;
