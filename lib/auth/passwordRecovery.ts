@@ -1,4 +1,4 @@
-import { buildAuthCallbackUrl } from "@/lib/config/appUrl";
+import { normalizeAuthRedirectOrigin } from "@/lib/config/appUrl";
 import {
   AUTH_PASSWORD_RESET_SEND_FAILURE_MESSAGE,
   AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE,
@@ -7,6 +7,8 @@ import {
 } from "@/lib/auth/authErrors";
 
 export const PASSWORD_RESET_NEXT_PATH = "/reset-password" as const;
+
+export const PASSWORD_RESET_CALLBACK_QUERY = `next=${PASSWORD_RESET_NEXT_PATH}` as const;
 
 export const RESET_LINK_EXPIRED_TITLE = "Reset link expired";
 
@@ -19,18 +21,14 @@ export const PASSWORD_RESET_SEND_FAILURE_MESSAGE = AUTH_PASSWORD_RESET_SEND_FAIL
 /** @deprecated Use AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE from authErrors */
 export const PASSWORD_RESET_UPDATE_FAILURE_MESSAGE = AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE;
 
-/** Supabase password recovery redirect — must go through /auth/callback for PKCE. */
+/**
+ * Supabase password recovery redirect — must go through /auth/callback for PKCE.
+ * Built as a literal query string so `next=/reset-password` matches Supabase redirect allowlists
+ * (URLSearchParams encodes the slash as %2F, which Supabase may reject and fall back to site_url).
+ */
 export function buildPasswordResetCallbackUrl(origin?: string): string {
-  const callbackUrl = buildAuthCallbackUrl({
-    origin,
-    next: PASSWORD_RESET_NEXT_PATH,
-  });
-
-  if (!callbackUrl) {
-    throw new Error("Unable to build password reset callback URL");
-  }
-
-  return callbackUrl;
+  const base = normalizeAuthRedirectOrigin(origin);
+  return `${base}/auth/callback?${PASSWORD_RESET_CALLBACK_QUERY}`;
 }
 
 export function isPasswordRecoveryCallback(next: string | null): boolean {

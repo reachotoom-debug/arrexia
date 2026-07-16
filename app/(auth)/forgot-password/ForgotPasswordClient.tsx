@@ -23,6 +23,7 @@ import {
 import {
   buildPasswordResetCallbackUrl,
 } from "@/lib/auth/passwordRecovery";
+import { getClientAppOrigin } from "@/lib/config/appUrl";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 const forgotPasswordSchema = z.object({
@@ -55,7 +56,11 @@ export function ForgotPasswordClient() {
 
     try {
       const supabase = supabaseBrowser();
-      const redirectTo = buildPasswordResetCallbackUrl();
+      const redirectTo = buildPasswordResetCallbackUrl(getClientAppOrigin());
+
+      if (process.env.NODE_ENV === "development") {
+        console.info("[auth/forgot-password] redirectTo:", redirectTo);
+      }
 
       const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
         redirectTo,

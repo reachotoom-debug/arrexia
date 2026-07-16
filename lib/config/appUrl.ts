@@ -60,10 +60,21 @@ export type AuthCallbackUrlOptions = {
   returnTo?: "/login" | "/register";
 };
 
+/**
+ * Normalized origin for client-initiated auth redirects (no trailing slash).
+ * Uses explicit origin when provided; otherwise getClientAppOrigin().
+ */
+export function normalizeAuthRedirectOrigin(origin?: string): string {
+  const base = (origin?.trim() || getClientAppOrigin()).replace(/\/+$/, "");
+  if (!base) {
+    throw new Error("Unable to determine auth redirect origin");
+  }
+  return base;
+}
+
 /** Supabase email/OAuth redirect target for this app. Uses getClientAppOrigin() when origin is omitted. */
 export function buildAuthCallbackUrl(options: AuthCallbackUrlOptions = {}): string | undefined {
-  const base = (options.origin?.trim() || getClientAppOrigin()).replace(/\/+$/, "");
-  if (!base) return undefined;
+  const base = normalizeAuthRedirectOrigin(options.origin);
 
   const url = new URL("/auth/callback", base);
 
