@@ -34,7 +34,19 @@ Each file includes a header comment:
 
 > Reference template for manual synchronization with Supabase Dashboard.
 
-Placeholder variables (for example `{{ confirmation_url }}`, `{{ reset_url }}`, `{{ user_email }}`) are illustrative. Use the exact variable names shown in the Supabase Dashboard template editor when copying content.
+Placeholder variables use Supabase Go template syntax (for example `{{ .ConfirmationURL }}`, `{{ .Email }}`, `{{ .SiteURL }}`). Use the exact variable names shown in the Supabase Dashboard template editor when copying content.
+
+### Logo asset for auth email templates
+
+Both reference templates use the email-optimized PNG hosted from the public site:
+
+| Asset | Public URL |
+|-------|------------|
+| `public/brand/arrexia-logo-email.png` | `https://www.arrexia.app/brand/arrexia-logo-email.png` |
+
+This matches the application transactional email logo in `lib/email/templates.ts`. Use the `www` host in email HTML — `https://arrexia.app/brand/...` redirects (308) and some email clients do not load redirected images reliably.
+
+Do **not** use SVG logos in auth emails (`arrexia-avatar.svg` is the only SVG under `public/brand/`); SVG support in email clients is inconsistent.
 
 ## Supabase Dashboard configuration (required for production)
 

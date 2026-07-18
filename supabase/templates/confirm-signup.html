@@ -1,50 +1,50 @@
 <!--
   Reference template for manual synchronization with Supabase Dashboard.
   Copy this HTML into: Authentication → Email Templates → Confirm signup.
-  Replace placeholder variables with the variable names shown in the Dashboard editor.
+  Supabase Go template variables: {{ .ConfirmationURL }}, {{ .Email }}, {{ .SiteURL }}
+  Recommended subject: Confirm your Arrexia account
 -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <title>Confirm your Arrexia account</title>
   </head>
-  <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a;">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; padding: 32px 16px;">
       <tr>
         <td align="center">
           <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
             <tr>
-              <td style="padding: 32px 32px 24px; text-align: center; border-bottom: 1px solid #e2e8f0;">
-                <!-- Arrexia logo placeholder -->
-                <img
-                  src="https://arrexia.app/brand/arrexia-logo-email.png"
-                  alt="Arrexia"
-                  width="160"
-                  style="display: block; margin: 0 auto; max-width: 160px; height: auto;"
-                />
+              <td style="padding: 32px 32px 24px; text-align: center; border-bottom: 1px solid #e2e8f0; background-color: #ffffff;">
+                <a href="https://www.arrexia.app" style="text-decoration: none;">
+                  <img
+                    src="https://www.arrexia.app/brand/arrexia-logo-email.png"
+                    alt="Arrexia"
+                    width="160"
+                    style="display: block; margin: 0 auto; max-width: 160px; height: auto; border: 0; outline: none; text-decoration: none;"
+                  />
+                </a>
               </td>
             </tr>
             <tr>
               <td style="padding: 32px;">
                 <h1 style="margin: 0 0 16px; font-size: 22px; line-height: 1.3; color: #0f172a; font-weight: 600;">
-                  Confirm your email address
+                  Confirm your Arrexia account
                 </h1>
-                <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #334155;">
-                  Thanks for signing up for Arrexia. Please confirm that
-                  <strong style="color: #0f172a;">{{ user_email }}</strong>
-                  is your email address so you can start managing cash collection with clarity and confidence.
+                <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7; color: #334155;">
+                  You&rsquo;re one step away from getting started with Arrexia. Confirm your email address to activate your account.
                 </p>
-                <p style="margin: 0 0 28px; font-size: 15px; line-height: 1.6; color: #334155;">
-                  Click the button below to verify your account. This link expires for your security.
+                <p style="margin: 0 0 28px; font-size: 15px; line-height: 1.7; color: #334155;">
+                  This link expires for your security. Once confirmed, you can sign in and set up your workspace.
                 </p>
                 <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto 28px;">
                   <tr>
                     <td align="center" style="border-radius: 8px; background-color: #2563eb;">
-                      <!-- Primary CTA placeholder -->
                       <a
-                        href="{{ confirmation_url }}"
+                        href="{{ .ConfirmationURL }}"
                         style="display: inline-block; padding: 14px 28px; font-size: 15px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 8px;"
                       >
                         Confirm email address
@@ -52,12 +52,22 @@
                     </td>
                   </tr>
                 </table>
-                <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #64748b;">
+                <p style="margin: 0 0 8px; font-size: 13px; line-height: 1.6; color: #64748b;">
                   If the button does not work, copy and paste this link into your browser:
                 </p>
-                <p style="margin: 8px 0 0; font-size: 13px; line-height: 1.6; word-break: break-all;">
-                  <a href="{{ confirmation_url }}" style="color: #2563eb; text-decoration: underline;">{{ confirmation_url }}</a>
+                <p style="margin: 0 0 24px; font-size: 13px; line-height: 1.6; word-break: break-all;">
+                  <a href="{{ .ConfirmationURL }}" style="color: #2563eb; text-decoration: underline;">{{ .ConfirmationURL }}</a>
                 </p>
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                  <tr>
+                    <td style="padding: 16px 18px;">
+                      <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #64748b;">
+                        <strong style="color: #0f172a;">Security note:</strong>
+                        If you did not create an Arrexia account, you can safely ignore this email.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
             <tr>
@@ -67,7 +77,7 @@
                   Cash Flow. Clarity. Confidence.
                 </p>
                 <p style="margin: 0 0 12px; font-size: 13px; line-height: 1.5;">
-                  <a href="https://arrexia.app" style="color: #2563eb; text-decoration: none;">https://arrexia.app</a>
+                  <a href="https://www.arrexia.app" style="color: #2563eb; text-decoration: none;">www.arrexia.app</a>
                 </p>
                 <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #94a3b8;">
                   Need help? Contact
