@@ -1,5 +1,10 @@
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
+import {
+  AUTH_SESSION_COULD_NOT_BE_ESTABLISHED_MESSAGE,
+} from "@/lib/auth/authErrors";
+import { resolveAuthenticatedBootstrapFailureRedirect } from "@/lib/auth/postLoginRecovery";
+
 const SENSITIVE_AUTH_PARAMS = ["password", "passwd", "pwd"] as const;
 const POST_LOGIN_MAX_ATTEMPTS = 4;
 const POST_LOGIN_RETRY_MS = 150;
@@ -24,7 +29,7 @@ type PostLoginApiLegacy = {
   error?: string;
 };
 
-function parsePostLoginPayload(
+export function parsePostLoginPayload(
   payload: PostLoginApiSuccess | PostLoginApiFailure | PostLoginApiLegacy | null,
   status: number
 ) {
@@ -130,6 +135,18 @@ export async function resolvePostLoginPath(
       lastBody: lastPayload,
       error: lastError,
     });
+  }
+
+  const recoveryRedirect = resolveAuthenticatedBootstrapFailureRedirect(lastError);
+  if (recoveryRedirect) {
+    return { redirectTo: recoveryRedirect };
+  }
+
+  if (lastStatus === 401) {
+    return {
+      redirectTo: "/login",
+      error: AUTH_SESSION_COULD_NOT_BE_ESTABLISHED_MESSAGE,
+    };
   }
 
   return {

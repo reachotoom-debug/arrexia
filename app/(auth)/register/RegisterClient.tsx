@@ -31,6 +31,7 @@ import {
   SIGNUP_CONFIRMATION_BODY,
   SIGNUP_CONFIRMATION_HEADING,
   SIGNUP_READY_TO_SIGN_IN_MESSAGE,
+  shouldOfferSignupConfirmationResend,
   type SignUpOutcome,
 } from "@/lib/auth/signUpResult";
 import { useAuthUrlSanitizer } from "@/lib/auth/useAuthUrlSanitizer";
@@ -185,8 +186,7 @@ export function RegisterClient() {
 
   if (successState) {
     const { outcome } = successState;
-    const showResend =
-      outcome.kind === "confirmation_sent" || outcome.kind === "already_registered";
+    const showResend = shouldOfferSignupConfirmationResend(outcome);
 
     let heading = SIGNUP_CONFIRMATION_HEADING;
     let body = SIGNUP_CONFIRMATION_BODY;
@@ -230,6 +230,12 @@ export function RegisterClient() {
           <Link href="/login" className={`${authButtonClass} inline-block text-center`}>
             Back to Sign In
           </Link>
+
+          {outcome.kind === "already_registered" ? (
+            <Link href="/forgot-password" className={`${authButtonClass} inline-block text-center`}>
+              Reset password
+            </Link>
+          ) : null}
         </div>
       </AuthCard>
     );

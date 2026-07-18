@@ -12,6 +12,18 @@ export const AUTH_GENERIC_FAILURE_MESSAGE =
 export const AUTH_REGISTER_FAILURE_MESSAGE =
   "We couldn't create your account right now. Please try again in a few minutes.";
 
+export const AUTH_WORKSPACE_SETUP_FAILED_MESSAGE =
+  "Your account is confirmed, but workspace setup failed. Please try again.";
+
+export const AUTH_CONFIRMATION_LINK_INVALID_MESSAGE =
+  "This confirmation link is invalid or has expired. Please sign in or register again.";
+
+export const AUTH_SESSION_COULD_NOT_BE_ESTABLISHED_MESSAGE =
+  "Your session could not be established. Please sign in again.";
+
+export const AUTH_EMAIL_NOT_CONFIRMED_MESSAGE =
+  "Please confirm your email before signing in. Check your inbox for the confirmation link.";
+
 export const AUTH_PASSWORD_RESET_SEND_FAILURE_MESSAGE =
   "We couldn't send a reset email right now. Please try again in a few minutes.";
 
@@ -37,6 +49,13 @@ export function mapSupabaseAuthError(
 
   if (normalized.includes("rate limit") || normalized.includes("email rate limit")) {
     return AUTH_EMAIL_RATE_LIMIT_MESSAGE;
+  }
+
+  if (
+    normalized.includes("email not confirmed") ||
+    normalized.includes("email address not confirmed")
+  ) {
+    return AUTH_EMAIL_NOT_CONFIRMED_MESSAGE;
   }
 
   if (
@@ -83,6 +102,23 @@ export function mapSupabaseAuthError(
     default:
       return AUTH_GENERIC_FAILURE_MESSAGE;
   }
+}
+
+export function mapAuthCallbackExchangeError(message: string): string {
+  const normalized = normalizeAuthErrorMessage(message);
+
+  if (
+    normalized.includes("expired") ||
+    normalized.includes("invalid") ||
+    normalized.includes("pkce") ||
+    normalized.includes("code verifier") ||
+    normalized.includes("auth code") ||
+    normalized.includes("flow state")
+  ) {
+    return AUTH_CONFIRMATION_LINK_INVALID_MESSAGE;
+  }
+
+  return AUTH_SESSION_COULD_NOT_BE_ESTABLISHED_MESSAGE;
 }
 
 export function logAuthErrorDev(context: string, error: unknown): void {

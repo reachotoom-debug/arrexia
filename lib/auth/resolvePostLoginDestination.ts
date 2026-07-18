@@ -1,9 +1,10 @@
+import { AUTH_WORKSPACE_SETUP_FAILED_MESSAGE } from "@/lib/auth/authErrors";
+import { buildPostLoginDestinationPath } from "@/lib/auth/postLoginRecovery";
 import { resolveHonoredNextPath } from "@/lib/auth/safeNextPath";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ensureWorkspaceForUser } from "@/lib/workspaces/ensureWorkspaceForUser";
 
-export const WORKSPACE_SETUP_FAILED_MESSAGE =
-  "Your account is confirmed, but workspace setup failed. Please try again.";
+export const WORKSPACE_SETUP_FAILED_MESSAGE = AUTH_WORKSPACE_SETUP_FAILED_MESSAGE;
 
 export type PostLoginDestinationResult = {
   path: string;
@@ -48,9 +49,8 @@ export async function resolvePostLoginDestination(
     );
     memberWorkspaceIds.add(workspaceId);
 
-    const defaultPath = `/${workspaceId}/dashboard`;
+    const path = buildPostLoginDestinationPath(workspaceId, nextUrl, memberWorkspaceIds);
     const honoredNext = resolveHonoredNextPath(nextUrl, memberWorkspaceIds);
-    const path = honoredNext ?? defaultPath;
 
     logPostLoginDev({
       userId,

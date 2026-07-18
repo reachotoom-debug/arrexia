@@ -1,21 +1,18 @@
 import { NextResponse } from "next/server";
+import { mapAuthCallbackExchangeError } from "@/lib/auth/authErrors";
 import { getServerAppOrigin } from "@/lib/config/appUrl";
 import { getOAuthCallbackErrorMessage, isSocialAuthEnabled } from "@/lib/auth/oauthErrors";
 import {
   isPasswordRecoveryCallback,
   PASSWORD_RESET_NEXT_PATH,
 } from "@/lib/auth/passwordRecovery";
+import { resolveAuthCallbackFailureRedirect } from "@/lib/auth/postLoginRecovery";
 import {
   resolvePostLoginDestination,
   WORKSPACE_SETUP_FAILED_MESSAGE,
 } from "@/lib/auth/resolvePostLoginDestination";
+import { sanitizeNextPath } from "@/lib/auth/safeNextPath";
 import { supabaseRouteHandler } from "@/lib/supabase/route-handler";
-
-function sanitizeNext(next: string | null): string | null {
-  if (!next) return null;
-  if (!next.startsWith("/") || next.startsWith("//")) return null;
-  return next;
-}
 
 function sanitizeReturnTo(returnTo: string | null): "/login" | "/register" {
   return returnTo === "/register" ? "/register" : "/login";
@@ -42,7 +39,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const origin = getServerAppOrigin(request);
   const code = searchParams.get("code");
-  const next = sanitizeNext(searchParams.get("next"));
+  const next = sanitizeNextPath(searchParams.get("next"));
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const isRecovery = isPasswordRecoveryCallback(next);
 
@@ -82,7 +79,7 @@ export async function GET(request: Request) {
     if (isRecovery) {
       return redirectRecoveryExpired(origin);
     }
-    return redirectWithError(origin, returnTo, error.message);
+    return redirectWithError(origin, returnTo, mapAuthCallbackExchangeError(error.message));
   }
 
   const {
@@ -105,7 +102,15 @@ export async function GET(request: Request) {
   const destination = await resolvePostLoginDestination(user.id, next);
 
   if ("error" in destination) {
-    return redirectWithError(origin, returnTo, WORKSPACE_SETUP_FAILED_MESSAGE);
+    const recoveryUrl = resolveAuthCallbackFailureRedirect({
+      origin,
+      returnTo,
+      errorMessage: WORKSPACE_SETUP_FAILED_MESSAGE,
+      sessionEstablished: true,
+    });
+    const recoveryRedirect = NextResponse.redirect(recoveryUrl);
+    copyCookies(cookieHolder, recoveryRedirect);
+    return recoveryRedirect;
   }
 
   const finalRedirect = NextResponse.redirect(`${origin}${destination.path}`);

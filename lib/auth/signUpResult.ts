@@ -41,6 +41,10 @@ export function isLocalSupabaseHost(host: string): boolean {
   return host === "127.0.0.1" || host === "localhost" || host.startsWith("127.0.0.1:");
 }
 
+export function shouldOfferSignupConfirmationResend(outcome: SignUpOutcome): boolean {
+  return outcome.kind === "confirmation_sent";
+}
+
 export function analyzeSignUpResponse(
   data: SignUpResultData | null,
   error: AuthError | null
