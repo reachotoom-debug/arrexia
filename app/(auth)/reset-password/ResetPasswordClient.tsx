@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { AuthBranding } from "@/components/auth/AuthBranding";
 import { AuthCard } from "@/components/auth/AuthCard";
 import {
@@ -17,27 +16,18 @@ import {
   authInputClass,
   authNoticeClass,
 } from "@/components/auth/authFormStyles";
+import { logAuthErrorDev } from "@/lib/auth/authErrors";
 import {
-  logAuthErrorDev,
-  mapSupabaseAuthError,
-} from "@/lib/auth/authErrors";
-import {
+  mapPasswordResetUpdateError,
+  PASSWORD_RESET_SUCCESS_MESSAGE,
+  PASSWORD_RESET_SUCCESS_TITLE,
   RESET_LINK_EXPIRED_MESSAGE,
   RESET_LINK_EXPIRED_TITLE,
+  shouldAllowPasswordResetSubmit,
+  verifyRecoverySessionWithRetry,
 } from "@/lib/auth/passwordRecovery";
+import { resetPasswordSchema, type ResetPasswordValues } from "@/lib/schemas/auth";
 import { supabaseBrowser } from "@/lib/supabase/client";
-
-const resetPasswordSchema = z
-  .object({
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    confirmPassword: z.string().min(1, "Confirm password is required"),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ["confirmPassword"],
-  });
-
-type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 
 export function ResetPasswordClient() {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -71,16 +61,14 @@ export function ResetPasswordClient() {
       }
 
       const supabase = supabaseBrowser();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const hasSession = await verifyRecoverySessionWithRetry(async () => {
+        const { data } = await supabase.auth.getUser();
+        return { data: { user: data.user } };
+      });
 
       if (cancelled) return;
 
-      if (!session) {
-        setSessionExpired(true);
-      }
-
+      setSessionExpired(!hasSession);
       setIsCheckingSession(false);
     };
 
@@ -92,7 +80,14 @@ export function ResetPasswordClient() {
   }, []);
 
   const onSubmit = async (data: ResetPasswordValues) => {
-    if (submitLockRef.current || isSubmitting || sessionExpired) {
+    if (
+      !shouldAllowPasswordResetSubmit({
+        submitLocked: submitLockRef.current,
+        isSubmitting,
+        sessionExpired,
+        completed,
+      })
+    ) {
       return;
     }
 
@@ -104,7 +99,7 @@ export function ResetPasswordClient() {
 
       if (error) {
         logAuthErrorDev("reset-password", error);
-        setError("root", { message: mapSupabaseAuthError(error.message, "reset-password") });
+        setError("root", { message: mapPasswordResetUpdateError(error.message) });
         return;
       }
 
@@ -155,8 +150,8 @@ export function ResetPasswordClient() {
         <AuthBranding />
 
         <div className={authNoticeClass}>
-          <p className="font-medium">Password updated</p>
-          <p className="mt-1 text-blue-600">You can now sign in with your new password.</p>
+          <p className="font-medium">{PASSWORD_RESET_SUCCESS_TITLE}</p>
+          <p className="mt-1 text-blue-600">{PASSWORD_RESET_SUCCESS_MESSAGE}</p>
         </div>
 
         <div className={authFooterClass}>

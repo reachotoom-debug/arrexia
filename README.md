@@ -31,7 +31,7 @@ Auth redirects (login, register, OAuth callback, email confirmation, password re
 For **local Supabase** (`npm run supabase:start`), redirect URLs are configured in `supabase/config.toml` under `[auth]`. For **hosted Supabase** while testing on localhost, add these in the Supabase Dashboard → Authentication → URL configuration:
 
 - Site URL: `http://localhost:3000` (for local QA) or `https://arrexia.app` (production)
-- Redirect URLs: `http://localhost:3000/auth/callback`, `http://127.0.0.1:3000/auth/callback`, `https://arrexia.app/auth/callback`, `https://arrexia.app/auth/callback?next=/reset-password`
+- Redirect URLs: `http://localhost:3000/auth/callback`, `http://127.0.0.1:3000/auth/callback`, `https://arrexia.app/auth/callback`, `https://arrexia.app/auth/callback?next=/reset-password`, `https://www.arrexia.app/auth/callback`, `https://www.arrexia.app/auth/callback?next=/reset-password`
 
 OAuth callback path: `{APP_URL}/auth/callback`
 

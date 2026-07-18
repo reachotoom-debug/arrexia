@@ -45,6 +45,8 @@ Placeholder variables (for example `{{ confirmation_url }}`, `{{ reset_url }}`, 
 | Site URL | `https://arrexia.app` |
 | Redirect URLs | `https://arrexia.app/auth/callback` |
 | | `https://arrexia.app/auth/callback?next=/reset-password` |
+| | `https://www.arrexia.app/auth/callback` |
+| | `https://www.arrexia.app/auth/callback?next=/reset-password` |
 | Local QA (optional) | `http://localhost:3000/auth/callback` |
 | | `http://127.0.0.1:3000/auth/callback` |
 | | `http://localhost:3000/auth/callback?next=/reset-password` |

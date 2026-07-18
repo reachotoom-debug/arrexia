@@ -3,8 +3,9 @@ import { mapAuthCallbackExchangeError } from "@/lib/auth/authErrors";
 import { getServerAppOrigin } from "@/lib/config/appUrl";
 import { getOAuthCallbackErrorMessage, isSocialAuthEnabled } from "@/lib/auth/oauthErrors";
 import {
-  isPasswordRecoveryCallback,
+  isPasswordRecoveryRequest,
   PASSWORD_RESET_NEXT_PATH,
+  resolvePasswordRecoveryCallbackDecision,
 } from "@/lib/auth/passwordRecovery";
 import { resolveAuthCallbackFailureRedirect } from "@/lib/auth/postLoginRecovery";
 import {
@@ -40,8 +41,9 @@ export async function GET(request: Request) {
   const origin = getServerAppOrigin(request);
   const code = searchParams.get("code");
   const next = sanitizeNextPath(searchParams.get("next"));
+  const recoveryType = searchParams.get("type");
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
-  const isRecovery = isPasswordRecoveryCallback(next);
+  const isRecovery = isPasswordRecoveryRequest(next, recoveryType);
 
   const oauthError = searchParams.get("error");
   const oauthErrorDescription = searchParams.get("error_description");
@@ -93,7 +95,16 @@ export async function GET(request: Request) {
     return redirectWithError(origin, returnTo, "Signed in, but no user found");
   }
 
-  if (isRecovery) {
+  const successDecision = resolvePasswordRecoveryCallbackDecision({
+    next,
+    typeParam: recoveryType,
+    code,
+    oauthError: null,
+    exchangeSucceeded: true,
+    hasUser: true,
+  });
+
+  if (successDecision.action === "recovery_success") {
     const finalRedirect = NextResponse.redirect(`${origin}${PASSWORD_RESET_NEXT_PATH}`);
     copyCookies(cookieHolder, finalRedirect);
     return finalRedirect;

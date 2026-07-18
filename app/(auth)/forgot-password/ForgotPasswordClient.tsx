@@ -18,10 +18,10 @@ import {
 } from "@/components/auth/authFormStyles";
 import {
   logAuthErrorDev,
-  mapSupabaseAuthError,
 } from "@/lib/auth/authErrors";
 import {
   buildPasswordResetCallbackUrl,
+  mapPasswordResetRequestError,
 } from "@/lib/auth/passwordRecovery";
 import { getClientAppOrigin } from "@/lib/config/appUrl";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -68,7 +68,7 @@ export function ForgotPasswordClient() {
 
       if (error) {
         logAuthErrorDev("forgot-password", error);
-        setError("root", { message: mapSupabaseAuthError(error.message, "forgot-password") });
+        setError("root", { message: mapPasswordResetRequestError(error.message) });
         return;
       }
 
