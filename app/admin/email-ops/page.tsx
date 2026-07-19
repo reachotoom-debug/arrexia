@@ -1,8 +1,9 @@
 import { guardFullAdminConsoleAccess, renderAdminSetupScreen } from "@/lib/admin/adminPageGate";
 import { getFounderEmailOpsData } from "@/lib/admin/getAdminDashboardData";
+import { AdminDateTimeCell } from "@/components/admin/AdminDateTimeCell";
 import { AdminPageShell } from "../_components/AdminPageShell";
 import { AdminMetricCard } from "../_components/AdminMetricCard";
-import { AdminCard, formatAdminDateTime } from "../_components/adminUtils";
+import { AdminCard } from "../_components/adminUtils";
 
 export default async function AdminEmailOpsPage() {
   const gate = await guardFullAdminConsoleAccess();
@@ -48,7 +49,9 @@ export default async function AdminEmailOpsPage() {
             <tbody className="divide-y divide-slate-100 bg-white">
               {data.recentEvents.map((event) => (
                 <tr key={`${event.type}-${event.id}`}>
-                  <td className="px-4 py-3 text-slate-600">{formatAdminDateTime(event.createdAt)}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    <AdminDateTimeCell value={event.createdAt} />
+                  </td>
                   <td className="px-4 py-3 capitalize text-slate-900">{event.type}</td>
                   <td className="px-4 py-3 capitalize text-slate-600">{event.status}</td>
                   <td className="px-4 py-3 text-slate-600">{event.recipientEmail ?? "—"}</td>

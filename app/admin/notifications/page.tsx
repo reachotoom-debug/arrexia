@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { guardFullAdminConsoleAccess, renderAdminSetupScreen } from "@/lib/admin/adminPageGate";
 import { getFounderNotificationsData } from "@/lib/admin/getAdminDashboardData";
+import { AdminDateTimeCell } from "@/components/admin/AdminDateTimeCell";
 import { AdminPageShell } from "../_components/AdminPageShell";
-import { AdminCard, formatAdminDateTime } from "../_components/adminUtils";
+import { AdminCard } from "../_components/adminUtils";
 
 export default async function AdminNotificationsPage() {
   const gate = await guardFullAdminConsoleAccess();
@@ -31,7 +32,9 @@ export default async function AdminNotificationsPage() {
               <div>
                 <p className="font-medium text-slate-900">{item.title}</p>
                 <p className="mt-1 text-sm text-slate-600">{item.description}</p>
-                <p className="mt-1 text-xs text-slate-400">{formatAdminDateTime(item.createdAt)}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  <AdminDateTimeCell value={item.createdAt} />
+                </p>
               </div>
               {item.href ? (
                 <Link

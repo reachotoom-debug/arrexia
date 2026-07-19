@@ -1,7 +1,8 @@
 import { guardFullAdminConsoleAccess, renderAdminSetupScreen } from "@/lib/admin/adminPageGate";
 import { getFounderSubscribersData } from "@/lib/admin/getAdminDashboardData";
+import { AdminDateTimeCell } from "@/components/admin/AdminDateTimeCell";
 import { AdminPageShell } from "../_components/AdminPageShell";
-import { AdminCard, PlanBadge, formatAdminCurrency, formatAdminDate, formatAdminDateTime } from "../_components/adminUtils";
+import { AdminCard, PlanBadge, formatAdminCurrency, formatAdminDate } from "../_components/adminUtils";
 import { ChangeWorkspacePlanForm } from "../_components/ChangeWorkspacePlanForm";
 
 export default async function AdminSubscribersPage() {
@@ -51,7 +52,9 @@ export default async function AdminSubscribersPage() {
                   <td className="px-4 py-3 text-slate-600">{formatAdminDate(row.trialEndsAt)}</td>
                   <td className="px-4 py-3 text-slate-600">{formatAdminDate(row.renewalDate)}</td>
                   <td className="px-4 py-3 text-slate-900">{formatAdminCurrency(row.estimatedMonthlyValue)}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatAdminDateTime(row.lastSignInAt)}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    <AdminDateTimeCell value={row.lastSignInAt} />
+                  </td>
                   <td className="px-4 py-3">
                     <ChangeWorkspacePlanForm workspaceId={row.workspaceId} currentPlan={row.plan} />
                   </td>

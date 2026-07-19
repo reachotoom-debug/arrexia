@@ -10,8 +10,8 @@ import {
   updateAdminRoleAction,
 } from "../actions";
 import type { AdminRole } from "@/lib/admin/requireAdmin";
+import { AdminDateTimeCell } from "@/components/admin/AdminDateTimeCell";
 import { AdminCard } from "./adminUtils";
-import { formatAdminDateTime } from "./adminUtils";
 import { Button } from "@/components/ui/button";
 
 type AdminUserRow = {
@@ -166,7 +166,7 @@ export function AdminSecurityPanel({
                     )}
                   </td>
                   <td className="px-4 py-3 text-slate-600">
-                    {formatAdminDateTime(row.createdAt)}
+                    <AdminDateTimeCell value={row.createdAt} />
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {row.createdByEmail ?? "—"}
@@ -254,7 +254,7 @@ export function AdminSecurityPanel({
                 auditLogs.map((log) => (
                   <tr key={log.id}>
                     <td className="px-4 py-3 text-slate-600">
-                      {formatAdminDateTime(log.createdAt)}
+                      <AdminDateTimeCell value={log.createdAt} />
                     </td>
                     <td className="px-4 py-3 text-slate-900">{log.action}</td>
                     <td className="px-4 py-3 text-slate-600">

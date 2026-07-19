@@ -1,9 +1,9 @@
 import { guardFullAdminConsoleAccess, renderAdminSetupScreen } from "@/lib/admin/adminPageGate";
 import { getFounderUsersData } from "@/lib/admin/getAdminDashboardData";
 import { AdminCreateWorkspaceButton } from "@/components/admin/AdminCreateWorkspaceButton";
+import { AdminDateTimeCell } from "@/components/admin/AdminDateTimeCell";
 import { AdminPageShell } from "../_components/AdminPageShell";
 import { AdminCard } from "../_components/adminUtils";
-import { formatAdminDateTime } from "../_components/adminUtils";
 
 export default async function AdminUsersPage() {
   const gate = await guardFullAdminConsoleAccess();
@@ -42,9 +42,11 @@ export default async function AdminUsersPage() {
               {users.map((user) => (
                 <tr key={user.id}>
                   <td className="px-4 py-3 text-slate-900">{user.email ?? user.id}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatAdminDateTime(user.createdAt)}</td>
                   <td className="px-4 py-3 text-slate-600">
-                    {formatAdminDateTime(user.lastSignInAt)}
+                    <AdminDateTimeCell value={user.createdAt} />
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    <AdminDateTimeCell value={user.lastSignInAt} />
                   </td>
                   <td className="px-4 py-3 text-slate-600">{user.workspaceCount}</td>
                   {canRepairUsers ? (

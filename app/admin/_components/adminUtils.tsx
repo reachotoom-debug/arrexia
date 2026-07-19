@@ -1,24 +1,19 @@
 import type { ReactNode } from "react";
 import type { WorkspacePlan } from "@/lib/billing/plans";
+import {
+  APPLICATION_FALLBACK_TIMEZONE,
+  formatAdminDisplayDate,
+  formatAdminDisplayDateTime,
+} from "@/lib/datetime/formatDateTime";
 
+/** Server-side fallback only. Prefer AdminDateTimeCell in admin UI tables. */
 export function formatAdminDate(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return formatAdminDisplayDate(value, APPLICATION_FALLBACK_TIMEZONE);
 }
 
+/** Server-side fallback only. Prefer AdminDateTimeCell in admin UI tables. */
 export function formatAdminDateTime(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatAdminDisplayDateTime(value, APPLICATION_FALLBACK_TIMEZONE);
 }
 
 export function formatAdminCurrency(value: number) {
