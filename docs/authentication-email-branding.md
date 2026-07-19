@@ -46,7 +46,7 @@ Both reference templates use the email-optimized PNG hosted from the public site
 
 This matches the application transactional email logo in `lib/email/templates.ts`. Use the `www` host in email HTML — `https://arrexia.app/brand/...` redirects (308) and some email clients do not load redirected images reliably.
 
-Do **not** use SVG logos in auth emails (`arrexia-avatar.svg` is the only SVG under `public/brand/`); SVG support in email clients is inconsistent.
+Both templates use `{{ .ConfirmationURL }}` for the primary CTA button and for the fallback text link. Do not render `{{ .ConfirmationURL }}` as visible body text — long verification tokens make the email look unprofessional. The fallback uses short linked copy instead (for example, “Click here to confirm your email address”).
 
 ## Supabase Dashboard configuration (required for production)
 
