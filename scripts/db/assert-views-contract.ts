@@ -7,6 +7,7 @@
 
 import { Client } from 'pg';
 import * as process from 'process';
+import { INVOICES_VIEW_CONTRACT_COLUMNS } from './invoicesViewContract';
 
 interface ColumnDefinition {
   name: string;
@@ -49,26 +50,7 @@ const VIEW_CONTRACTS: ViewContract[] = [
   },
   {
     viewName: 'invoices_view',
-    expectedColumns: [
-      { name: 'id', data_type: 'uuid' },
-      { name: 'workspace_id', data_type: 'uuid' },
-      { name: 'client_id', data_type: 'uuid' },
-      { name: 'client_name', data_type: 'text' },
-      { name: 'invoice_number', data_type: 'text' },
-      { name: 'issue_date', data_type: 'date' },
-      { name: 'due_date', data_type: 'date' },
-      { name: 'currency', data_type: 'text' },
-      { name: 'total', data_type: 'numeric' },
-      { name: 'paid', data_type: 'numeric' },
-      { name: 'outstanding', data_type: 'numeric' },
-      { name: 'base_status', data_type: 'text' },
-      { name: 'display_status', data_type: 'text' },
-      { name: 'is_overdue', data_type: 'boolean' },
-      { name: 'overdue_days', data_type: 'integer' },
-      { name: 'risk_level', data_type: 'text' },
-      { name: 'po_number', data_type: 'text' },
-      { name: 'notes', data_type: 'text' },
-    ],
+    expectedColumns: INVOICES_VIEW_CONTRACT_COLUMNS,
   },
   {
     viewName: 'invoice_risk_view',
