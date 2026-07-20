@@ -136,7 +136,6 @@ function WorkspaceSidebarPanel({
               <Link
                 key={item.href}
                 href={item.href}
-                prefetch={false}
                 title={item.label}
                 onClick={afterNav}
                 className={[
@@ -168,7 +167,6 @@ function WorkspaceSidebarPanel({
           {showAdminLink ? (
             <Link
               href={adminPath}
-              prefetch={false}
               title="Admin"
               onClick={afterNav}
               className={[
@@ -247,7 +245,6 @@ function WorkspaceSidebarPanel({
           {isUpgradeAvailable(plan) ? (
             <Link
               href={`/${workspaceId}/settings?section=billing`}
-              prefetch={false}
               onClick={afterNav}
               className="text-xs font-medium text-blue-600 hover:text-blue-700"
             >

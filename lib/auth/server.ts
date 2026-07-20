@@ -1,44 +1,55 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
 
-export type AuthUserInfo = {
-  id: string;
-  email: string | null;
-};
+import {
+  loadAuthenticatedUserUncached,
+  loadWorkspaceAccessUncached,
+} from "./requestScope";
+import type { AuthUserInfo, MembershipInfo, WorkspaceAccessResult, WorkspaceInfo } from "./types";
 
-export type WorkspaceInfo = {
-  id: string;
-  name: string;
-  organization_id: string;
-};
+export type { AuthUserInfo, MembershipInfo, WorkspaceInfo } from "./types";
 
-export type MembershipInfo = {
-  workspace_id: string;
-  role: string | null;
-};
+/** Request-scoped memoized auth lookup (one getUser() per server request). */
+export const getAuthenticatedUser = cache(loadAuthenticatedUserUncached);
 
-export async function requireUser(): Promise<{ user: AuthUserInfo }> {
-  const supabase = await supabaseServer();
-  let user = null as any;
-  let error: unknown = null;
-  try {
-    const result = await supabase.auth.getUser();
-    user = result.data.user;
-    error = result.error;
-  } catch (err) {
-    error = err;
+const getWorkspaceAccess = cache(
+  async (workspaceId: string): Promise<WorkspaceAccessResult> => {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return { status: "unauthenticated" };
+    }
+
+    return loadWorkspaceAccessUncached(workspaceId, user);
   }
+);
 
-  if (!user || error) {
+function assertWorkspacePageAccess(access: WorkspaceAccessResult): {
+  user: AuthUserInfo;
+  workspace: WorkspaceInfo;
+  membership: MembershipInfo;
+} {
+  if (access.status === "unauthenticated") {
     redirect("/login");
   }
 
+  if (access.status === "forbidden") {
+    redirect("/start");
+  }
+
   return {
-    user: {
-      id: user.id,
-      email: user.email ?? null,
-    },
+    user: access.user,
+    workspace: access.workspace,
+    membership: access.membership,
   };
+}
+
+export async function requireUser(): Promise<{ user: AuthUserInfo }> {
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  return { user };
 }
 
 export async function requireWorkspace(workspaceId: string): Promise<{
@@ -46,57 +57,8 @@ export async function requireWorkspace(workspaceId: string): Promise<{
   workspace: WorkspaceInfo;
   membership: MembershipInfo;
 }> {
-  const supabase = await supabaseServer();
-  let user = null as any;
-  let authError: unknown = null;
-  try {
-    const result = await supabase.auth.getUser();
-    user = result.data.user;
-    authError = result.error;
-  } catch (err) {
-    authError = err;
-  }
-
-  if (!user || authError) {
-    redirect("/login");
-  }
-
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("workspace_id, role")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!membership) {
-    redirect("/start");
-  }
-
-  const { data: workspace, error: wsError } = await supabase
-    .from("workspaces")
-    .select("id, name, organization_id")
-    .eq("id", workspaceId)
-    .single();
-
-  if (!workspace || wsError || !workspace.organization_id) {
-    redirect("/start");
-  }
-
-  return {
-    user: {
-      id: user.id,
-      email: user.email ?? null,
-    },
-    workspace: {
-      id: workspace.id,
-      name: workspace.name,
-      organization_id: workspace.organization_id,
-    },
-    membership: {
-      workspace_id: membership.workspace_id,
-      role: membership.role,
-    },
-  };
+  const access = await getWorkspaceAccess(workspaceId);
+  return assertWorkspacePageAccess(access);
 }
 
 export type ApiAuthFailure = {
@@ -116,57 +78,20 @@ export type ApiAuthSuccess = {
 export async function requireWorkspaceForApi(
   workspaceId: string
 ): Promise<ApiAuthSuccess | ApiAuthFailure> {
-  const supabase = await supabaseServer();
-  let user = null as { id: string; email?: string | null } | null;
-  let authError: unknown = null;
+  const access = await getWorkspaceAccess(workspaceId);
 
-  try {
-    const result = await supabase.auth.getUser();
-    user = result.data.user;
-    authError = result.error;
-  } catch (err) {
-    authError = err;
-  }
-
-  if (!user || authError) {
+  if (access.status === "unauthenticated") {
     return { ok: false, status: 401, error: "Unauthorized" };
   }
 
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("workspace_id, role")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!membership) {
-    return { ok: false, status: 403, error: "Forbidden" };
-  }
-
-  const { data: workspace, error: wsError } = await supabase
-    .from("workspaces")
-    .select("id, name, organization_id")
-    .eq("id", workspaceId)
-    .single();
-
-  if (!workspace || wsError || !workspace.organization_id) {
+  if (access.status === "forbidden") {
     return { ok: false, status: 403, error: "Forbidden" };
   }
 
   return {
     ok: true,
-    user: {
-      id: user.id,
-      email: user.email ?? null,
-    },
-    workspace: {
-      id: workspace.id,
-      name: workspace.name,
-      organization_id: workspace.organization_id,
-    },
-    membership: {
-      workspace_id: membership.workspace_id,
-      role: membership.role,
-    },
+    user: access.user,
+    workspace: access.workspace,
+    membership: access.membership,
   };
 }

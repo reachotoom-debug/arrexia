@@ -1,3 +1,6 @@
+import { cache } from "react";
+
+import { getAuthenticatedUser } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export type AccountProfileResult = {
@@ -10,22 +13,17 @@ export type AccountProfileResult = {
   error?: string;
 };
 
-export async function getCurrentProfile(): Promise<AccountProfileResult> {
-  const supabase = await supabaseServer();
+async function loadCurrentProfileUncached(): Promise<AccountProfileResult> {
+  const user = await getAuthenticatedUser();
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    console.error("[getCurrentProfile] auth error:", userError);
+  if (!user) {
     return {
       profile: null,
       error: "User not authenticated",
     };
   }
 
+  const supabase = await supabaseServer();
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
@@ -56,6 +54,9 @@ export async function getCurrentProfile(): Promise<AccountProfileResult> {
   };
 }
 
+/** Request-scoped memoized profile lookup (reuses cached auth user). */
+export const getCurrentProfile = cache(loadCurrentProfileUncached);
+
 export type UpsertProfileResult = {
   error?: string;
 };
@@ -64,18 +65,13 @@ export async function upsertProfile(input: {
   full_name?: string;
   avatar_url?: string | null;
 }): Promise<UpsertProfileResult> {
-  const supabase = await supabaseServer();
+  const user = await getAuthenticatedUser();
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    console.error("[upsertProfile] auth error:", userError);
+  if (!user) {
     return { error: "User not authenticated" };
   }
 
+  const supabase = await supabaseServer();
   const { error } = await supabase
     .from("profiles")
     .upsert(
