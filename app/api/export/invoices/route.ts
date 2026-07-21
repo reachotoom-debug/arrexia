@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/auth/server";
-import { normalizeInvoiceListStatusParam } from "@/lib/invoices/listQueryPlan";
+import { normalizeInvoiceListStatusParam, applyDisplayStatusFilterPredicate, buildDisplayStatusFilterPredicate } from "@/lib/invoices/listQueryPlan";
 import { supabaseServer } from "@/lib/supabase/server";
 import { toCsv, formatDate, formatMoney } from "@/lib/csv/exportCsv";
 
@@ -80,7 +80,10 @@ function buildInvoicesQuery(
     } else if (status === "paid") {
       query = query.or("display_status.eq.paid,display_status.eq.Paid");
     } else if (status === "partial") {
-      query = query.eq("display_status", "partially_paid");
+      query = applyDisplayStatusFilterPredicate(
+        query,
+        buildDisplayStatusFilterPredicate("partially_paid")
+      );
     } else if (status === "overdue") {
       query = query.or("display_status.eq.overdue,display_status.eq.Overdue");
     } else if (status === "sent") {

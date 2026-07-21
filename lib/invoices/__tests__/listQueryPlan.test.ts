@@ -4,8 +4,10 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import {
+  applyDisplayStatusFilterPredicate,
   buildDisplayStatusFilterPredicate,
   invoiceListViewAppliesCountFilters,
+  matchesPartiallyPaidFinancialFilter,
   normalizeInvoiceListStatusParam,
   resolveInvoiceListDisplayStatusFilter,
   shouldReuseAnyInvoicesCountAsFilteredCount,
@@ -96,18 +98,57 @@ describe("normalizeInvoiceListStatusParam", () => {
   });
 });
 
+describe("matchesPartiallyPaidFinancialFilter", () => {
+  it("matches overdue invoices with paid > 0 and outstanding > 0", () => {
+    assert.equal(
+      matchesPartiallyPaidFinancialFilter({
+        paid: 2000,
+        outstanding: 1591,
+      }),
+      true
+    );
+  });
+
+  it("matches non-overdue invoices with paid > 0 and outstanding > 0", () => {
+    assert.equal(
+      matchesPartiallyPaidFinancialFilter({
+        paid: 500,
+        outstanding: 500,
+      }),
+      true
+    );
+  });
+
+  it("does not match when paid = 0", () => {
+    assert.equal(
+      matchesPartiallyPaidFinancialFilter({
+        paid: 0,
+        outstanding: 1591,
+      }),
+      false
+    );
+  });
+
+  it("does not match when outstanding = 0", () => {
+    assert.equal(
+      matchesPartiallyPaidFinancialFilter({
+        paid: 3591,
+        outstanding: 0,
+      }),
+      false
+    );
+  });
+});
+
 describe("Partially Paid filter construction", () => {
-  it("maps status=partial to canonical display_status eq partially_paid", () => {
+  it("maps status=partial to financial paid/outstanding predicate", () => {
     const status = normalizeInvoiceListStatusParam("partial");
     const displayStatus = resolveInvoiceListDisplayStatusFilter(status);
     assert.equal(displayStatus, "partially_paid");
 
     const predicate = buildDisplayStatusFilterPredicate(displayStatus!);
-    assert.equal(predicate.kind, "eq");
-    if (predicate.kind === "eq") {
-      assert.equal(predicate.column, "display_status");
-      assert.equal(predicate.value, "partially_paid");
-    }
+    assert.equal(predicate.kind, "financial_partial");
+    assert.doesNotMatch(JSON.stringify(predicate), /display_status/);
   });
 
   it("maps status=partially_paid to the same Partially Paid path", () => {
@@ -118,17 +159,26 @@ describe("Partially Paid filter construction", () => {
     assert.equal(displayStatus, "partially_paid");
 
     const predicate = buildDisplayStatusFilterPredicate(displayStatus!);
-    assert.equal(predicate.kind, "eq");
-    if (predicate.kind === "eq") {
-      assert.equal(predicate.value, "partially_paid");
-    }
+    assert.equal(predicate.kind, "financial_partial");
   });
 
-  it("does not include legacy Partially Paid OR branch", () => {
+  it("applies paid > 0 and outstanding > 0 to query builders", () => {
+    const calls: string[] = [];
+    const mockQuery = {
+      gt(column: string, value: number) {
+        calls.push(`${column}.${value}`);
+        return this;
+      },
+      or(expression: string) {
+        calls.push(`or:${expression}`);
+        return this;
+      },
+    };
+
     const predicate = buildDisplayStatusFilterPredicate("partially_paid");
-    const serialized = JSON.stringify(predicate);
-    assert.doesNotMatch(serialized, /Partially Paid/);
-    assert.doesNotMatch(serialized, /\.or\(/);
+    applyDisplayStatusFilterPredicate(mockQuery, predicate);
+
+    assert.deepEqual(calls, ["paid.0", "outstanding.0"]);
   });
 
   it("preserves legacy OR predicates for other display-status tabs", () => {

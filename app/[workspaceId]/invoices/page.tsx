@@ -1,5 +1,6 @@
 import { requireWorkspace } from "@/lib/auth/server";
 import {
+  applyDisplayStatusFilterPredicate,
   buildDisplayStatusFilterPredicate,
   normalizeInvoiceListStatusParam,
   shouldReuseAnyInvoicesCountAsFilteredCount,
@@ -421,13 +422,8 @@ async function loadInvoices(
 
     if (displayStatusFilter) {
       const predicate = buildDisplayStatusFilterPredicate(displayStatusFilter);
-      if (predicate.kind === "eq") {
-        query = query.eq(predicate.column, predicate.value);
-        countQuery = countQuery.eq(predicate.column, predicate.value);
-      } else {
-        query = query.or(predicate.expression);
-        countQuery = countQuery.or(predicate.expression);
-      }
+      query = applyDisplayStatusFilterPredicate(query, predicate);
+      countQuery = applyDisplayStatusFilterPredicate(countQuery, predicate);
     }
   }
   // Archived tab: No status filter needed - shows all archived invoices regardless of status

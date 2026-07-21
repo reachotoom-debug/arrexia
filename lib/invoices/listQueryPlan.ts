@@ -19,7 +19,7 @@ export type InvoiceListViewParam =
 export type InvoiceListDisplayStatusFilter = "paid" | "partially_paid" | "overdue";
 
 export type DisplayStatusFilterPredicate =
-  | { kind: "eq"; column: "display_status"; value: "partially_paid" }
+  | { kind: "financial_partial" }
   | { kind: "or"; expression: string };
 
 const INVOICE_LIST_STATUS_PARAMS: InvoiceListStatusParam[] = [
@@ -62,12 +62,20 @@ export function resolveInvoiceListDisplayStatusFilter(
   }
 }
 
+/** Whether an invoice matches the Partially Paid tab (financial definition). */
+export function matchesPartiallyPaidFinancialFilter(input: {
+  paid: number;
+  outstanding: number;
+}): boolean {
+  return input.paid > 0 && input.outstanding > 0;
+}
+
 /** Builds the display_status predicate for active invoice list queries. */
 export function buildDisplayStatusFilterPredicate(
   displayStatus: InvoiceListDisplayStatusFilter
 ): DisplayStatusFilterPredicate {
   if (displayStatus === "partially_paid") {
-    return { kind: "eq", column: "display_status", value: "partially_paid" };
+    return { kind: "financial_partial" };
   }
 
   const capitalizedFilter = displayStatus
@@ -79,6 +87,22 @@ export function buildDisplayStatusFilterPredicate(
     kind: "or",
     expression: `display_status.eq.${displayStatus},display_status.eq.${capitalizedFilter}`,
   };
+}
+
+type DisplayStatusFilterQuery<T> = {
+  gt: (column: string, value: number) => T;
+  or: (expression: string) => T;
+};
+
+export function applyDisplayStatusFilterPredicate<T extends DisplayStatusFilterQuery<T>>(
+  query: T,
+  predicate: DisplayStatusFilterPredicate
+): T {
+  if (predicate.kind === "financial_partial") {
+    return query.gt("paid", 0).gt("outstanding", 0);
+  }
+
+  return query.or(predicate.expression);
 }
 
 export type InvoiceListQueryPlanInput = {
