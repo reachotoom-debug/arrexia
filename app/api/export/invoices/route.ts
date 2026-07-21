@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/auth/server";
+import { normalizeInvoiceListStatusParam } from "@/lib/invoices/listQueryPlan";
 import { supabaseServer } from "@/lib/supabase/server";
 import { toCsv, formatDate, formatMoney } from "@/lib/csv/exportCsv";
 
@@ -20,7 +21,7 @@ function parseExportParams(searchParams: URLSearchParams): {
   clientId: string | null;
 } {
   const workspaceId = searchParams.get("workspaceId") || "";
-  const status = (searchParams.get("status") || "all") as InvoiceStatusParam;
+  const status = normalizeInvoiceListStatusParam(searchParams.get("status"));
   const view = searchParams.get("view") || null;
   const search = searchParams.get("search") || null;
   const sort = searchParams.get("sort") || null;
@@ -79,7 +80,7 @@ function buildInvoicesQuery(
     } else if (status === "paid") {
       query = query.or("display_status.eq.paid,display_status.eq.Paid");
     } else if (status === "partial") {
-      query = query.or("display_status.eq.partially_paid,display_status.eq.Partially Paid");
+      query = query.eq("display_status", "partially_paid");
     } else if (status === "overdue") {
       query = query.or("display_status.eq.overdue,display_status.eq.Overdue");
     } else if (status === "sent") {

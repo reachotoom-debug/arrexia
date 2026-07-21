@@ -4,7 +4,10 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import {
+  buildDisplayStatusFilterPredicate,
   invoiceListViewAppliesCountFilters,
+  normalizeInvoiceListStatusParam,
+  resolveInvoiceListDisplayStatusFilter,
   shouldReuseAnyInvoicesCountAsFilteredCount,
 } from "../listQueryPlan";
 
@@ -63,9 +66,80 @@ describe("shouldReuseAnyInvoicesCountAsFilteredCount", () => {
     );
   });
 
+  it("returns false for Partially Paid (status=partial)", () => {
+    assert.equal(
+      shouldReuseAnyInvoicesCountAsFilteredCount({
+        status: "partial",
+        search: "",
+        view: "default",
+      }),
+      false
+    );
+  });
+
   it("documents smart views apply extra count filters", () => {
     assert.equal(invoiceListViewAppliesCountFilters("default"), false);
     assert.equal(invoiceListViewAppliesCountFilters("smart-low-risk"), true);
+  });
+});
+
+describe("normalizeInvoiceListStatusParam", () => {
+  it("accepts partial and partially_paid URL values", () => {
+    assert.equal(normalizeInvoiceListStatusParam("partial"), "partial");
+    assert.equal(normalizeInvoiceListStatusParam("partially_paid"), "partial");
+    assert.equal(normalizeInvoiceListStatusParam("PARTIALLY_PAID"), "partial");
+  });
+
+  it("falls back unknown values to all", () => {
+    assert.equal(normalizeInvoiceListStatusParam(null), "all");
+    assert.equal(normalizeInvoiceListStatusParam("unknown"), "all");
+  });
+});
+
+describe("Partially Paid filter construction", () => {
+  it("maps status=partial to canonical display_status eq partially_paid", () => {
+    const status = normalizeInvoiceListStatusParam("partial");
+    const displayStatus = resolveInvoiceListDisplayStatusFilter(status);
+    assert.equal(displayStatus, "partially_paid");
+
+    const predicate = buildDisplayStatusFilterPredicate(displayStatus!);
+    assert.equal(predicate.kind, "eq");
+    if (predicate.kind === "eq") {
+      assert.equal(predicate.column, "display_status");
+      assert.equal(predicate.value, "partially_paid");
+    }
+  });
+
+  it("maps status=partially_paid to the same Partially Paid path", () => {
+    const status = normalizeInvoiceListStatusParam("partially_paid");
+    assert.equal(status, "partial");
+
+    const displayStatus = resolveInvoiceListDisplayStatusFilter(status);
+    assert.equal(displayStatus, "partially_paid");
+
+    const predicate = buildDisplayStatusFilterPredicate(displayStatus!);
+    assert.equal(predicate.kind, "eq");
+    if (predicate.kind === "eq") {
+      assert.equal(predicate.value, "partially_paid");
+    }
+  });
+
+  it("does not include legacy Partially Paid OR branch", () => {
+    const predicate = buildDisplayStatusFilterPredicate("partially_paid");
+    const serialized = JSON.stringify(predicate);
+    assert.doesNotMatch(serialized, /Partially Paid/);
+    assert.doesNotMatch(serialized, /\.or\(/);
+  });
+
+  it("preserves legacy OR predicates for other display-status tabs", () => {
+    const paidPredicate = buildDisplayStatusFilterPredicate("paid");
+    assert.equal(paidPredicate.kind, "or");
+    if (paidPredicate.kind === "or") {
+      assert.match(paidPredicate.expression, /display_status\.eq\.paid,display_status\.eq\.Paid/);
+    }
+
+    const overduePredicate = buildDisplayStatusFilterPredicate("overdue");
+    assert.equal(overduePredicate.kind, "or");
   });
 });
 

@@ -1,5 +1,9 @@
 import { requireWorkspace } from "@/lib/auth/server";
-import { shouldReuseAnyInvoicesCountAsFilteredCount } from "@/lib/invoices/listQueryPlan";
+import {
+  buildDisplayStatusFilterPredicate,
+  normalizeInvoiceListStatusParam,
+  shouldReuseAnyInvoicesCountAsFilteredCount,
+} from "@/lib/invoices/listQueryPlan";
 import { supabaseServer } from "@/lib/supabase/server";
 import { createRoutePerf, isPerfEnabled, perfLog, perfTime } from "@/lib/perf/server";
 import Link from "next/link";
@@ -261,19 +265,7 @@ function normalizeDisplayStatus(value: string | null | undefined): InvoiceStatus
 }
 
 function normalizeStatusParam(raw: string | null): InvoiceStatusParam {
-  if (!raw) return "all";
-  const value = raw.toLowerCase() as InvoiceStatusParam;
-  const allowed: InvoiceStatusParam[] = [
-    "all",
-    "draft",
-    "sent",
-    "paid",
-    "partial",
-    "overdue",
-    "void",
-    "archived",
-  ];
-  return allowed.includes(value) ? value : "all";
+  return normalizeInvoiceListStatusParam(raw);
 }
 
 
@@ -428,16 +420,14 @@ async function loadInvoices(
     }
 
     if (displayStatusFilter) {
-      // Normalize the filter value to snake_case
-      const normalizedFilter = normalizeDisplayStatus(displayStatusFilter);
-      // Convert to capitalized format (e.g., "partially_paid" -> "Partially Paid")
-      const capitalizedFilter = normalizedFilter
-        .split("_")
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ");
-      // Use or() to handle both lowercase snake_case and capitalized space-separated formats from DB
-      query = query.or(`display_status.eq.${normalizedFilter},display_status.eq.${capitalizedFilter}`);
-      countQuery = countQuery.or(`display_status.eq.${normalizedFilter},display_status.eq.${capitalizedFilter}`);
+      const predicate = buildDisplayStatusFilterPredicate(displayStatusFilter);
+      if (predicate.kind === "eq") {
+        query = query.eq(predicate.column, predicate.value);
+        countQuery = countQuery.eq(predicate.column, predicate.value);
+      } else {
+        query = query.or(predicate.expression);
+        countQuery = countQuery.or(predicate.expression);
+      }
     }
   }
   // Archived tab: No status filter needed - shows all archived invoices regardless of status
