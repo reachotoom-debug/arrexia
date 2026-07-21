@@ -631,28 +631,6 @@ async function loadClients(
   };
 }
 
-/**
- * Build canonical URL with all required params explicitly set
- * Canonical: status=all&view=default&sort=created_at&dir=desc&page=1&pageSize=10
- * If q exists, include it too
- */
-function buildCanonicalClientsUrl(
-  workspaceId: string,
-  q?: string
-): string {
-  const params = new URLSearchParams();
-  params.set("status", "all");
-  params.set("view", "default");
-  params.set("sort", "created_at");
-  params.set("dir", "desc");
-  params.set("page", "1");
-  params.set("pageSize", String(CLIENTS_PAGE_SIZE));
-  if (q && q.trim()) {
-    params.set("q", q.trim());
-  }
-  return `/${workspaceId}/clients?${params.toString()}`;
-}
-
 export default async function ClientsPage({
   params,
   searchParams,
@@ -667,69 +645,6 @@ export default async function ClientsPage({
   const limitCodeParam = Array.isArray(resolvedSearchParams.limit)
     ? resolvedSearchParams.limit[0]
     : resolvedSearchParams.limit;
-  
-  // Check if required params are missing and redirect to canonical URL
-  const hasStatus = resolvedSearchParams.status !== undefined;
-  const hasView = resolvedSearchParams.view !== undefined;
-  const hasSort = resolvedSearchParams.sort !== undefined;
-  const hasDir = resolvedSearchParams.dir !== undefined;
-  const hasPage = resolvedSearchParams.page !== undefined;
-  const hasPageSize = resolvedSearchParams.pageSize !== undefined;
-  
-  // Extract q to preserve it in redirect
-  const rawQ = Array.isArray(resolvedSearchParams.q) ? resolvedSearchParams.q[0] : resolvedSearchParams.q;
-  const rawSearch = Array.isArray(resolvedSearchParams.search) ? resolvedSearchParams.search[0] : resolvedSearchParams.search;
-  const q = (rawQ || rawSearch || "").trim();
-  
-  // Check if required params are missing or invalid, and redirect to canonical URL
-  // Canonical: status=all, view=default, sort=created_at, dir=desc, page=1, pageSize=10
-  const needsRedirect = !hasStatus || !hasView || !hasSort || !hasDir || !hasPage || !hasPageSize;
-  
-  if (needsRedirect) {
-    const { redirect } = await import("next/navigation");
-    const canonicalParams = new URLSearchParams();
-    
-    // Use existing values if valid, otherwise use defaults
-    // Default status is "active" (shows only active, non-archived clients)
-    const status = hasStatus
-      ? (Array.isArray(resolvedSearchParams.status) ? resolvedSearchParams.status[0] : resolvedSearchParams.status)
-      : "active";
-    const view = hasView
-      ? (Array.isArray(resolvedSearchParams.view) ? resolvedSearchParams.view[0] : resolvedSearchParams.view)
-      : "default";
-    const sort = hasSort
-      ? (Array.isArray(resolvedSearchParams.sort) ? resolvedSearchParams.sort[0] : resolvedSearchParams.sort)
-      : "created_at";
-    const dir = hasDir
-      ? (Array.isArray(resolvedSearchParams.dir) ? resolvedSearchParams.dir[0] : resolvedSearchParams.dir)
-      : "desc";
-    const page = hasPage
-      ? (Array.isArray(resolvedSearchParams.page) ? resolvedSearchParams.page[0] : resolvedSearchParams.page)
-      : "1";
-    const pageSize = hasPageSize
-      ? (Array.isArray(resolvedSearchParams.pageSize) ? resolvedSearchParams.pageSize[0] : resolvedSearchParams.pageSize)
-      : String(CLIENTS_PAGE_SIZE);
-    
-    // Validate values match allowed options
-    const validStatus = ["all", "active", "inactive", "archived"].includes(status?.toLowerCase() || "") ? status : "active";
-    const validView = ["default", "highest-outstanding-first", "with-overdue-invoices"].includes(view || "") ? view : "default";
-    const validSort = ["client_name", "company", "email", "outstanding", "invoices_count", "status", "created_at"].includes(sort || "") ? sort : "created_at";
-    const validDir = ["asc", "desc"].includes(dir?.toLowerCase() || "") ? dir : "desc";
-    const validPage = Math.max(parseInt(page || "1", 10) || 1, 1).toString();
-    const validPageSize = Math.max(parseInt(pageSize || String(CLIENTS_PAGE_SIZE), 10) || CLIENTS_PAGE_SIZE, 1).toString();
-    
-    canonicalParams.set("status", validStatus ?? "");
-    canonicalParams.set("view", validView ?? "");
-    canonicalParams.set("sort", validSort ?? "");
-    canonicalParams.set("dir", validDir ?? "");
-    canonicalParams.set("page", validPage);
-    canonicalParams.set("pageSize", validPageSize);
-    if (q && q.trim()) {
-      canonicalParams.set("q", q.trim());
-    }
-    
-    redirect(`/${workspaceId}/clients?${canonicalParams.toString()}`);
-  }
   
   const supabase = await supabaseServer();
   const parsedForPlan = parseClientsQuery(resolvedSearchParams);
