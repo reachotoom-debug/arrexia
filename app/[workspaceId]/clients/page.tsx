@@ -1,5 +1,6 @@
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { createRoutePerf, perfTime } from "@/lib/perf/server";
 import { unstable_noStore as noStore } from "next/cache";
 import Link from "next/link";
 import { ErrorState, EmptyState } from "@/components/ui/state";
@@ -362,9 +363,12 @@ async function loadClients(
 
   // Fetch clients - if view needs invoice data, fetch ALL (no pagination yet)
   // Otherwise, paginate directly in SQL
-  const { data: clientsFromDb, error, count } = needsInvoiceData
-    ? await query // Fetch all matching clients
-    : await query.range(from, to); // Paginate in SQL
+  const { data: clientsFromDb, error, count } = await perfTime(
+    "clients-list",
+    needsInvoiceData ? "clientRowsAll" : "clientRows",
+    async () => (needsInvoiceData ? query : query.range(from, to)),
+    (result) => `rows=${result.data?.length ?? 0} count=${result.count ?? 0}`
+  );
 
 
   // Error handling - always log full error details with actionable information
@@ -421,12 +425,18 @@ async function loadClients(
   if (needsInvoiceData && clientsFromDb) {
     // Fetch all invoices for computing metrics (exclude void and draft)
     // NOTE: Use invoices_view for outstanding field (outstanding_amount was dropped from invoices table)
-    const { data: invoiceRows, error: invoiceError } = await supabase
-      .from("invoices_view")
-      .select("id, client_id, display_status, risk_level, outstanding")
-      .eq("workspace_id", workspaceId)
-      .neq("display_status", "void")
-      .neq("display_status", "draft");
+    const { data: invoiceRows, error: invoiceError } = await perfTime(
+      "clients-list",
+      "invoicesViewForMetrics",
+      async () =>
+        supabase
+          .from("invoices_view")
+          .select("id, client_id, display_status, risk_level, outstanding")
+          .eq("workspace_id", workspaceId)
+          .neq("display_status", "void")
+          .neq("display_status", "draft"),
+      (result) => `rows=${result.data?.length ?? 0}`
+    );
 
     if (invoiceError) {
       console.error("[ClientsPage] Error loading invoices for metrics:", invoiceError);
@@ -521,13 +531,19 @@ async function loadClients(
     const clientIds = clientsFromDb.map((c) => c.id);
 
     // NOTE: Use invoices_view for outstanding field (outstanding_amount was dropped from invoices table)
-    const { data: invoiceRows, error: invoiceError } = await supabase
-      .from("invoices_view")
-      .select("client_id, display_status, risk_level, outstanding, due_date")
-      .eq("workspace_id", workspaceId)
-      .in("client_id", clientIds)
-      .neq("display_status", "void")
-      .neq("display_status", "draft");
+    const { data: invoiceRows, error: invoiceError } = await perfTime(
+      "clients-list",
+      "invoicesViewForPageBatch",
+      async () =>
+        supabase
+          .from("invoices_view")
+          .select("client_id, display_status, risk_level, outstanding, due_date")
+          .eq("workspace_id", workspaceId)
+          .in("client_id", clientIds)
+          .neq("display_status", "void")
+          .neq("display_status", "draft"),
+      (result) => `rows=${result.data?.length ?? 0}`
+    );
 
     if (invoiceError) {
       console.error("[ClientsPage] Error loading invoices for overdue computation:", invoiceError);
@@ -630,9 +646,10 @@ export default async function ClientsPage({
 }: ClientsPageProps) {
   // Prevent caching to ensure new clients appear immediately
   noStore();
+  const perf = createRoutePerf("clients-list");
   
   const { workspaceId } = await params;
-  await requireWorkspace(workspaceId);
+  await perf.time("requireWorkspace", () => requireWorkspace(workspaceId));
   const resolvedSearchParams = await searchParams;
   const limitCodeParam = Array.isArray(resolvedSearchParams.limit)
     ? resolvedSearchParams.limit[0]
@@ -706,8 +723,11 @@ export default async function ClientsPage({
   // Load clients using the refactored function
   let clientData;
   try {
-    clientData = await loadClients(workspaceId, resolvedSearchParams);
+    clientData = await perf.time("loadClients", () =>
+      loadClients(workspaceId, resolvedSearchParams)
+    );
   } catch (error) {
+    perf.finish({ status: "error" });
     return (
       <>
         <ClientsPreferencesGate
@@ -731,15 +751,22 @@ export default async function ClientsPage({
 
   // Check if there are ANY clients in the workspace (without filters)
   // This distinguishes "no clients at all" from "no clients match filters"
-  const { count: allClientsCount } = await supabase
-    .from("clients")
-    .select("*", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId);
+  const { count: allClientsCount } = await perfTime(
+    "clients-list",
+    "allClientsCount",
+    async () =>
+      supabase
+        .from("clients")
+        .select("*", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId),
+    (result) => `count=${result.count ?? 0}`
+  );
 
   const hasAnyClients = (allClientsCount ?? 0) > 0;
 
   // Show global empty state ONLY when workspace has zero clients
   if (!hasAnyClients) {
+    perf.finish({ hasAnyClients: 0 });
     return (
       <>
         <ClientsPreferencesGate
@@ -766,13 +793,19 @@ export default async function ClientsPage({
   const clientIds = safeClients.map((c) => c.id);
   
   // NOTE: Use invoices_view for outstanding field (outstanding_amount was dropped from invoices table)
-  const { data: invoiceRows, error: invoiceRowsError } = await supabase
-    .from("invoices_view")
-    .select("client_id, display_status, risk_level, outstanding")
-    .eq("workspace_id", workspaceId)
-    .in("client_id", clientIds)
-    .neq("display_status", "void")
-    .neq("display_status", "draft");
+  const { data: invoiceRows, error: invoiceRowsError } = await perfTime(
+    "clients-list",
+    "invoicesViewForPageClients",
+    async () =>
+      supabase
+        .from("invoices_view")
+        .select("client_id, display_status, risk_level, outstanding")
+        .eq("workspace_id", workspaceId)
+        .in("client_id", clientIds)
+        .neq("display_status", "void")
+        .neq("display_status", "draft"),
+    (result) => `rows=${result.data?.length ?? 0}`
+  );
 
   if (invoiceRowsError) {
     console.error("[ClientsPage] Error loading invoices:", invoiceRowsError);
@@ -850,6 +883,11 @@ export default async function ClientsPage({
   const clientsFilterSummary =
     filterSummaryParts.length > 0 ? filterSummaryParts.join(" · ") : undefined;
   const activeFilterCount = Number(viewParam !== "default") + Number(statusParam !== "active");
+
+  perf.finish({
+    rows: clientsWithMetrics.length,
+    totalCount,
+  });
 
   return (
     <>

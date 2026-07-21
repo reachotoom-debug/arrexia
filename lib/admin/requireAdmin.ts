@@ -8,6 +8,7 @@ import {
   type AdminInfrastructureStatus,
 } from "@/lib/admin/adminInfrastructure";
 import { getAdminLoginRedirectUrl } from "@/lib/admin/adminPaths";
+import { perfTime } from "@/lib/perf/server";
 
 export type AdminRole = "super_admin" | "admin" | "support" | "analyst";
 
@@ -322,8 +323,15 @@ export async function userCanAccessAdminPanel(
   userId: string,
   email: string | null | undefined
 ): Promise<boolean> {
-  const access = await resolveAdminAccessForUser({ id: userId, email });
-  return access.authorized;
+  return perfTime(
+    "admin-access",
+    "resolveAdminAccess",
+    async () => {
+      const access = await resolveAdminAccessForUser({ id: userId, email });
+      return access.authorized;
+    },
+    (authorized) => `authorized=${authorized ? 1 : 0}`
+  );
 }
 
 export async function findAuthUserIdByEmail(

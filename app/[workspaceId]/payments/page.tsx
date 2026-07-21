@@ -1,6 +1,7 @@
 import PaymentsTable from "@/components/payments/PaymentsTable";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { createRoutePerf, perfTime } from "@/lib/perf/server";
 import { ErrorState, EmptyState } from "@/components/ui/state";
 import Link from "next/link";
 import { PaymentsPreferencesGate } from "./_components/PaymentsPreferencesGate";
@@ -164,10 +165,16 @@ async function loadPayments(
   
   // Get workspace payment existence count (for empty state logic)
   // Query base payments table to check if ANY payments exist in workspace
-  const { count: anyPaymentsCount } = await supabase
-    .from("payments")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId);
+  const { count: anyPaymentsCount } = await perfTime(
+    "payments-list",
+    "anyPaymentsCount",
+    async () =>
+      supabase
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId),
+    (result) => `count=${result.count ?? 0}`
+  );
   
   const workspacePaymentCount = typeof anyPaymentsCount === "number" ? anyPaymentsCount : 0;
 
@@ -417,10 +424,20 @@ async function loadPayments(
   // Apply pagination (AFTER all filtering, search, and ordering)
   // IMPORTANT: All filtering (.eq, .or), search (.or with ilike), and ordering (.order)
   // must happen BEFORE .range() to ensure sorting/search/filtering apply across ALL pages
-  const { data: paymentsFromDb, error } = await query.range(from, to);
+  const { data: paymentsFromDb, error } = await perfTime(
+    "payments-list",
+    "paymentRows",
+    async () => query.range(from, to),
+    (result) => `rows=${result.data?.length ?? 0}`
+  );
   
   // Get count with same filters (but no ordering/pagination)
-  const { count, error: countError } = await countQuery;
+  const { count, error: countError } = await perfTime(
+    "payments-list",
+    "filteredCount",
+    async () => countQuery,
+    (result) => `count=${result.count ?? 0}`
+  );
   
   // If count query fails, log but don't fail the whole request
   if (countError) {
@@ -491,16 +508,20 @@ async function loadPayments(
 
 export default async function PaymentsPage({ params, searchParams }: PaymentsPageProps) {
   noStore();
+  const perf = createRoutePerf("payments-list");
   const { workspaceId } = await params;
-  const { workspace } = await requireWorkspace(workspaceId);
+  await perf.time("requireWorkspace", () => requireWorkspace(workspaceId));
   const resolvedSearchParams = await searchParams;
   const supabase = await supabaseServer();
 
   // Load payments using the refactored function
   let paymentData;
   try {
-    paymentData = await loadPayments(workspaceId, resolvedSearchParams);
+    paymentData = await perf.time("loadPayments", () =>
+      loadPayments(workspaceId, resolvedSearchParams)
+    );
   } catch (error) {
+    perf.finish({ status: "error" });
     return (
       <>
         <PaymentsPreferencesGate
@@ -554,6 +575,7 @@ export default async function PaymentsPage({ params, searchParams }: PaymentsPag
   // Show empty state ONLY when workspace has no payments at all
   // If workspace has payments but filters return empty, let PaymentsTable render filters + empty state
   if (anyPaymentsCount === 0) {
+    perf.finish({ anyPaymentsCount: 0 });
     return (
       <>
         <PaymentsPreferencesGate
@@ -584,6 +606,8 @@ export default async function PaymentsPage({ params, searchParams }: PaymentsPag
       </>
     );
   }
+
+  perf.finish({ rows: paymentRows.length, totalCount });
 
   return (
     <>

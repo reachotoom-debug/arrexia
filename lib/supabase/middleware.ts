@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { perfTime } from "@/lib/perf/server";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -30,7 +31,7 @@ export async function updateSession(request: NextRequest) {
   );
 
   // Refresh the auth session so Server Components can read cookies reliably.
-  await supabase.auth.getUser();
+  await perfTime("proxy", "middlewareGetUser", async () => supabase.auth.getUser());
 
   return supabaseResponse;
 }

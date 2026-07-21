@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import { getAuthenticatedUser } from "@/lib/auth/server";
+import { perfTime } from "@/lib/perf/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export type AccountProfileResult = {
@@ -24,11 +25,13 @@ async function loadCurrentProfileUncached(): Promise<AccountProfileResult> {
   }
 
   const supabase = await supabaseServer();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data, error } = await perfTime(
+    "getCurrentProfile",
+    "profilesQuery",
+    async () =>
+      supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+    (result) => `found=${result.data ? 1 : 0}`
+  );
 
   if (error) {
     console.error("[getCurrentProfile] profile load error:", error);

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { perfTime } from "@/lib/perf/server";
 
 import {
 
@@ -26,15 +27,17 @@ export async function getWorkspacePlan(workspaceId: string) {
 
 
 
-  const { data, error } = await supabase
-
-    .from("workspace_plans")
-
-    .select("plan, invoice_limit_monthly, client_limit")
-
-    .eq("workspace_id", workspaceId)
-
-    .maybeSingle();
+  const { data, error } = await perfTime(
+    "workspace-plan",
+    "workspacePlansQuery",
+    async () =>
+      supabase
+        .from("workspace_plans")
+        .select("plan, invoice_limit_monthly, client_limit")
+        .eq("workspace_id", workspaceId)
+        .maybeSingle(),
+    (result) => `found=${result.data ? 1 : 0}`
+  );
 
 
 

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { createRoutePerf, perfTime } from "@/lib/perf/server";
 import { InvoiceForm } from "../../_components/InvoiceForm";
 import { type InvoiceFormValues } from "@/lib/invoices/schema";
 import { updateInvoice } from "../../actions";
@@ -13,9 +14,10 @@ const isUuid = (value: string): boolean =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 export default async function EditInvoicePage({ params }: EditInvoicePageProps) {
+  const perf = createRoutePerf("invoice-edit");
   const { workspaceId, invoiceId } = await params;
 
-  await requireWorkspace(workspaceId);
+  await perf.time("requireWorkspace", () => requireWorkspace(workspaceId));
   const supabase = await supabaseServer();
 
   const invoiceSelect = `
@@ -49,7 +51,12 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
     invoiceQuery = invoiceQuery.eq("invoice_number", invoiceId);
   }
 
-  const { data: invoice, error: invoiceError } = await invoiceQuery.maybeSingle();
+  const { data: invoice, error: invoiceError } = await perfTime(
+    "invoice-edit",
+    "baseInvoice",
+    async () => invoiceQuery.maybeSingle(),
+    (result) => `found=${result.data ? 1 : 0}`
+  );
 
   if (invoiceError) {
     if (process.env.NODE_ENV === "development") {
@@ -78,22 +85,27 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
   // Fetch invoice items and client in parallel
   // NOTE: invoice_items has no workspace_id; scope via invoices join (already verified invoice belongs to workspace)
   const [itemsResult, clientResult] = await Promise.all([
-    supabase
-      .from("invoice_items")
-      .select("id, name, description, quantity, unit_price, position")
-      .eq("invoice_id", invoice.id)
-      .order("position", { ascending: true, nullsFirst: false }),
-    invoice.client_id
-      ? supabase
-          .from("clients")
-          .select("id, name, email, company, country")
-          .eq("workspace_id", workspaceId)
-          .eq("id", invoice.client_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
+    perf.time("items", async () =>
+      supabase
+        .from("invoice_items")
+        .select("id, name, description, quantity, unit_price, position")
+        .eq("invoice_id", invoice.id)
+        .order("position", { ascending: true, nullsFirst: false })
+    ),
+    perf.time("client", async () =>
+      invoice.client_id
+        ? supabase
+            .from("clients")
+            .select("id, name, email, company, country")
+            .eq("workspace_id", workspaceId)
+            .eq("id", invoice.client_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null })
+    ),
   ]);
 
   if (itemsResult.error) {
+    perf.finish({ status: "items-error" });
     return (
       <div className="rounded-xl bg-red-50 p-4 text-red-800">
         Error loading invoice items: {itemsResult.error.message}
@@ -146,6 +158,8 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
     }
     // If we reach here, there was an error (redirect throws, so we never get here on success)
   }
+
+  perf.finish({ items: (invoiceItems || []).length });
 
   return (
     <div className="w-full min-w-0">

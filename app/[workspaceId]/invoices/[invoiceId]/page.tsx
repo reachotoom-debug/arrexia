@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/auth/server";
+import { createRoutePerf, perfTime } from "@/lib/perf/server";
 import { isSandboxSenderActive, getResendTestRecipientEmail } from "@/lib/email/sendEmail";
 import { formatCurrency } from "@/lib/format/currency";
 import { PAYMENT_TERMS_OPTIONS } from "@/lib/invoices/paymentTerms";
@@ -27,8 +28,9 @@ const isUuid = (value: string): boolean =>
 
 export default async function InvoicePage({ params }: InvoicePageProps) {
   noStore();
+  const perf = createRoutePerf("invoice-detail");
   const { workspaceId, invoiceId } = await params;
-  await requireWorkspace(workspaceId);
+  await perf.time("requireWorkspace", () => requireWorkspace(workspaceId));
   const sandboxMode = isSandboxSenderActive();
   const sandboxTestRecipientEmail = getResendTestRecipientEmail();
   const supabase = await supabaseServer();
@@ -69,7 +71,12 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
     invoiceQuery = invoiceQuery.eq("invoice_number", invoiceId);
   }
 
-  const { data: invoice, error: invoiceError } = await invoiceQuery.maybeSingle();
+  const { data: invoice, error: invoiceError } = await perfTime(
+    "invoice-detail",
+    "baseInvoice",
+    async () => invoiceQuery.maybeSingle(),
+    (result) => `found=${result.data ? 1 : 0}`
+  );
 
   if (invoiceError) {
     if (process.env.NODE_ENV === "development") {
@@ -88,21 +95,25 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
 
   // 2) Load client and settings in parallel
   const [clientRes, settingsRes] = await Promise.all([
-    invoice.client_id
-      ? supabase
-          .from("clients")
-          .select(
-            "id, workspace_id, name, email, company, country, country_code, whatsapp_phone, whatsapp, payment_terms, is_active, archived_at"
-          )
-          .eq("workspace_id", workspaceId)
-          .eq("id", invoice.client_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    supabase
-      .from("settings")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .maybeSingle(),
+    perfTime("invoice-detail", "client", async () =>
+      invoice.client_id
+        ? supabase
+            .from("clients")
+            .select(
+              "id, workspace_id, name, email, company, country, country_code, whatsapp_phone, whatsapp, payment_terms, is_active, archived_at"
+            )
+            .eq("workspace_id", workspaceId)
+            .eq("id", invoice.client_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null })
+    ),
+    perfTime("invoice-detail", "settings", async () =>
+      supabase
+        .from("settings")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .maybeSingle()
+    ),
   ]);
 
   const client = clientRes.data;
@@ -115,32 +126,40 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
   // 3) Load items, payments, delivery logs, invoices_view in parallel
   const [itemsRes, paymentsRes, deliveryLogsRes, invoiceViewRes] =
     await Promise.all([
-      supabase
-        .from("invoice_items")
-        .select("id, name, description, quantity, unit_price, position")
-        .eq("invoice_id", invoice.id)
-        .order("position", { ascending: true }),
-      supabase
-        .from("payments")
-        .select(
-          "id, payment_date, amount, currency, method, status, transaction_id, notes, payment_provider, created_at, archived_at"
-        )
-        .eq("invoice_id", invoice.id)
-        .is("archived_at", null)
-        .order("payment_date", { ascending: false }),
-      supabase
-        .from("invoice_delivery_logs")
-        .select(
-          "id, workspace_id, invoice_id, recipient_email, status, error_message, delivery_method, created_at"
-        )
-        .eq("invoice_id", invoice.id)
-        .eq("workspace_id", workspaceId)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("invoices_view")
-        .select("paid, outstanding, client_name, display_status, is_overdue, overdue_days")
-        .eq("id", invoice.id)
-        .maybeSingle(),
+      perfTime("invoice-detail", "items", async () =>
+        supabase
+          .from("invoice_items")
+          .select("id, name, description, quantity, unit_price, position")
+          .eq("invoice_id", invoice.id)
+          .order("position", { ascending: true })
+      ),
+      perfTime("invoice-detail", "payments", async () =>
+        supabase
+          .from("payments")
+          .select(
+            "id, payment_date, amount, currency, method, status, transaction_id, notes, payment_provider, created_at, archived_at"
+          )
+          .eq("invoice_id", invoice.id)
+          .is("archived_at", null)
+          .order("payment_date", { ascending: false })
+      ),
+      perfTime("invoice-detail", "deliveryLogs", async () =>
+        supabase
+          .from("invoice_delivery_logs")
+          .select(
+            "id, workspace_id, invoice_id, recipient_email, status, error_message, delivery_method, created_at"
+          )
+          .eq("invoice_id", invoice.id)
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: false })
+      ),
+      perfTime("invoice-detail", "invoicesView", async () =>
+        supabase
+          .from("invoices_view")
+          .select("paid, outstanding, client_name, display_status, is_overdue, overdue_days")
+          .eq("id", invoice.id)
+          .maybeSingle()
+      ),
     ]);
 
   const items = itemsRes.data ?? [];
@@ -298,6 +317,11 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
       return 0;
     }
   }
+
+  perf.finish({
+    items: lineItems.length,
+    payments: paymentList.length,
+  });
 
   return (
     <div className="mx-auto w-full max-w-5xl min-w-0 space-y-6">

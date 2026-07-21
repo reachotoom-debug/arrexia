@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { perfTime } from "@/lib/perf/server";
 
 import type { AuthUserInfo, WorkspaceAccessResult } from "./types";
 
@@ -24,7 +25,9 @@ export async function loadAuthenticatedUserUncached(
   let authError: unknown = null;
 
   try {
-    const result = await supabase.auth.getUser();
+    const result = await perfTime("requireWorkspace", "authGetUser", async () =>
+      supabase.auth.getUser()
+    );
     user = result.data.user;
     authError = result.error;
   } catch (err) {
@@ -52,22 +55,34 @@ export async function loadWorkspaceAccessUncached(
 ): Promise<Exclude<WorkspaceAccessResult, { status: "unauthenticated" }>> {
   const supabase = await deps.getSupabase();
 
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("workspace_id, role")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const { data: membership } = await perfTime(
+    "requireWorkspace",
+    "membershipLookup",
+    async () =>
+      supabase
+        .from("workspace_members")
+        .select("workspace_id, role")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    (result) => `found=${result.data ? 1 : 0}`
+  );
 
   if (!membership) {
     return { status: "forbidden" };
   }
 
-  const { data: workspace, error: wsError } = await supabase
-    .from("workspaces")
-    .select("id, name, organization_id")
-    .eq("id", workspaceId)
-    .single();
+  const { data: workspace, error: wsError } = await perfTime(
+    "requireWorkspace",
+    "workspaceLookup",
+    async () =>
+      supabase
+        .from("workspaces")
+        .select("id, name, organization_id")
+        .eq("id", workspaceId)
+        .single(),
+    (result) => `found=${result.data ? 1 : 0}`
+  );
 
   if (!workspace || wsError || !workspace.organization_id) {
     return { status: "forbidden" };

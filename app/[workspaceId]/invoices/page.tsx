@@ -1,5 +1,6 @@
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { createRoutePerf, perfTime } from "@/lib/perf/server";
 import Link from "next/link";
 import { ErrorState, EmptyState } from "@/components/ui/state";
 import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
@@ -301,10 +302,16 @@ async function loadInvoices(
 
   // Get workspace invoice existence count (for empty state logic)
   // Query invoices_view to check if ANY active invoices exist in workspace
-  const { count: anyInvoicesCount } = await supabase
-    .from("invoices_view")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId);
+  const { count: anyInvoicesCount } = await perfTime(
+    "invoice-list",
+    "anyInvoicesCount",
+    async () =>
+      supabase
+        .from("invoices_view")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId),
+    (result) => `count=${result.count ?? 0}`
+  );
   
   const workspaceInvoiceCount = typeof anyInvoicesCount === "number" ? anyInvoicesCount : 0;
 
@@ -555,10 +562,20 @@ async function loadInvoices(
   }
 
   // Apply pagination (AFTER all filtering, search, and ordering)
-  let { data: invoicesFromDb, error } = await query.range(from, to);
+  let { data: invoicesFromDb, error } = await perfTime(
+    "invoice-list",
+    "invoiceRows",
+    async () => query.range(from, to),
+    (result) => `rows=${result.data?.length ?? 0}`
+  );
 
   // Get count with same filters (but no ordering/pagination)
-  const { count, error: countError } = await countQuery;
+  const { count, error: countError } = await perfTime(
+    "invoice-list",
+    "filteredCount",
+    async () => countQuery,
+    (result) => `count=${result.count ?? 0}`
+  );
   
   // If count query fails, log but don't fail the whole request
   if (countError) {
@@ -671,8 +688,9 @@ export default async function InvoicesPage({
   searchParams,
 }: InvoicesPageProps) {
   noStore();
+  const perf = createRoutePerf("invoice-list");
   const { workspaceId } = await params;
-  await requireWorkspace(workspaceId);
+  await perf.time("requireWorkspace", () => requireWorkspace(workspaceId));
 
   const resolvedSearchParams = (await searchParams) || {};
   const limitCodeParam = Array.isArray(resolvedSearchParams.limit)
@@ -682,8 +700,11 @@ export default async function InvoicesPage({
   // Load invoices using the refactored function
   let invoiceData;
   try {
-    invoiceData = await loadInvoices(workspaceId, resolvedSearchParams);
+    invoiceData = await perf.time("loadInvoices", () =>
+      loadInvoices(workspaceId, resolvedSearchParams)
+    );
   } catch {
+    perf.finish({ status: "error" });
     return (
       <>
         <InvoicesPreferencesGate />
@@ -838,6 +859,11 @@ export default async function InvoicesPage({
   const summaryOverdueCount = enrichedInvoices.filter(
     (inv) => inv.displayStatusNormalized === "overdue"
   ).length;
+
+  perf.finish({
+    rows: enrichedInvoices.length,
+    totalCount,
+  });
 
   return (
     <>

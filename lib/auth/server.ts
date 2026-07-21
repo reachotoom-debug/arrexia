@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 
+import { perfTime } from "@/lib/perf/server";
 import {
   loadAuthenticatedUserUncached,
   loadWorkspaceAccessUncached,
@@ -57,8 +58,10 @@ export async function requireWorkspace(workspaceId: string): Promise<{
   workspace: WorkspaceInfo;
   membership: MembershipInfo;
 }> {
-  const access = await getWorkspaceAccess(workspaceId);
-  return assertWorkspacePageAccess(access);
+  return perfTime("requireWorkspace", "cachedRequireWorkspace", async () => {
+    const access = await getWorkspaceAccess(workspaceId);
+    return assertWorkspacePageAccess(access);
+  });
 }
 
 export type ApiAuthFailure = {
