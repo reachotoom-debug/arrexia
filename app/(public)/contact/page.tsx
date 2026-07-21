@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ExternalLink, Linkedin, Mail } from "lucide-react";
 import { StartTrialLink } from "@/components/analytics/StartTrialLink";
 import { PublicPageShell } from "@/components/public/PublicPageShell";

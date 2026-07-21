@@ -1,6 +1,7 @@
 import { requireWorkspace } from "@/lib/auth/server";
+import { shouldReuseAnyInvoicesCountAsFilteredCount } from "@/lib/invoices/listQueryPlan";
 import { supabaseServer } from "@/lib/supabase/server";
-import { createRoutePerf, perfTime } from "@/lib/perf/server";
+import { createRoutePerf, isPerfEnabled, perfLog, perfTime } from "@/lib/perf/server";
 import Link from "next/link";
 import { ErrorState, EmptyState } from "@/components/ui/state";
 import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
@@ -300,27 +301,17 @@ async function loadInvoices(
 }> {
   const supabase = await supabaseServer();
 
-  // Get workspace invoice existence count (for empty state logic)
-  // Query invoices_view to check if ANY active invoices exist in workspace
-  const { count: anyInvoicesCount } = await perfTime(
-    "invoice-list",
-    "anyInvoicesCount",
-    async () =>
-      supabase
-        .from("invoices_view")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId),
-    (result) => `count=${result.count ?? 0}`
-  );
-  
-  const workspaceInvoiceCount = typeof anyInvoicesCount === "number" ? anyInvoicesCount : 0;
-
   // Parse query parameters with defaults
   const { page, pageSize, status, view, search, sort, dir } = parseInvoicesQuery(searchParams);
   const rawSort = Array.isArray(searchParams.sort) ? searchParams.sort[0] : searchParams.sort;
   const hasExplicitSort = Boolean(rawSort && rawSort.trim().length > 0);
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+  const reuseAnyInvoicesCountAsFilteredCount = shouldReuseAnyInvoicesCountAsFilteredCount({
+    status,
+    search,
+    view,
+  });
 
   // ============================================================================
   // DATA SOURCE SELECTION (Active vs Archived)
@@ -562,21 +553,82 @@ async function loadInvoices(
   }
 
   // Apply pagination (AFTER all filtering, search, and ordering)
-  let { data: invoicesFromDb, error } = await perfTime(
-    "invoice-list",
-    "invoiceRows",
-    async () => query.range(from, to),
-    (result) => `rows=${result.data?.length ?? 0}`
-  );
+  const paginatedRowsQuery = query.range(from, to);
+  const anyInvoicesCountQuery = supabase
+    .from("invoices_view")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId);
 
-  // Get count with same filters (but no ordering/pagination)
-  const { count, error: countError } = await perfTime(
-    "invoice-list",
-    "filteredCount",
-    async () => countQuery,
-    (result) => `count=${result.count ?? 0}`
-  );
-  
+  type CountQueryResult = { count: number | null; error: { message: string } | null };
+  type RowsQueryResult = {
+    data: Record<string, unknown>[] | null;
+    error: { message: string; details?: string; hint?: string; code?: string } | null;
+  };
+
+  let invoicesFromDb: Record<string, unknown>[] | null = null;
+  let error: RowsQueryResult["error"] = null;
+  let count: number | null = null;
+  let countError: CountQueryResult["error"] = null;
+  let workspaceInvoiceCount = 0;
+
+  if (reuseAnyInvoicesCountAsFilteredCount) {
+    const [rowsResult, filteredCountResult] = await Promise.all([
+      perfTime(
+        "invoice-list",
+        "invoiceRows",
+        async () => paginatedRowsQuery,
+        (result) => `rows=${result.data?.length ?? 0}`
+      ),
+      perfTime(
+        "invoice-list",
+        "filteredCount",
+        async () => countQuery,
+        (result) => `count=${result.count ?? 0}`
+      ),
+    ]);
+
+    invoicesFromDb = rowsResult.data;
+    error = rowsResult.error;
+    count = filteredCountResult.count;
+    countError = filteredCountResult.error;
+    workspaceInvoiceCount = typeof count === "number" ? count : 0;
+
+    if (isPerfEnabled()) {
+      perfLog(
+        "invoice-list",
+        `anyInvoicesCount=reused count=${workspaceInvoiceCount}`
+      );
+    }
+  } else {
+    const [rowsResult, filteredCountResult, anyInvoicesCountResult] = await Promise.all([
+      perfTime(
+        "invoice-list",
+        "invoiceRows",
+        async () => paginatedRowsQuery,
+        (result) => `rows=${result.data?.length ?? 0}`
+      ),
+      perfTime(
+        "invoice-list",
+        "filteredCount",
+        async () => countQuery,
+        (result) => `count=${result.count ?? 0}`
+      ),
+      perfTime(
+        "invoice-list",
+        "anyInvoicesCount",
+        async () => anyInvoicesCountQuery,
+        (result) => `count=${result.count ?? 0}`
+      ),
+    ]);
+
+    invoicesFromDb = rowsResult.data;
+    error = rowsResult.error;
+    count = filteredCountResult.count;
+    countError = filteredCountResult.error;
+    workspaceInvoiceCount =
+      typeof anyInvoicesCountResult.count === "number" ? anyInvoicesCountResult.count : 0;
+  }
+
   // If count query fails, log but don't fail the whole request
   if (countError) {
     if (process.env.NODE_ENV === "development") {

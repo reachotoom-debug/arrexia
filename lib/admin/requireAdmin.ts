@@ -3,6 +3,11 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { AuthUserInfo } from "@/lib/auth/server";
 import {
+  decideAdminAccess,
+  infrastructureStatusWhenAdminRecordExists,
+  shouldRunAdminInfrastructureProbes,
+} from "@/lib/admin/adminAccessPlan";
+import {
   getAdminInfrastructureStatus,
   isEmergencyFallbackEnabled,
   type AdminInfrastructureStatus,
@@ -117,7 +122,6 @@ async function resolveAdminAccessForUser(user: {
   id: string;
   email?: string | null;
 }): Promise<AdminAccessResult> {
-  const infrastructure = await getAdminInfrastructureStatus();
   const record = await getAdminUserRecord(user.id);
   const emergencyFallbackEnabled = perfTimeSync(
     "admin-access",
@@ -126,79 +130,30 @@ async function resolveAdminAccessForUser(user: {
     (enabled) => `enabled=${enabled ? 1 : 0}`
   );
 
-  if (record) {
-    return {
-      authorized: true,
-      user: { id: user.id, email: user.email ?? null },
-      role: record.role,
-      bootstrapAllowed: false,
-      emergencyFallback: false,
+  if (!shouldRunAdminInfrastructureProbes(record)) {
+    return decideAdminAccess({
+      user,
+      record,
+      infrastructure: infrastructureStatusWhenAdminRecordExists(),
       emergencyFallbackEnabled,
-      accessMode: "db_admin",
-      setupRequired: false,
-      tablesMissing: !infrastructure.adminUsersTableInstalled,
-      canAccessFullAdmin: true,
-      infrastructure,
-    };
+      isAdminEmailAllowed: checkAdminAllowlist,
+    });
   }
 
-  if (!infrastructure.adminUsersTableInstalled) {
-    if (!checkAdminAllowlist(user.email)) {
-      return { authorized: false, reason: "unauthorized" };
-    }
+  const infrastructure = await perfTime(
+    "admin-access",
+    "adminInfrastructureFallback",
+    () => getAdminInfrastructureStatus(),
+    (status) => `adminUsersCount=${status.adminUsersCount}`
+  );
 
-    return {
-      authorized: true,
-      user: { id: user.id, email: user.email ?? null },
-      role: null,
-      bootstrapAllowed: false,
-      emergencyFallback: false,
-      emergencyFallbackEnabled,
-      accessMode: "tables_missing_fallback",
-      setupRequired: true,
-      tablesMissing: true,
-      canAccessFullAdmin: false,
-      infrastructure,
-    };
-  }
-
-  if (infrastructure.adminUsersCount === 0) {
-    if (!checkAdminAllowlist(user.email)) {
-      return { authorized: false, reason: "unauthorized" };
-    }
-
-    return {
-      authorized: true,
-      user: { id: user.id, email: user.email ?? null },
-      role: null,
-      bootstrapAllowed: true,
-      emergencyFallback: false,
-      emergencyFallbackEnabled,
-      accessMode: "bootstrap_pending",
-      setupRequired: true,
-      tablesMissing: false,
-      canAccessFullAdmin: false,
-      infrastructure,
-    };
-  }
-
-  if (emergencyFallbackEnabled && checkAdminAllowlist(user.email)) {
-    return {
-      authorized: true,
-      user: { id: user.id, email: user.email ?? null },
-      role: "admin",
-      bootstrapAllowed: false,
-      emergencyFallback: true,
-      emergencyFallbackEnabled,
-      accessMode: "emergency_fallback",
-      setupRequired: false,
-      tablesMissing: false,
-      canAccessFullAdmin: true,
-      infrastructure,
-    };
-  }
-
-  return { authorized: false, reason: "unauthorized" };
+  return decideAdminAccess({
+    user,
+    record: null,
+    infrastructure,
+    emergencyFallbackEnabled,
+    isAdminEmailAllowed: checkAdminAllowlist,
+  });
 }
 
 export async function getAdminAccess(): Promise<AdminAccessResult> {

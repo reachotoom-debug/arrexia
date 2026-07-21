@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LegalDocument } from "@/components/public/LegalDocument";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { buildPageMetadata } from "@/lib/seo/metadata";
@@ -88,7 +89,7 @@ export default function CookiesPage() {
                   </p>
                   <p>
                     For more about how we handle personal data, see our{" "}
-                    <a href="/privacy">Privacy Policy</a>.
+                    <Link href="/privacy">Privacy Policy</Link>.
                   </p>
                 </>
               ),

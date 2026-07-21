@@ -1,6 +1,11 @@
 import { requireWorkspace } from "@/lib/auth/server";
+import {
+  canUseFilteredCountAsWorkspaceTotal,
+  shouldReusePageInvoiceMetricsFromLoadClients,
+  type ClientPageInvoiceMetricRow,
+} from "@/lib/clients/listQueryPlan";
 import { supabaseServer } from "@/lib/supabase/server";
-import { createRoutePerf, perfTime } from "@/lib/perf/server";
+import { createRoutePerf, isPerfEnabled, perfLog, perfTime } from "@/lib/perf/server";
 import { unstable_noStore as noStore } from "next/cache";
 import Link from "next/link";
 import { ErrorState, EmptyState } from "@/components/ui/state";
@@ -268,6 +273,8 @@ async function loadClients(
   sort: ClientSortKey | null;
   dir: SortDir;
   q: string;
+  pageInvoiceMetrics: ClientPageInvoiceMetricRow[] | null;
+  workspaceInvoiceMetrics: ClientPageInvoiceMetricRow[] | null;
 }> {
   const supabase = await supabaseServer();
 
@@ -522,6 +529,8 @@ async function loadClients(
       sort,
       dir,
       q,
+      pageInvoiceMetrics: null,
+      workspaceInvoiceMetrics: safeInvoiceRows,
     };
   }
 
@@ -597,6 +606,8 @@ async function loadClients(
       sort,
       dir,
       q,
+      pageInvoiceMetrics: safeInvoiceRows,
+      workspaceInvoiceMetrics: null,
     };
   }
 
@@ -615,6 +626,8 @@ async function loadClients(
     sort,
     dir,
     q,
+    pageInvoiceMetrics: null,
+    workspaceInvoiceMetrics: null,
   };
 }
 
@@ -719,13 +732,36 @@ export default async function ClientsPage({
   }
   
   const supabase = await supabaseServer();
+  const parsedForPlan = parseClientsQuery(resolvedSearchParams);
+  const skipWorkspaceClientCount = canUseFilteredCountAsWorkspaceTotal({
+    status: parsedForPlan.status,
+    q: parsedForPlan.q,
+  });
 
-  // Load clients using the refactored function
+  // Load clients and, when needed, workspace-wide client total in parallel
   let clientData;
+  let workspaceClientCount: number | null = null;
   try {
-    clientData = await perf.time("loadClients", () =>
-      loadClients(workspaceId, resolvedSearchParams)
-    );
+    const [loadedClientData, workspaceClientCountResult] = await Promise.all([
+      perf.time("loadClients", () => loadClients(workspaceId, resolvedSearchParams)),
+      skipWorkspaceClientCount
+        ? Promise.resolve(null)
+        : perfTime(
+            "clients-list",
+            "allClientsCount",
+            async () =>
+              supabase
+                .from("clients")
+                .select("*", { count: "exact", head: true })
+                .eq("workspace_id", workspaceId),
+            (result) => `count=${result.count ?? 0}`
+          ),
+    ]);
+
+    clientData = loadedClientData;
+    workspaceClientCount = skipWorkspaceClientCount
+      ? clientData.totalCount
+      : workspaceClientCountResult?.count ?? 0;
   } catch (error) {
     perf.finish({ status: "error" });
     return (
@@ -748,21 +784,13 @@ export default async function ClientsPage({
 
   const { clients: safeClients, totalCount, page, view: viewParam, status: statusParam, sort, dir, q: searchTerm } = clientData;
 
-
-  // Check if there are ANY clients in the workspace (without filters)
-  // This distinguishes "no clients at all" from "no clients match filters"
-  const { count: allClientsCount } = await perfTime(
-    "clients-list",
-    "allClientsCount",
-    async () =>
-      supabase
-        .from("clients")
-        .select("*", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId),
-    (result) => `count=${result.count ?? 0}`
-  );
-
-  const hasAnyClients = (allClientsCount ?? 0) > 0;
+  const hasAnyClients = (workspaceClientCount ?? 0) > 0;
+  if (skipWorkspaceClientCount && isPerfEnabled()) {
+    perfLog(
+      "clients-list",
+      `allClientsCount=reused count=${workspaceClientCount ?? 0}`
+    );
+  }
 
   // Show global empty state ONLY when workspace has zero clients
   if (!hasAnyClients) {
@@ -789,30 +817,52 @@ export default async function ClientsPage({
 
   const totalPages = Math.max(Math.ceil(totalCount / clientData.pageSize), 1);
 
-  // Fetch invoice data for ONLY the current page client IDs
   const clientIds = safeClients.map((c) => c.id);
-  
-  // NOTE: Use invoices_view for outstanding field (outstanding_amount was dropped from invoices table)
-  const { data: invoiceRows, error: invoiceRowsError } = await perfTime(
-    "clients-list",
-    "invoicesViewForPageClients",
-    async () =>
-      supabase
-        .from("invoices_view")
-        .select("client_id, display_status, risk_level, outstanding")
-        .eq("workspace_id", workspaceId)
-        .in("client_id", clientIds)
-        .neq("display_status", "void")
-        .neq("display_status", "draft"),
-    (result) => `rows=${result.data?.length ?? 0}`
-  );
+  let safeInvoiceRows: ClientPageInvoiceMetricRow[] = [];
 
-  if (invoiceRowsError) {
-    console.error("[ClientsPage] Error loading invoices:", invoiceRowsError);
-    // Continue with empty data - will use fallback values
+  if (
+    shouldReusePageInvoiceMetricsFromLoadClients({ view: viewParam }) &&
+    clientData.pageInvoiceMetrics
+  ) {
+    safeInvoiceRows = clientData.pageInvoiceMetrics;
+    if (isPerfEnabled()) {
+      perfLog(
+        "clients-list",
+        `invoicesViewForPageClients=reused rows=${safeInvoiceRows.length}`
+      );
+    }
+  } else if (clientData.workspaceInvoiceMetrics) {
+    const clientIdSet = new Set(clientIds);
+    safeInvoiceRows = clientData.workspaceInvoiceMetrics.filter(
+      (row) => row.client_id != null && clientIdSet.has(row.client_id)
+    );
+    if (isPerfEnabled()) {
+      perfLog(
+        "clients-list",
+        `invoicesViewForPageClients=reused workspaceMetrics rows=${safeInvoiceRows.length}`
+      );
+    }
+  } else if (clientIds.length > 0) {
+    const { data: invoiceRows, error: invoiceRowsError } = await perfTime(
+      "clients-list",
+      "invoicesViewForPageClients",
+      async () =>
+        supabase
+          .from("invoices_view")
+          .select("client_id, display_status, risk_level, outstanding")
+          .eq("workspace_id", workspaceId)
+          .in("client_id", clientIds)
+          .neq("display_status", "void")
+          .neq("display_status", "draft"),
+      (result) => `rows=${result.data?.length ?? 0}`
+    );
+
+    if (invoiceRowsError) {
+      console.error("[ClientsPage] Error loading invoices:", invoiceRowsError);
+    }
+
+    safeInvoiceRows = invoiceRows ?? [];
   }
-
-  const safeInvoiceRows = invoiceRows ?? [];
 
   // Compute metrics per client using deterministic logic
   const clientMetrics = new Map<string, { outstandingSum: number; isOverdue: boolean; invoiceCount: number }>();

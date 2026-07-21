@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LegalDocument } from "@/components/public/LegalDocument";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { buildPageMetadata } from "@/lib/seo/metadata";
@@ -112,7 +113,7 @@ export default function PrivacyPage() {
                   <p>
                     We use cookies and similar technologies to keep you signed in, maintain session
                     state, and support core product functionality. For more detail, see our{" "}
-                    <a href="/cookies">Cookie Policy</a>.
+                    <Link href="/cookies">Cookie Policy</Link>.
                   </p>
                 </>
               ),
@@ -144,7 +145,7 @@ export default function PrivacyPage() {
                     our stage and infrastructure.
                   </p>
                   <p>
-                    Learn more on our <a href="/security">Security</a> page.
+                    Learn more on our <Link href="/security">Security</Link> page.
                   </p>
                 </>
               ),
