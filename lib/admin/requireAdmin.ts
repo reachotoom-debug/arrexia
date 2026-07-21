@@ -8,7 +8,7 @@ import {
   type AdminInfrastructureStatus,
 } from "@/lib/admin/adminInfrastructure";
 import { getAdminLoginRedirectUrl } from "@/lib/admin/adminPaths";
-import { perfTime } from "@/lib/perf/server";
+import { isPerfEnabled, perfLog, perfTime, perfTimeSync } from "@/lib/perf/server";
 
 export type AdminRole = "super_admin" | "admin" | "support" | "analyst";
 
@@ -76,18 +76,34 @@ async function getSessionUser(): Promise<{ id: string; email?: string | null } |
 }
 
 async function getAdminUserRecord(userId: string): Promise<AdminUserRow | null> {
-  try {
-    const admin = supabaseAdmin();
-    const { data, error } = await admin
-      .from("admin_users")
-      .select("id, user_id, role, created_by, created_at, updated_at")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (error || !data) return null;
-    return data as AdminUserRow;
-  } catch {
-    return null;
-  }
+  return perfTime(
+    "admin-access",
+    "adminUserLookup",
+    async () => {
+      try {
+        const admin = supabaseAdmin();
+        const { data, error } = await admin
+          .from("admin_users")
+          .select("id, user_id, role, created_by, created_at, updated_at")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (error || !data) return null;
+        return data as AdminUserRow;
+      } catch {
+        return null;
+      }
+    },
+    (record) => `found=${record ? 1 : 0}`
+  );
+}
+
+function checkAdminAllowlist(email: string | null | undefined): boolean {
+  return perfTimeSync(
+    "admin-access",
+    "adminAllowlistCheck",
+    () => isAdminEmail(email),
+    (allowed) => `allowed=${allowed ? 1 : 0}`
+  );
 }
 
 export async function getCurrentAdminRole(
@@ -103,7 +119,12 @@ async function resolveAdminAccessForUser(user: {
 }): Promise<AdminAccessResult> {
   const infrastructure = await getAdminInfrastructureStatus();
   const record = await getAdminUserRecord(user.id);
-  const emergencyFallbackEnabled = isEmergencyFallbackEnabled();
+  const emergencyFallbackEnabled = perfTimeSync(
+    "admin-access",
+    "emergencyFallbackEnvCheck",
+    () => isEmergencyFallbackEnabled(),
+    (enabled) => `enabled=${enabled ? 1 : 0}`
+  );
 
   if (record) {
     return {
@@ -122,7 +143,7 @@ async function resolveAdminAccessForUser(user: {
   }
 
   if (!infrastructure.adminUsersTableInstalled) {
-    if (!isAdminEmail(user.email)) {
+    if (!checkAdminAllowlist(user.email)) {
       return { authorized: false, reason: "unauthorized" };
     }
 
@@ -142,7 +163,7 @@ async function resolveAdminAccessForUser(user: {
   }
 
   if (infrastructure.adminUsersCount === 0) {
-    if (!isAdminEmail(user.email)) {
+    if (!checkAdminAllowlist(user.email)) {
       return { authorized: false, reason: "unauthorized" };
     }
 
@@ -161,7 +182,7 @@ async function resolveAdminAccessForUser(user: {
     };
   }
 
-  if (emergencyFallbackEnabled && isAdminEmail(user.email)) {
+  if (emergencyFallbackEnabled && checkAdminAllowlist(user.email)) {
     return {
       authorized: true,
       user: { id: user.id, email: user.email ?? null },
@@ -323,15 +344,19 @@ export async function userCanAccessAdminPanel(
   userId: string,
   email: string | null | undefined
 ): Promise<boolean> {
-  return perfTime(
+  if (!isPerfEnabled()) {
+    const access = await resolveAdminAccessForUser({ id: userId, email });
+    return access.authorized;
+  }
+
+  const startedAt = performance.now();
+  const access = await resolveAdminAccessForUser({ id: userId, email });
+  const elapsedMs = Math.round(performance.now() - startedAt);
+  perfLog(
     "admin-access",
-    "resolveAdminAccess",
-    async () => {
-      const access = await resolveAdminAccessForUser({ id: userId, email });
-      return access.authorized;
-    },
-    (authorized) => `authorized=${authorized ? 1 : 0}`
+    `total=${elapsedMs}ms authorized=${access.authorized ? 1 : 0}`
   );
+  return access.authorized;
 }
 
 export async function findAuthUserIdByEmail(

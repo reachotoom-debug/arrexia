@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 
-import { perfTime } from "@/lib/perf/server";
+import { isPerfEnabled, perfLog } from "@/lib/perf/server";
 import {
   loadAuthenticatedUserUncached,
   loadWorkspaceAccessUncached,
@@ -15,6 +15,10 @@ export const getAuthenticatedUser = cache(loadAuthenticatedUserUncached);
 
 const getWorkspaceAccess = cache(
   async (workspaceId: string): Promise<WorkspaceAccessResult> => {
+    if (isPerfEnabled()) {
+      perfLog("requireWorkspace", "getWorkspaceAccessCacheMiss=1");
+    }
+
     const user = await getAuthenticatedUser();
     if (!user) {
       return { status: "unauthenticated" };
@@ -58,10 +62,25 @@ export async function requireWorkspace(workspaceId: string): Promise<{
   workspace: WorkspaceInfo;
   membership: MembershipInfo;
 }> {
-  return perfTime("requireWorkspace", "cachedRequireWorkspace", async () => {
+  // First call: includes uncached loader work (auth/membership/workspace logs).
+  // Repeat calls in the same RSC request hit React cache() and should be ~0–2ms.
+  if (!isPerfEnabled()) {
     const access = await getWorkspaceAccess(workspaceId);
     return assertWorkspacePageAccess(access);
-  });
+  }
+
+  const startedAt = performance.now();
+  const access = await getWorkspaceAccess(workspaceId);
+  const elapsedMs = Math.round(performance.now() - startedAt);
+  const result =
+    access.status === "ok"
+      ? "ok"
+      : access.status === "unauthenticated"
+        ? "unauthenticated"
+        : "forbidden";
+  perfLog("requireWorkspace", `cachedRequireWorkspace=${elapsedMs}ms result=${result}`);
+
+  return assertWorkspacePageAccess(access);
 }
 
 export type ApiAuthFailure = {

@@ -1,5 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
-import { perfTime } from "@/lib/perf/server";
+import { isPerfEnabled, perfLog, perfTime } from "@/lib/perf/server";
 
 import type { AuthUserInfo, WorkspaceAccessResult } from "./types";
 
@@ -20,13 +20,21 @@ const defaultAuthLoaderDeps: AuthLoaderDeps = {
 export async function loadAuthenticatedUserUncached(
   deps: AuthLoaderDeps = defaultAuthLoaderDeps
 ): Promise<AuthUserInfo | null> {
+  if (isPerfEnabled()) {
+    perfLog("requireWorkspace", "uncachedAuthLoaderCall=1");
+  }
+
   const supabase = await deps.getSupabase();
   let user: { id: string; email?: string | null } | null = null;
   let authError: unknown = null;
 
   try {
-    const result = await perfTime("requireWorkspace", "authGetUser", async () =>
-      supabase.auth.getUser()
+    const result = await perfTime(
+      "requireWorkspace",
+      "authGetUser",
+      async () => supabase.auth.getUser(),
+      (authResult) =>
+        `authenticated=${authResult.data.user && !authResult.error ? 1 : 0}`
     );
     user = result.data.user;
     authError = result.error;
@@ -53,6 +61,10 @@ export async function loadWorkspaceAccessUncached(
   user: AuthUserInfo,
   deps: AuthLoaderDeps = defaultAuthLoaderDeps
 ): Promise<Exclude<WorkspaceAccessResult, { status: "unauthenticated" }>> {
+  if (isPerfEnabled()) {
+    perfLog("requireWorkspace", "uncachedWorkspaceAccessCall=1");
+  }
+
   const supabase = await deps.getSupabase();
 
   const { data: membership } = await perfTime(

@@ -13,6 +13,24 @@ export function perfLog(scope: string, line: string): void {
   console.log(`[perf][${scope}] ${line}`);
 }
 
+export function perfTimeSync<T>(
+  scope: string,
+  label: string,
+  fn: () => T,
+  meta?: (result: T) => string
+): T {
+  if (!isPerfEnabled()) {
+    return fn();
+  }
+
+  const start = performance.now();
+  const result = fn();
+  const ms = Math.round(performance.now() - start);
+  const suffix = meta ? ` ${meta(result)}` : "";
+  perfLog(scope, `${label}=${ms}ms${suffix}`);
+  return result;
+}
+
 export async function perfTime<T>(
   scope: string,
   label: string,
