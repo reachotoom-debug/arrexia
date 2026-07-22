@@ -11,6 +11,7 @@ import {
 } from "./eligibility";
 import { formatRuleWhenText } from "./shared";
 import {
+  normalizeJoinedReminderTemplate,
   ruleHasUsableReminderTemplate,
   type ReminderTemplateEligibilityRow,
 } from "./ruleTemplate";
@@ -83,6 +84,41 @@ export type ReminderHistoryCandidateRow = {
   status: string;
   sent_at: string | null;
 };
+
+/** PostgREST nested-select shape for reminder_rules + reminder_templates join. */
+export type SupabaseReminderRuleRow = {
+  id: string;
+  name: string;
+  trigger_type: string;
+  offset_days: number;
+  for_status: string | null;
+  is_enabled: boolean;
+  template_id: string | null;
+  sort_order: number | null;
+  created_at?: string | null;
+  reminder_templates?:
+    | ReminderTemplateEligibilityRow
+    | ReminderTemplateEligibilityRow[]
+    | null;
+};
+
+/** Maps Supabase/PostgREST rule rows to the internal ReminderRuleCandidateRow contract. */
+export function mapSupabaseReminderRulesToCandidates(
+  rows: SupabaseReminderRuleRow[]
+): ReminderRuleCandidateRow[] {
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    trigger_type: row.trigger_type,
+    offset_days: row.offset_days,
+    for_status: row.for_status,
+    is_enabled: row.is_enabled,
+    template_id: row.template_id,
+    sort_order: row.sort_order,
+    created_at: row.created_at,
+    reminder_template: normalizeJoinedReminderTemplate(row.reminder_templates),
+  }));
+}
 
 function compareRules(a: ReminderRuleCandidateRow, b: ReminderRuleCandidateRow): number {
   const sortA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
@@ -381,7 +417,7 @@ export async function getEligibleReminders(
     evaluationDate,
     workspaceTimeZone,
     invoices: invoiceCandidates,
-    rules: rules as ReminderRuleCandidateRow[],
+    rules: mapSupabaseReminderRulesToCandidates(rules),
     historyRows,
     clientEmailsByClientId,
   });

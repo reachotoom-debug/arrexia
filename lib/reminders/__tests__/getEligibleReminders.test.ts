@@ -4,9 +4,11 @@ import { describe, it } from "node:test";
 import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
 import {
   buildEligibleReminderCandidates,
+  mapSupabaseReminderRulesToCandidates,
   type InvoiceCandidateRow,
   type ReminderHistoryCandidateRow,
   type ReminderRuleCandidateRow,
+  type SupabaseReminderRuleRow,
 } from "../getEligibleReminders";
 
 const WORKSPACE_ID = "ws-1";
@@ -331,5 +333,275 @@ describe("getEligibleReminders suggested send metadata", () => {
     assert.equal(results[0].ruleId, "rule-on-due");
     assert.equal(results[0].templateId, "tpl-on-due");
     assert.match(results[0].id, /^inv-1:rule-on-due$/);
+  });
+});
+
+describe("mapSupabaseReminderRulesToCandidates (R2B.3)", () => {
+  function supabaseRule(
+    overrides: Partial<SupabaseReminderRuleRow> &
+      Pick<
+        SupabaseReminderRuleRow,
+        "id" | "trigger_type" | "offset_days" | "template_id"
+      >
+  ): SupabaseReminderRuleRow {
+    const templateId = overrides.template_id;
+    return {
+      name: overrides.name ?? "Rule",
+      for_status: overrides.for_status ?? "sent",
+      is_enabled: overrides.is_enabled ?? true,
+      sort_order: overrides.sort_order ?? 1,
+      created_at: overrides.created_at ?? "2026-01-01T00:00:00.000Z",
+      reminder_templates:
+        overrides.reminder_templates !== undefined
+          ? overrides.reminder_templates
+          : {
+              id: templateId!,
+              workspace_id: WORKSPACE_ID,
+              is_enabled: true,
+            },
+      ...overrides,
+    };
+  }
+
+  function evaluateSupabaseRules(params: {
+    evaluationDate?: string;
+    invoices?: InvoiceCandidateRow[];
+    supabaseRules: SupabaseReminderRuleRow[];
+    historyRows?: ReminderHistoryCandidateRow[];
+  }) {
+    return buildEligibleReminderCandidates({
+      workspaceId: WORKSPACE_ID,
+      evaluationDate: params.evaluationDate ?? "2026-07-22",
+      workspaceTimeZone: "UTC",
+      invoices: params.invoices ?? [baseInvoice()],
+      rules: mapSupabaseReminderRulesToCandidates(params.supabaseRules),
+      historyRows: params.historyRows ?? [],
+      clientEmailsByClientId: new Map([["client-1", "billing@acme.test"]]),
+    });
+  }
+
+  it("maps reminder_templates object join and produces eligible candidate", () => {
+    const results = evaluateSupabaseRules({
+      evaluationDate: "2026-07-22",
+      supabaseRules: [
+        supabaseRule({
+          id: "rule-on-due",
+          name: "On due date",
+          trigger_type: "on_due",
+          offset_days: 0,
+          template_id: "tpl-on-due",
+          reminder_templates: {
+            id: "tpl-on-due",
+            workspace_id: WORKSPACE_ID,
+            is_enabled: true,
+          },
+        }),
+      ],
+      invoices: [baseInvoice({ due_date: "2026-07-22" })],
+    });
+    assert.equal(results.length, 1);
+    assert.equal(results[0].ruleId, "rule-on-due");
+    assert.equal(results[0].eligibilityReason, "eligible");
+  });
+
+  it("maps reminder_templates array join and produces eligible candidate", () => {
+    const results = evaluateSupabaseRules({
+      evaluationDate: "2026-07-22",
+      supabaseRules: [
+        supabaseRule({
+          id: "rule-on-due",
+          name: "On due date",
+          trigger_type: "on_due",
+          offset_days: 0,
+          template_id: "tpl-on-due",
+          reminder_templates: [
+            {
+              id: "tpl-on-due",
+              workspace_id: WORKSPACE_ID,
+              is_enabled: true,
+            },
+          ],
+        }),
+      ],
+      invoices: [baseInvoice({ due_date: "2026-07-22" })],
+    });
+    assert.equal(results.length, 1);
+    assert.equal(results[0].ruleId, "rule-on-due");
+  });
+
+  it("excludes rule when reminder_templates join is null/missing", () => {
+    const results = evaluateSupabaseRules({
+      supabaseRules: [
+        supabaseRule({
+          id: "rule-on-due",
+          trigger_type: "on_due",
+          offset_days: 0,
+          template_id: "tpl-on-due",
+          reminder_templates: null,
+        }),
+      ],
+    });
+    assert.equal(results.length, 0);
+  });
+
+  it("excludes rule when reminder_templates is_enabled=false", () => {
+    const results = evaluateSupabaseRules({
+      supabaseRules: [
+        supabaseRule({
+          id: "rule-on-due",
+          trigger_type: "on_due",
+          offset_days: 0,
+          template_id: "tpl-on-due",
+          reminder_templates: {
+            id: "tpl-on-due",
+            workspace_id: WORKSPACE_ID,
+            is_enabled: false,
+          },
+        }),
+      ],
+    });
+    assert.equal(results.length, 0);
+  });
+
+  it("excludes rule when reminder_templates belongs to another workspace", () => {
+    const results = evaluateSupabaseRules({
+      supabaseRules: [
+        supabaseRule({
+          id: "rule-on-due",
+          trigger_type: "on_due",
+          offset_days: 0,
+          template_id: "tpl-on-due",
+          reminder_templates: {
+            id: "tpl-on-due",
+            workspace_id: "other-workspace",
+            is_enabled: true,
+          },
+        }),
+      ],
+    });
+    assert.equal(results.length, 0);
+  });
+
+  it("returns exactly five eligible candidates for July 23 production regression", () => {
+    const supabaseRules: SupabaseReminderRuleRow[] = [
+      supabaseRule({
+        id: "rule-before-3",
+        name: "Before Due Date 3 Days",
+        trigger_type: "before_due",
+        offset_days: 3,
+        template_id: "tpl-before-3",
+        sort_order: 1,
+      }),
+      supabaseRule({
+        id: "rule-on-due",
+        name: "On due date",
+        trigger_type: "on_due",
+        offset_days: 0,
+        template_id: "tpl-on-due",
+        sort_order: 2,
+      }),
+      supabaseRule({
+        id: "rule-after-3",
+        name: "After due 3",
+        trigger_type: "after_due",
+        offset_days: 3,
+        template_id: "tpl-after-3",
+        sort_order: 3,
+      }),
+      supabaseRule({
+        id: "rule-after-7",
+        name: "After due 7",
+        trigger_type: "after_due",
+        offset_days: 7,
+        template_id: "tpl-after-7",
+        sort_order: 4,
+      }),
+      supabaseRule({
+        id: "rule-after-14",
+        name: "After due 14",
+        trigger_type: "after_due",
+        offset_days: 14,
+        template_id: "tpl-after-14",
+        sort_order: 5,
+      }),
+    ];
+
+    for (const rule of supabaseRules) {
+      const template = rule.reminder_templates;
+      assert.ok(template);
+      if (Array.isArray(template)) {
+        assert.equal(template[0]?.id, rule.template_id);
+      } else {
+        assert.equal(template.id, rule.template_id);
+      }
+    }
+
+    const invoices: InvoiceCandidateRow[] = [
+      baseInvoice({
+        id: "inv-0069",
+        invoice_number: "INV-0069",
+        due_date: "2026-07-26",
+        outstanding: 3000,
+        total: 3000,
+        display_status: "sent",
+        is_overdue: false,
+      }),
+      baseInvoice({
+        id: "inv-0070",
+        invoice_number: "INV-0070",
+        due_date: "2026-07-23",
+        outstanding: 6156,
+        total: 6156,
+        display_status: "sent",
+        is_overdue: false,
+      }),
+      baseInvoice({
+        id: "inv-0071",
+        invoice_number: "INV-0071",
+        due_date: "2026-07-20",
+        outstanding: 5000,
+        total: 5000,
+        display_status: "overdue",
+        is_overdue: true,
+      }),
+      baseInvoice({
+        id: "inv-0072",
+        invoice_number: "INV-0072",
+        due_date: "2026-07-16",
+        outstanding: 2000,
+        total: 2000,
+        display_status: "overdue",
+        is_overdue: true,
+      }),
+      baseInvoice({
+        id: "inv-0073",
+        invoice_number: "INV-0073",
+        due_date: "2026-07-09",
+        outstanding: 5000,
+        total: 5000,
+        display_status: "overdue",
+        is_overdue: true,
+      }),
+    ];
+
+    const results = evaluateSupabaseRules({
+      evaluationDate: "2026-07-23",
+      supabaseRules,
+      invoices,
+    });
+
+    assert.equal(results.length, 5);
+
+    const byInvoice = new Map(results.map((r) => [r.invoiceNumber, r]));
+    assert.equal(byInvoice.get("INV-0069")?.ruleId, "rule-before-3");
+    assert.equal(byInvoice.get("INV-0069")?.scheduledDate, "2026-07-23");
+    assert.equal(byInvoice.get("INV-0070")?.ruleId, "rule-on-due");
+    assert.equal(byInvoice.get("INV-0070")?.scheduledDate, "2026-07-23");
+    assert.equal(byInvoice.get("INV-0071")?.ruleId, "rule-after-3");
+    assert.equal(byInvoice.get("INV-0071")?.scheduledDate, "2026-07-23");
+    assert.equal(byInvoice.get("INV-0072")?.ruleId, "rule-after-7");
+    assert.equal(byInvoice.get("INV-0072")?.scheduledDate, "2026-07-23");
+    assert.equal(byInvoice.get("INV-0073")?.ruleId, "rule-after-14");
+    assert.equal(byInvoice.get("INV-0073")?.scheduledDate, "2026-07-23");
   });
 });
