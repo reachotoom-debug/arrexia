@@ -51,6 +51,7 @@ type SuggestedRow = {
   rule_name: string;
   rule_label: string;
   template_id: string | null;
+  scheduled_date: string;
 };
 
 export default async function RemindersPage({
@@ -123,6 +124,7 @@ export default async function RemindersPage({
     rule_name: c.ruleName,
     rule_label: c.ruleLabel,
     template_id: c.templateId,
+    scheduled_date: c.scheduledDate,
   }));
 
   let filteredSuggested = suggestedReminders;

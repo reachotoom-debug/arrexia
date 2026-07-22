@@ -1,6 +1,8 @@
 // lib/reminders/render.ts
 
+import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 import { buildAppUrl } from "@/lib/config/appUrl";
+import { computeReminderDaysOverdue } from "./calendarOverdue";
 
 interface InvoiceForRender {
   invoice_number?: string | null;
@@ -39,9 +41,13 @@ export function buildReminderTemplateContext(args: {
   client: { name?: string | null; email?: string | null } | null;
   workspaceId?: string;
   invoiceId?: string;
-  now?: Date;
+  /** Workspace-local or rule occurrence reference date (YYYY-MM-DD). */
+  referenceDate?: string | null;
+  /** Precomputed overdue days; must match email shell when provided by send.ts. */
+  daysOverdue?: number;
 }): ReminderTemplateContext {
-  const { invoiceView, client, workspaceId, invoiceId, now = new Date() } = args;
+  const { invoiceView, client, workspaceId, invoiceId, referenceDate, daysOverdue } =
+    args;
 
   const clientName = client?.name ?? "";
   const clientEmail = client?.email ?? "";
@@ -50,7 +56,7 @@ export function buildReminderTemplateContext(args: {
   const currency = invoiceView.currency ?? "";
   const workspaceName = invoiceView.workspace_name ?? "";
 
-  const dueDateFormatted = dueDate ? new Date(dueDate).toLocaleDateString() : "";
+  const dueDateFormatted = dueDate ? formatDateOnlyField(dueDate) : "";
 
   const outstanding =
     invoiceView.outstanding == null ? null : Number(invoiceView.outstanding);
@@ -68,16 +74,12 @@ export function buildReminderTemplateContext(args: {
     }
   })();
 
-  const daysOverdue = (() => {
-    if (!dueDate) return 0;
-    const msPerDay = 1000 * 60 * 60 * 24;
-    const due = new Date(dueDate);
-    const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-    const t = new Date(now);
-    const startOfNow = new Date(t.getFullYear(), t.getMonth(), t.getDate());
-    const diffDays = Math.floor((startOfNow.getTime() - startOfDue.getTime()) / msPerDay);
-    return diffDays > 0 ? diffDays : 0;
-  })();
+  const resolvedDaysOverdue =
+    daysOverdue ??
+    computeReminderDaysOverdue({
+      dueDate,
+      referenceDate: referenceDate ?? null,
+    });
 
   const paymentLink =
     workspaceId && invoiceId
@@ -95,7 +97,7 @@ export function buildReminderTemplateContext(args: {
     amount_due: outstandingFormatted || (outstanding == null ? "" : String(outstanding)),
     currency: currency,
     workspace_name: workspaceName,
-    days_overdue: String(daysOverdue),
+    days_overdue: String(resolvedDaysOverdue),
     payment_link: paymentLink,
   };
 
@@ -109,7 +111,7 @@ export function buildReminderTemplateContext(args: {
     outstandingFormatted,
     currency,
     workspaceName,
-    daysOverdue,
+    daysOverdue: resolvedDaysOverdue,
     replacements,
   };
 }

@@ -9,10 +9,13 @@ type SendReminderInput = {
   explicitTemplateId?: string | null;
   /** Matched reminder rule when sending from Suggested Reminders (preserves occurrence). */
   ruleId?: string | null;
+  /** Workspace-local rule occurrence date from eligibility (YYYY-MM-DD). */
+  scheduledDate?: string | null;
 };
 
 export async function sendReminderAction(input: SendReminderInput) {
-  const { workspaceId, invoiceId, explicitTemplateId, ruleId = null } = input;
+  const { workspaceId, invoiceId, explicitTemplateId, ruleId = null, scheduledDate = null } =
+    input;
 
   try {
     // Use the shared sendReminderForInvoice function which handles:
@@ -25,6 +28,7 @@ export async function sendReminderAction(input: SendReminderInput) {
       invoiceId,
       templateId: explicitTemplateId ?? null,
       ruleId,
+      scheduledDate,
       source: "manual",
       userId: null, // TODO: Add user ID when auth is available
     });

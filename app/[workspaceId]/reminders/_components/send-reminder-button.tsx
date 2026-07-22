@@ -16,6 +16,7 @@ type SendReminderButtonProps = {
   clientEmail?: string | null;
   templateId?: string | null;
   ruleId?: string | null;
+  scheduledDate?: string | null;
 };
 
 type ButtonStatus = "idle" | "loading" | "sent" | "skipped";
@@ -28,6 +29,7 @@ export function SendReminderButton({
   clientEmail,
   templateId,
   ruleId,
+  scheduledDate,
 }: SendReminderButtonProps) {
   const [status, setStatus] = useState<ButtonStatus>("idle");
   const [skipReason, setSkipReason] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export function SendReminderButton({
         invoiceId,
         explicitTemplateId: templateId ?? null,
         ruleId: ruleId ?? null,
+        scheduledDate: scheduledDate ?? null,
       });
 
       if (res.ok && res.status === "sent") {

@@ -42,6 +42,7 @@ type SuggestedRow = {
   rule_name: string;
   rule_label: string;
   template_id: string | null;
+  scheduled_date: string;
 };
 
 interface SuggestedRemindersTableProps {
@@ -229,6 +230,7 @@ export function SuggestedRemindersTable({
                   clientEmail={inv.client_email ?? undefined}
                   ruleId={inv.rule_id}
                   templateId={inv.template_id}
+                  scheduledDate={inv.scheduled_date}
                 />
               }
             />
@@ -387,6 +389,7 @@ export function SuggestedRemindersTable({
                       clientEmail={inv.client_email ?? undefined}
                       ruleId={inv.rule_id}
                       templateId={inv.template_id}
+                      scheduledDate={inv.scheduled_date}
                     />
                   </div>
                 </td>

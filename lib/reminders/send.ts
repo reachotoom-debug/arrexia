@@ -19,6 +19,10 @@ import {
   ruleTemplateErrorOutcome,
 } from "@/lib/reminders/ruleTemplate";
 import { checkRuleOccurrenceDuplicateBeforeSend } from "@/lib/reminders/ruleOccurrenceGuard";
+import {
+  computeReminderDaysOverdue,
+  resolveReminderOverdueReferenceDate,
+} from "@/lib/reminders/calendarOverdue";
 import type { Database } from "@/types/supabase/index";
 
 // Dynamic import for nodemailer
@@ -464,6 +468,8 @@ export async function sendReminderForInvoice(
   // 3) Resolve template content — rule-bound vs generic manual
   let resolvedTemplateId: string | null = null;
   let templateData: { subject: string; body: string } | null = null;
+  let workspaceTimeZone = "UTC";
+  let overdueReferenceDate: string | null = null;
 
   if (ruleId) {
     const resolution = await fetchRuleBoundTemplate(
@@ -522,6 +528,8 @@ export async function sendReminderForInvoice(
       .eq("workspace_id", workspaceId)
       .maybeSingle();
 
+    workspaceTimeZone = settingsRow?.timezone ?? "UTC";
+
     const duplicateCheck = await checkRuleOccurrenceDuplicateBeforeSend({
       supabase,
       workspaceId,
@@ -560,7 +568,28 @@ export async function sendReminderForInvoice(
         skipReason: "already_sent_for_rule",
       };
     }
+
+    overdueReferenceDate = resolveReminderOverdueReferenceDate({
+      ruleId,
+      scheduledDate: scheduledDate ?? duplicateCheck.scheduledDate,
+      dueDate: invoiceView.due_date,
+      triggerType: resolution.rule.trigger_type,
+      offsetDays: Number(resolution.rule.offset_days ?? 0),
+      workspaceTimeZone,
+    });
   } else {
+    const { data: settingsRow } = await supabase
+      .from("settings")
+      .select("timezone")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    workspaceTimeZone = settingsRow?.timezone ?? "UTC";
+    overdueReferenceDate = resolveReminderOverdueReferenceDate({
+      ruleId: null,
+      workspaceTimeZone,
+    });
+
     const manualResolution = await resolveGenericManualTemplate(
       supabase,
       workspaceId,
@@ -569,6 +598,11 @@ export async function sendReminderForInvoice(
     resolvedTemplateId = manualResolution.resolvedTemplateId;
     templateData = manualResolution.templateData;
   }
+
+  const daysOverdue = computeReminderDaysOverdue({
+    dueDate: invoiceView.due_date,
+    referenceDate: overdueReferenceDate,
+  });
 
   // Prepare subject and main message (plain text; HTML shell applied below)
   const invoiceNumberLabel = invoice.invoice_number || invoice.id;
@@ -598,6 +632,8 @@ export async function sendReminderForInvoice(
         },
         workspaceId,
         invoiceId: invoice.id,
+        referenceDate: overdueReferenceDate,
+        daysOverdue,
       });
 
       const rendered = renderReminderTemplateFromContext({
@@ -657,17 +693,6 @@ export async function sendReminderForInvoice(
   const outstandingFormatted = formatCurrency(Number(invoiceView.outstanding ?? 0), {
     currency,
   });
-
-  const daysOverdue = (() => {
-    if (!invoiceView.due_date) return 0;
-    const msPerDay = 1000 * 60 * 60 * 24;
-    const due = new Date(invoiceView.due_date);
-    const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-    const now = new Date();
-    const startOfNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const diffDays = Math.floor((startOfNow.getTime() - startOfDue.getTime()) / msPerDay);
-    return diffDays > 0 ? diffDays : 0;
-  })();
 
   const workspaceLogoUrl = settings?.workspace_logo_url || settings?.logo_url || null;
 
