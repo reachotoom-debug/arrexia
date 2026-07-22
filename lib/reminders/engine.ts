@@ -6,6 +6,11 @@ import "server-only";
  */
 
 import { formatRuleWhenText } from "./shared";
+import {
+  computeInvoiceTiming,
+  matchesReminderRuleTrigger,
+  type InvoiceTiming,
+} from "./ruleTrigger";
 import { supabaseServer } from "@/lib/supabase/server";
 import { INVOICE_VIEW_BASE_FIELDS } from "@/lib/db/invoicesView";
 import type { Database } from "@/types/supabase/index";
@@ -14,32 +19,8 @@ type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
 type ReminderRuleRow = Database["public"]["Tables"]["reminder_rules"]["Row"];
 type ReminderTemplateRow = Database["public"]["Tables"]["reminder_templates"]["Row"];
 
-export interface InvoiceTiming {
-  daysUntilDue: number | null;
-  daysOverdue: number | null;
-}
-
-/**
- * Compute days until due and days overdue for an invoice
- */
-export function computeInvoiceTiming(
-  invoice: { due_date: string | null },
-  today: Date = new Date()
-): InvoiceTiming {
-  const due = invoice.due_date ? new Date(invoice.due_date) : null;
-  if (!due) {
-    return { daysUntilDue: null, daysOverdue: null };
-  }
-
-  const ms = today.getTime() - due.getTime();
-  const daysDiff = Math.floor(ms / (1000 * 60 * 60 * 24));
-
-  // If negative → still before due date
-  const daysOverdue = daysDiff > 0 ? daysDiff : 0;
-  const daysUntilDue = daysDiff < 0 ? Math.abs(daysDiff) : 0;
-
-  return { daysUntilDue, daysOverdue };
-}
+export type { InvoiceTiming };
+export { computeInvoiceTiming, matchesReminderRuleTrigger };
 
 /**
  * Resolve reminder type based on the difference between today and due date
@@ -174,17 +155,15 @@ export async function findApplicableRuleForInvoice(
     const template = ruleData.reminder_templates[0];
     if (!template) continue;
 
-    let matches = false;
-
-    if (ruleData.trigger_type === "before_due") {
-      matches = timing.daysUntilDue === ruleData.offset_days;
-    } else if (ruleData.trigger_type === "on_due") {
-      matches = timing.daysUntilDue === 0;
-    } else if (ruleData.trigger_type === "after_due") {
-      matches = timing.daysOverdue === ruleData.offset_days;
+    if (
+      !matchesReminderRuleTrigger(
+        timing,
+        ruleData.trigger_type,
+        ruleData.offset_days
+      )
+    ) {
+      continue;
     }
-
-    if (!matches) continue;
 
     // Check if we've already sent a reminder with this rule for this invoice today
     const todayStr = today.toISOString().split("T")[0];
