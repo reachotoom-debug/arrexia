@@ -13,6 +13,12 @@ import { resolveEmailProvider, sendEmail } from "@/lib/email/sendEmail";
 import { renderReminderEmail, sanitizeReminderMainMessage } from "@/lib/email/templates";
 import { formatCurrency } from "@/lib/format/currency";
 import { getWorkspaceOrganizationId } from "@/lib/workspaces/getWorkspaceOrganizationId";
+import {
+  fetchRuleBoundTemplate,
+  resolveGenericManualTemplate,
+  ruleTemplateErrorOutcome,
+} from "@/lib/reminders/ruleTemplate";
+import { checkRuleOccurrenceDuplicateBeforeSend } from "@/lib/reminders/ruleOccurrenceGuard";
 import type { Database } from "@/types/supabase/index";
 
 // Dynamic import for nodemailer
@@ -33,6 +39,8 @@ export interface SendReminderOptions {
   invoiceId: string;
   ruleId?: string | null;
   templateId?: string | null;
+  /** Workspace-local scheduled occurrence date (YYYY-MM-DD) for rule-bound duplicate guard. */
+  scheduledDate?: string | null;
   source?: "manual" | "auto_cron";
   userId?: string | null; // optional, for audit logging
 }
@@ -54,10 +62,11 @@ export interface SendReminderResult {
 export async function sendReminderForInvoice(
   options: SendReminderOptions
 ): Promise<SendReminderResult> {
-  const { workspaceId, invoiceId, ruleId, templateId, source = "manual", userId = null } = options;
+  const { workspaceId, invoiceId, ruleId, templateId, scheduledDate, source = "manual", userId = null } = options;
   const supabase = await supabaseServer();
 
   const sourceLabel: "manual" | "auto" = source === "auto_cron" ? "auto" : "manual";
+  let ruleBoundReminderTemplateId: string | null = null;
 
   let cachedWorkspaceOrganizationId: string | undefined;
   const resolveOrganizationId = async (
@@ -163,6 +172,7 @@ export async function sendReminderForInvoice(
           recipient_email: recipientEmail ?? null,
           rule_id: rId,
           template_id: tId,
+          reminder_template_id: ruleBoundReminderTemplateId,
           source: sourceLabel,
           skip_reason: status === "skipped" ? skipReason ?? null : null,
         },
@@ -303,19 +313,22 @@ export async function sendReminderForInvoice(
     invoiceView = fallbackInvoiceView;
   }
 
-  // Load client separately
+  // Load client — rule-bound sends allow inactive non-archived clients (R2A/R2C).
   let client: ClientForReminder | null = null;
   {
-    const { data: eligibleClientData, error: eligibleClientError } = await supabase
+    let eligibleClientQuery = supabase
       .from("clients")
       .select("id, name, email, archived_at, is_active")
-      // Reminders eligibility: clients must be active AND not archived
-      // This rule must match all reminders queries globally.
       .eq("id", invoiceView.client_id)
       .eq("workspace_id", workspaceId)
-      .eq("is_active", true)
-      .is("archived_at", null)
-      .maybeSingle();
+      .is("archived_at", null);
+
+    if (!ruleId) {
+      eligibleClientQuery = eligibleClientQuery.eq("is_active", true);
+    }
+
+    const { data: eligibleClientData, error: eligibleClientError } =
+      await eligibleClientQuery.maybeSingle();
 
     if (eligibleClientError) {
       const errorMsg = "Failed to load client for this invoice";
@@ -408,7 +421,7 @@ export async function sendReminderForInvoice(
   let skipReason: string | null = null;
   if (client.archived_at) {
     skipReason = "client_archived";
-  } else if (client.is_active !== true) {
+  } else if (!ruleId && client.is_active !== true) {
     skipReason = "client_inactive";
   } else if (!client.email) {
     skipReason = "client_email_missing";
@@ -448,80 +461,113 @@ export async function sendReminderForInvoice(
     };
   }
 
-  // 3) Resolve template_id safely (from message_templates table)
+  // 3) Resolve template content — rule-bound vs generic manual
   let resolvedTemplateId: string | null = null;
+  let templateData: { subject: string; body: string } | null = null;
 
-  // If templateId is provided by caller, use it
-  if (templateId) {
-    // Verify it exists in message_templates
-    const { data: existingTemplate } = await supabase
-      .from("message_templates")
-      .select("id")
-      .eq("id", templateId)
+  if (ruleId) {
+    const resolution = await fetchRuleBoundTemplate(
+      supabase,
+      workspaceId,
+      ruleId,
+      templateId ?? null
+    );
+
+    if (!resolution.ok) {
+      const outcome = ruleTemplateErrorOutcome(resolution.reason);
+      const errorMessage = resolution.message;
+
+      const { reminderId } = await recordReminderOutcome({
+        status: outcome,
+        invoiceId: invoice.id,
+        clientId: client.id,
+        ruleId,
+        templateId: null,
+        subject: "Payment Reminder",
+        body: `Reminder ${outcome}: ${errorMessage}`,
+        sentAt: new Date().toISOString(),
+        errorMessage,
+        skipReason: outcome === "skipped" ? resolution.reason : null,
+        organizationId: invoice.organization_id || null,
+      });
+
+      console.error("[sendReminderForInvoice] rule template resolution failed:", {
+        workspaceId,
+        invoiceId,
+        ruleId,
+        reason: resolution.reason,
+        message: resolution.message,
+      });
+
+      return {
+        success: false,
+        status: outcome,
+        errorMessage,
+        reminderId,
+        reminderLogId: reminderId,
+        skipReason: outcome === "skipped" ? resolution.reason : undefined,
+      };
+    }
+
+    templateData = {
+      subject: resolution.template.subject,
+      body: resolution.template.body,
+    };
+    ruleBoundReminderTemplateId = resolution.reminderTemplateId;
+    resolvedTemplateId = resolution.logTemplateId;
+
+    const { data: settingsRow } = await supabase
+      .from("settings")
+      .select("timezone")
       .eq("workspace_id", workspaceId)
       .maybeSingle();
 
-    if (existingTemplate) {
-      resolvedTemplateId = templateId;
+    const duplicateCheck = await checkRuleOccurrenceDuplicateBeforeSend({
+      supabase,
+      workspaceId,
+      invoiceId: invoice.id,
+      ruleId,
+      triggerType: resolution.rule.trigger_type,
+      offsetDays: Number(resolution.rule.offset_days ?? 0),
+      dueDate: invoiceView.due_date,
+      scheduledDate: scheduledDate ?? null,
+      workspaceTimeZone: settingsRow?.timezone ?? "UTC",
+    });
+
+    if (duplicateCheck.blocked) {
+      const errorMessage =
+        "Reminder for this rule occurrence was already sent successfully.";
+      const { reminderId } = await recordReminderOutcome({
+        status: "skipped",
+        invoiceId: invoice.id,
+        clientId: client.id,
+        ruleId,
+        templateId: null,
+        subject: "Payment Reminder",
+        body: `Reminder skipped: ${errorMessage}`,
+        sentAt: new Date().toISOString(),
+        errorMessage,
+        skipReason: "already_sent_for_rule",
+        organizationId: invoice.organization_id || null,
+      });
+
+      return {
+        success: false,
+        status: "skipped",
+        errorMessage,
+        reminderId,
+        reminderLogId: reminderId,
+        skipReason: "already_sent_for_rule",
+      };
     }
-  }
-
-  // If no template yet, query message_templates for the workspace
-  if (!resolvedTemplateId) {
-    // Query message_templates - try to filter by is_active/archived_at if columns exist
-    // Since we can't check column existence at runtime, we query all and filter in JS if needed
-    // Or use a SQL approach that handles missing columns gracefully
-    // For simplicity, we'll query and get the most recent template
-    const { data: templates } = await supabase
-      .from("message_templates")
-      .select("id, workspace_id, created_at")
-      .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    if (templates && templates.length > 0) {
-      resolvedTemplateId = templates[0].id;
-    }
-  }
-
-  // If still no template, create a minimal default template
-  if (!resolvedTemplateId) {
-    try {
-      const defaultSubject = "Payment Reminder";
-      const defaultBody = `This is a reminder that invoice {{invoice_number}} for {{amount_due}} was due on {{due_date}}.\n\nPlease make payment at your earliest convenience.`;
-
-      const { data: newTemplate, error: insertError } = await supabase
-        .from("message_templates")
-        .insert({
-          workspace_id: workspaceId,
-          name: "Default Reminder Template",
-          subject: defaultSubject,
-          body: defaultBody,
-        })
-        .select("id")
-        .single();
-
-      if (!insertError && newTemplate) {
-        resolvedTemplateId = newTemplate.id;
-      }
-    } catch (createError) {
-      console.error("[sendReminderForInvoice] Failed to create default template:", createError);
-      // Continue with resolvedTemplateId = null
-    }
-  }
-
-  // 4) Load template data if we have a template_id
-  let templateData: { subject: string; body: string } | null = null;
-  if (resolvedTemplateId) {
-    const { data: template } = await supabase
-      .from("message_templates")
-      .select("subject, body")
-      .eq("id", resolvedTemplateId)
-      .single();
-
-    if (template) {
-      templateData = { subject: template.subject, body: template.body };
-    }
+  } else {
+    const manualResolution = await resolveGenericManualTemplate(
+      supabase,
+      workspaceId,
+      templateId ?? null
+    );
+    resolvedTemplateId = manualResolution.resolvedTemplateId;
+    templateData = manualResolution.templateData;
   }
 
   // Prepare subject and main message (plain text; HTML shell applied below)
@@ -530,7 +576,7 @@ export async function sendReminderForInvoice(
   let mainMessagePlain = `This is a friendly reminder that invoice #${invoiceNumberLabel} is due.`;
 
   // If we have template data, try to render it
-  if (templateData && resolvedTemplateId) {
+  if (templateData && (resolvedTemplateId || ruleBoundReminderTemplateId)) {
     try {
       const { data: workspace } = await supabase
         .from("workspaces")
@@ -556,7 +602,7 @@ export async function sendReminderForInvoice(
 
       const rendered = renderReminderTemplateFromContext({
         template: {
-          id: resolvedTemplateId,
+          id: resolvedTemplateId ?? ruleBoundReminderTemplateId ?? "rule-template",
           subject: templateData.subject,
           body: templateData.body,
         },

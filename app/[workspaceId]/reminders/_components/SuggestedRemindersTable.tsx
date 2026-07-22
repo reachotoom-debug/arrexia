@@ -22,10 +22,11 @@ import { EntityCard } from "@/components/ui/EntityCard";
 
 type SuggestedRow = {
   id: string;
+  invoice_id: string;
   invoice_number: string | null;
   status: string | null;
   due_date: string | null;
-  outstanding: number | null; // From invoices_view.outstanding
+  outstanding: number | null;
   currency: string | null;
   client: {
     id: string;
@@ -37,65 +38,16 @@ type SuggestedRow = {
   is_overdue: boolean;
   client_name: string | null;
   client_email: string | null;
+  rule_id: string;
+  rule_name: string;
+  rule_label: string;
+  template_id: string | null;
 };
 
 interface SuggestedRemindersTableProps {
   workspaceId: string;
   reminders: SuggestedRow[];
-  currentView?: string;
   searchParams?: Record<string, string | string[] | undefined>;
-}
-
-function getEmptyStateContent(
-  view: string | undefined,
-  workspaceId: string
-) {
-  const baseReminders = `/${workspaceId}/reminders`;
-  const invoices = `/${workspaceId}/invoices`;
-  switch (view) {
-    case "overdue":
-      return {
-        title: "No overdue invoices",
-        message: "You're all caught up.",
-        actionLabel: "View invoices" as const,
-        actionHref: invoices,
-      };
-    case "due_7":
-      return {
-        title: "No invoices due in 7 days",
-        message: "Check other ranges or clear filters.",
-        actionLabel: "Clear filters" as const,
-        actionHref: baseReminders,
-      };
-    case "due_14":
-      return {
-        title: "No invoices due in 14 days",
-        message: "Check other ranges or clear filters.",
-        actionLabel: "Clear filters" as const,
-        actionHref: baseReminders,
-      };
-    case "due_this_month":
-      return {
-        title: "No invoices due this month",
-        message: "Check other ranges or clear filters.",
-        actionLabel: "Clear filters" as const,
-        actionHref: baseReminders,
-      };
-    case "due_next_month":
-      return {
-        title: "No invoices due next month",
-        message: "Check other ranges or clear filters.",
-        actionLabel: "Clear filters" as const,
-        actionHref: baseReminders,
-      };
-    default:
-      return {
-        title: "No reminders match your current filters",
-        message: "Try clearing filters to view more reminders.",
-        actionLabel: "Clear filters" as const,
-        actionHref: baseReminders,
-      };
-  }
 }
 
 function buildSortUrl(
@@ -108,7 +60,7 @@ function buildSortUrl(
   const params = new URLSearchParams();
   
   // Preserve existing meaningful params
-  const meaningfulParams = ["view", "status", "search", "page"];
+  const meaningfulParams = ["search", "page"];
   meaningfulParams.forEach((key) => {
     const value = currentParams[key];
     if (value) {
@@ -184,19 +136,17 @@ function SortableHeader({
 export function SuggestedRemindersTable({
   workspaceId,
   reminders,
-  currentView,
   searchParams = {},
 }: SuggestedRemindersTableProps) {
   const currentParams = searchParams;
 
   if (reminders.length === 0) {
-    const emptyState = getEmptyStateContent(currentView, workspaceId);
     return (
       <EmptyState
-        title={emptyState.title}
-        message={emptyState.message}
-        actionLabel={emptyState.actionLabel}
-        actionHref={emptyState.actionHref}
+        title="No reminders match your search"
+        message="Try a different search term."
+        actionLabel="Clear search"
+        actionHref={`/${workspaceId}/reminders`}
       />
     );
   }
@@ -228,10 +178,10 @@ export function SuggestedRemindersTable({
               key={`m-${inv.id}`}
               title={
                 <Link
-                  href={`/${workspaceId}/invoices/${inv.id}`}
+                  href={`/${workspaceId}/invoices/${inv.invoice_id}`}
                   className="text-base font-semibold text-blue-600 hover:underline"
                 >
-                  {inv.invoice_number ?? inv.id.slice(0, 8)}
+                  {inv.invoice_number ?? inv.invoice_id.slice(0, 8)}
                 </Link>
               }
               subtitle={
@@ -245,6 +195,9 @@ export function SuggestedRemindersTable({
               }
               meta={
                 <div className="space-y-1 text-xs text-muted-foreground">
+                  <div className="font-medium text-slate-700">
+                    {inv.rule_name} · {inv.rule_label}
+                  </div>
                   <div>
                     Due{" "}
                     {inv.due_date
@@ -270,10 +223,12 @@ export function SuggestedRemindersTable({
               actions={
                 <SendReminderButton
                   workspaceId={workspaceId}
-                  invoiceId={inv.id}
+                  invoiceId={inv.invoice_id}
                   invoiceNumber={inv.invoice_number}
                   clientName={inv.client_name ?? undefined}
                   clientEmail={inv.client_email ?? undefined}
+                  ruleId={inv.rule_id}
+                  templateId={inv.template_id}
                 />
               }
             />
@@ -327,6 +282,15 @@ export function SuggestedRemindersTable({
               />
             </th>
             <th className={`${TABLE_TH} pl-4`}>Status</th>
+            <th className={`hidden lg:table-cell ${TABLE_TH}`}>
+              <SortableHeader
+                label="RULE"
+                sortKey="rule_name"
+                workspaceId={workspaceId}
+                currentParams={currentParams}
+                align="left"
+              />
+            </th>
             <th className={TABLE_TH_RIGHT}>Actions</th>
           </tr>
         </thead>
@@ -341,10 +305,10 @@ export function SuggestedRemindersTable({
                 {/* INVOICE # (link) */}
                 <td className={`${TABLE_TD} text-sm whitespace-nowrap`}>
                   <Link
-                    href={`/${workspaceId}/invoices/${inv.id}`}
+                    href={`/${workspaceId}/invoices/${inv.invoice_id}`}
                     className="text-sm font-medium text-blue-600 hover:underline"
                   >
-                    {inv.invoice_number ?? inv.id.slice(0, 8)}
+                    {inv.invoice_number ?? inv.invoice_id.slice(0, 8)}
                   </Link>
                 </td>
 
@@ -407,15 +371,22 @@ export function SuggestedRemindersTable({
                   <StatusBadge type="invoice" status={inv.status ?? "sent"} />
                 </td>
 
+                <td className={`hidden lg:table-cell ${TABLE_TD} text-sm text-slate-700`}>
+                  <div className="font-medium text-slate-900">{inv.rule_name}</div>
+                  <div className="text-xs text-slate-500">{inv.rule_label}</div>
+                </td>
+
                 {/* ACTIONS – center aligned for icon */}
                 <td className={`${TABLE_TD_RIGHT} whitespace-nowrap`}>
                   <div className={TABLE_ACTIONS_ROW}>
                     <SendReminderButton
                       workspaceId={workspaceId}
-                      invoiceId={inv.id}
+                      invoiceId={inv.invoice_id}
                       invoiceNumber={inv.invoice_number}
                       clientName={inv.client_name ?? undefined}
                       clientEmail={inv.client_email ?? undefined}
+                      ruleId={inv.rule_id}
+                      templateId={inv.template_id}
                     />
                   </div>
                 </td>

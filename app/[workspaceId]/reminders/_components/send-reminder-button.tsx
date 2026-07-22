@@ -63,6 +63,7 @@ export function SendReminderButton({
         workspaceId,
         invoiceId,
         explicitTemplateId: templateId ?? null,
+        ruleId: ruleId ?? null,
       });
 
       if (res.ok && res.status === "sent") {

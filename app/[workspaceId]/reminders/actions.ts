@@ -7,10 +7,12 @@ type SendReminderInput = {
   workspaceId: string;
   invoiceId: string;
   explicitTemplateId?: string | null;
+  /** Matched reminder rule when sending from Suggested Reminders (preserves occurrence). */
+  ruleId?: string | null;
 };
 
 export async function sendReminderAction(input: SendReminderInput) {
-  const { workspaceId, invoiceId, explicitTemplateId } = input;
+  const { workspaceId, invoiceId, explicitTemplateId, ruleId = null } = input;
 
   try {
     // Use the shared sendReminderForInvoice function which handles:
@@ -22,7 +24,7 @@ export async function sendReminderAction(input: SendReminderInput) {
       workspaceId,
       invoiceId,
       templateId: explicitTemplateId ?? null,
-      ruleId: null,
+      ruleId,
       source: "manual",
       userId: null, // TODO: Add user ID when auth is available
     });

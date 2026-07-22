@@ -142,3 +142,22 @@ export function formatWorkspaceDisplayDate(
     ADMIN_DATE_OPTIONS
   );
 }
+
+/**
+ * Maps an instant to a workspace-local calendar date (YYYY-MM-DD).
+ * Used by orchestrators before pure reminder eligibility evaluation.
+ */
+export function instantToWorkspaceCalendarDate(
+  instant: Date | string,
+  workspaceTimeZone: string | null | undefined
+): string | null {
+  const date = instant instanceof Date ? instant : parseInstant(instant);
+  if (!date) return null;
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: resolveSafeTimeZone(workspaceTimeZone),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}

@@ -37,9 +37,11 @@ export async function POST(
       timestamp: new Date().toISOString(),
       durationMs: duration,
       workspaceId: result.workspaceId,
+      candidatesEligible: result.candidatesEligible,
       invoicesProcessed: result.invoicesProcessed,
       remindersSent: result.remindersSent,
       remindersFailed: result.remindersFailed,
+      remindersSkipped: result.remindersSkipped,
       errors: result.errors,
     });
   } catch (err) {
