@@ -36,6 +36,7 @@ type WorkspaceRow = {
 type SettingsRow = {
   workspace_id: string;
   default_currency: string;
+  auto_send_reminders?: boolean;
 };
 
 type PlanRow = {
@@ -286,6 +287,8 @@ class MockQueryBuilder {
         this.state.settings.push({
           workspace_id: String(row.workspace_id),
           default_currency: String(row.default_currency ?? "USD"),
+          auto_send_reminders:
+            typeof row.auto_send_reminders === "boolean" ? row.auto_send_reminders : undefined,
         });
         return { data: null, error: null };
       }
@@ -511,5 +514,18 @@ describe("ensureWorkspaceSettings", () => {
     const admin = createMockAdmin(state);
 
     await assert.doesNotReject(() => ensureWorkspaceSettings(admin, workspaceId, userId));
+  });
+
+  it("K — new workspace defaults auto_send_reminders to false", async () => {
+    const userId = "user-settings-default";
+    const workspaceId = "ws-settings-default-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "default@example.com");
+    const admin = createMockAdmin(state);
+
+    await ensureWorkspaceSettings(admin, workspaceId, userId);
+
+    assert.equal(state.settings.length, 1);
+    assert.equal(state.settings[0]?.workspace_id, workspaceId);
+    assert.equal(state.settings[0]?.auto_send_reminders, false);
   });
 });

@@ -1,5 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getPlanStorageLimits, type WorkspacePlan } from "./plans";
+import {
+  provisionDefaultReminderSetupSafe,
+  resolveWorkspacePlanForProvisioning,
+} from "@/lib/reminders/provisionDefaultSetup";
 
 export async function setWorkspacePlan(
   workspaceId: string,
@@ -20,4 +24,17 @@ export async function setWorkspacePlan(
   if (error) {
     throw new Error(`Failed to set workspace plan: ${error.message}`);
   }
+
+  await provisionDefaultReminderSetupSafe({
+    workspaceId,
+    plan,
+    admin,
+  });
+}
+
+export async function getWorkspacePlanRow(
+  workspaceId: string
+): Promise<WorkspacePlan> {
+  const admin = supabaseAdmin();
+  return resolveWorkspacePlanForProvisioning(admin, workspaceId);
 }

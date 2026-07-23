@@ -54,7 +54,11 @@ export function RemindersSettingsTabs({
       </ScrollTabStrip>
 
       <div className={cn(tab !== "automation" && "hidden")}>
-        <ReminderSettingsForm workspaceId={workspaceId} settings={settings} />
+        <ReminderSettingsForm
+          workspaceId={workspaceId}
+          settings={settings}
+          onGoToRules={() => setTab("rules")}
+        />
       </div>
       <div className={cn(tab !== "templates" && "hidden")}>
         <ReminderTemplatesSection workspaceId={workspaceId} templates={templates} />
@@ -65,6 +69,7 @@ export function RemindersSettingsTabs({
           rules={rules}
           templates={templates}
           canManageRules={canManageRules}
+          onGoToTemplates={() => setTab("templates")}
         />
       </div>
     </div>

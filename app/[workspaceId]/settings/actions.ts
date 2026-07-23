@@ -17,10 +17,10 @@ import {
 } from "@/lib/reminders/schema";
 import { MAX_AVATAR_FILE_SIZE_BYTES, ALLOWED_AVATAR_MIME_TYPES, DEFAULT_AVATAR_URL } from "@/lib/constants";
 import {
-  getPlanStorageLimits,
   isWorkspacePlan,
   type WorkspacePlan,
 } from "@/lib/billing/plans";
+import { setWorkspacePlan } from "@/lib/billing/setWorkspacePlan";
 import { assertReminderRulesManageAllowed } from "@/lib/billing/reminderRulesAccess";
 import { sendEmail } from "@/lib/email/sendEmail";
 import { renderTestEmail } from "@/lib/email/templates";
@@ -301,24 +301,7 @@ export async function setWorkspacePlanAction(formData: FormData) {
   try {
     const { user } = await requireUser();
 
-    const admin = supabaseAdmin();
-    const limits = getPlanStorageLimits(plan);
-
-    const { error } = await admin
-      .from("workspace_plans")
-      .upsert(
-        {
-          workspace_id: workspaceId,
-          plan: plan as WorkspacePlan,
-          ...limits,
-        },
-        { onConflict: "workspace_id" }
-      );
-
-    if (error) {
-      console.error("[setWorkspacePlanAction] Supabase error:", error);
-      return { ok: false, error: error.message };
-    }
+    await setWorkspacePlan(workspaceId, plan as WorkspacePlan);
 
     revalidatePath(`/${workspaceId}/settings`);
     return { ok: true };
@@ -343,20 +326,15 @@ export async function saveReminderSettings(
     const parsed = reminderSettingsSchema.parse(values);
     const supabase = await supabaseServer();
 
-    // Normalize channel
-    const normalizedChannel = parsed.defaultChannel === "whatsapp" ? "whatsapp" : "email";
-
-    const updateData: any = {
-      workspace_id: workspaceId,
-      auto_send_reminders: parsed.enableAutomatic,
-      reminder_after_days: parsed.afterDueDays,
-      reminder_before_days: parsed.beforeDueDays,
-      reminder_channel: normalizedChannel,
-    };
-
-    const { error } = await supabase.from("settings").upsert(updateData, {
-      onConflict: "workspace_id",
-    });
+    const { error } = await supabase
+      .from("settings")
+      .upsert(
+        {
+          workspace_id: workspaceId,
+          auto_send_reminders: parsed.enableAutomatic,
+        },
+        { onConflict: "workspace_id" }
+      );
 
     if (error) {
       console.error("[Settings] saveReminderSettings error", error);
@@ -998,18 +976,8 @@ export async function updateReminderSettingsAction(formData: FormData) {
     return { ok: false, error: "Workspace ID is required" };
   }
 
-  const rawChannel = formData.get("reminder_channel") as string | null;
-  const normalizedChannel = rawChannel === "whatsapp" ? "whatsapp" : "email";
-
   const input = {
     enableAutomatic: formData.get("auto_send_reminders") === "true",
-    afterDueDays: formData.get("reminder_after_days")
-      ? parseInt(formData.get("reminder_after_days") as string, 10)
-      : 7,
-    beforeDueDays: formData.get("reminder_before_days")
-      ? parseInt(formData.get("reminder_before_days") as string, 10)
-      : 3,
-    defaultChannel: normalizedChannel,
   };
 
   const result = await saveReminderSettings(workspaceId, input);

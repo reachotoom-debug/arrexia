@@ -13,6 +13,7 @@ import {
   executeEligibleReminderCandidates,
   type SendReminderForInvoiceFn,
 } from "../executeReminderRun";
+import { runDueRemindersForWorkspace } from "../run-reminders";
 import {
   checkRuleOccurrenceDuplicateBeforeSend,
   ruleOccurrenceAlreadySent,
@@ -397,5 +398,244 @@ describe("ruleOccurrence duplicate guard", () => {
     assert.equal(result.blocked, true);
     assert.ok(eqCalls.some((c) => c.startsWith("workspace_id=")));
     assert.ok(eqCalls.some((c) => c.startsWith("invoice_id=")));
+  });
+});
+
+function createAutomationRunnerSupabase(params: {
+  autoSendReminders?: boolean | null;
+  settingsError?: boolean;
+  settingsMissing?: boolean;
+  hasEmailSettings?: boolean;
+}) {
+  return {
+    from(table: string) {
+      if (table === "settings") {
+        return {
+          select() {
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          maybeSingle: async () => {
+            if (params.settingsError) {
+              return {
+                data: null,
+                error: { message: "db down", code: "500" },
+              };
+            }
+            if (params.settingsMissing) {
+              return { data: null, error: null };
+            }
+            return {
+              data: { auto_send_reminders: params.autoSendReminders },
+              error: null,
+            };
+          },
+        };
+      }
+
+      if (table === "workspace_email_settings") {
+        return {
+          select() {
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          single: async () => {
+            if (params.hasEmailSettings === false) {
+              return { data: null, error: { message: "not found", code: "PGRST116" } };
+            }
+            return { data: { id: "email-settings-1" }, error: null };
+          },
+        };
+      }
+
+      throw new Error(`Unexpected table in automation runner test: ${table}`);
+    },
+  };
+}
+
+describe("R2F master automation gate (runDueRemindersForWorkspace)", () => {
+  it("A — automation false sends zero and skips candidate discovery", async () => {
+    let eligibleCalled = false;
+    let sendCalled = false;
+
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({ autoSendReminders: false }) as never,
+      getEligibleRemindersFn: async () => {
+        eligibleCalled = true;
+        return evaluate({});
+      },
+      sendReminderFn: async () => {
+        sendCalled = true;
+        return { success: true, status: "sent" };
+      },
+    });
+
+    assert.equal(result.remindersSent, 0);
+    assert.equal(result.candidatesEligible, 0);
+    assert.equal(result.automationSkipReason, "automation_disabled");
+    assert.equal(eligibleCalled, false);
+    assert.equal(sendCalled, false);
+  });
+
+  it("B — automation true executes eligible cron candidates", async () => {
+    let sendCount = 0;
+
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({ autoSendReminders: true }) as never,
+      getEligibleRemindersFn: async () => evaluate({}),
+      sendReminderFn: async (opts) => {
+        sendCount++;
+        assert.equal(opts.source, "auto_cron");
+        return { success: true, status: "sent" };
+      },
+    });
+
+    assert.equal(sendCount, 1);
+    assert.equal(result.remindersSent, 1);
+    assert.equal(result.candidatesEligible, 1);
+    assert.equal(result.automationSkipReason, undefined);
+  });
+
+  it("C — missing settings sends zero automatic reminders", async () => {
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({ settingsMissing: true }) as never,
+      getEligibleRemindersFn: async () => {
+        throw new Error("getEligibleReminders must not run when settings are missing");
+      },
+    });
+
+    assert.equal(result.remindersSent, 0);
+    assert.equal(result.automationSkipReason, "settings_missing");
+  });
+
+  it("D — settings query error sends zero automatic reminders", async () => {
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({ settingsError: true }) as never,
+      getEligibleRemindersFn: async () => {
+        throw new Error("getEligibleReminders must not run on settings query failure");
+      },
+    });
+
+    assert.equal(result.remindersSent, 0);
+    assert.equal(result.automationSkipReason, "settings_query_failed");
+  });
+
+  it("E — null automation sends zero automatic reminders", async () => {
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({ autoSendReminders: null }) as never,
+      getEligibleRemindersFn: async () => evaluate({}),
+    });
+
+    assert.equal(result.remindersSent, 0);
+    assert.equal(result.automationSkipReason, "automation_null");
+  });
+
+  it("F — automation OFF does not affect canonical eligibility builder", () => {
+    const results = evaluate({
+      evaluationDate: "2026-07-22",
+      rules: [rule({ id: "rule-on-due", trigger_type: "on_due", offset_days: 0 })],
+    });
+    assert.equal(results.length, 1);
+
+    const eligibleSrc = readFileSync("lib/reminders/getEligibleReminders.ts", "utf8");
+    assert.doesNotMatch(eligibleSrc, /automationGate|auto_send_reminders/);
+  });
+
+  it("G — manual send path has no automation gate", () => {
+    const sendSrc = readFileSync("lib/reminders/send.ts", "utf8");
+    assert.doesNotMatch(sendSrc, /automationGate|auto_send_reminders/);
+  });
+
+  it("H — disabled rule never sends via cron runner", async () => {
+    let sendCount = 0;
+
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({ autoSendReminders: true }) as never,
+      getEligibleRemindersFn: async () =>
+        evaluate({
+          rules: [
+            {
+              ...rule({ id: "rule-disabled", trigger_type: "on_due", offset_days: 0 }),
+              is_enabled: false,
+            },
+          ],
+        }),
+      sendReminderFn: async () => {
+        sendCount++;
+        return { success: true, status: "sent" };
+      },
+    });
+
+    assert.equal(sendCount, 0);
+    assert.equal(result.remindersSent, 0);
+    assert.equal(result.candidatesEligible, 0);
+  });
+
+  it("I — enabled custom rule runs when automation is ON (plan-agnostic cron)", async () => {
+    let sentRuleId: string | undefined;
+
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({ autoSendReminders: true }) as never,
+      getEligibleRemindersFn: async () =>
+        evaluate({
+          rules: [
+            rule({
+              id: "starter-custom-plus-3",
+              trigger_type: "after_due",
+              offset_days: 3,
+            }),
+          ],
+          evaluationDate: "2026-07-25",
+          invoices: [
+            invoice({
+              due_date: "2026-07-22",
+              display_status: "overdue",
+              is_overdue: true,
+            }),
+          ],
+        }),
+      sendReminderFn: async (opts) => {
+        sentRuleId = opts.ruleId ?? undefined;
+        return { success: true, status: "sent" };
+      },
+    });
+
+    assert.equal(sentRuleId, "starter-custom-plus-3");
+    assert.equal(result.remindersSent, 1);
+  });
+
+  it("J — workspace manual-run API uses gated runner (no bypass)", () => {
+    const routeSrc = readFileSync(
+      "app/api/workspaces/[workspaceId]/reminders/run/route.ts",
+      "utf8"
+    );
+    assert.match(routeSrc, /runDueRemindersForWorkspace/);
+    assert.doesNotMatch(routeSrc, /getEligibleReminders/);
+    assert.doesNotMatch(routeSrc, /sendReminderForInvoice/);
+
+    const runnerSrc = readFileSync("lib/reminders/run-reminders.ts", "utf8");
+    assert.match(runnerSrc, /loadAutomationGateForWorkspace/);
+  });
+
+  it("L — automation save upsert does not include legacy timing/channel fields", () => {
+    const actionsSrc = readFileSync("app/[workspaceId]/settings/actions.ts", "utf8");
+    const saveBlock = actionsSrc.slice(
+      actionsSrc.indexOf("export async function saveReminderSettings"),
+      actionsSrc.indexOf("export async function savePaymentSettings")
+    );
+    assert.match(saveBlock, /auto_send_reminders:\s*parsed\.enableAutomatic/);
+    assert.doesNotMatch(saveBlock, /reminder_before_days/);
+    assert.doesNotMatch(saveBlock, /reminder_after_days/);
+    assert.doesNotMatch(saveBlock, /reminder_channel/);
+
+    const formSrc = readFileSync(
+      "app/[workspaceId]/settings/_components/ReminderSettingsForm.tsx",
+      "utf8"
+    );
+    assert.doesNotMatch(formSrc, /reminder_before_days|reminder_after_days|reminder_channel|Before Due Date|After Due Date|Default Channel/i);
   });
 });

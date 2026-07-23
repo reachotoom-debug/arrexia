@@ -1,12 +1,17 @@
 /**
- * Automated reminder runner (R2C).
+ * Automated reminder runner (R2C + R2F master automation gate).
  * Uses canonical getEligibleReminders() — same contract as Suggested Reminders.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
+import {
+  automationGateSkipMessage,
+  loadAutomationGateForWorkspace,
+  type AutomationGateSkipReason,
+} from "./automationGate";
 import { getEligibleReminders } from "./getEligibleReminders";
 import { executeEligibleReminderCandidates } from "./executeReminderRun";
-import { sendReminderForInvoice } from "./send";
 
 export type { ReminderExecutionSummary } from "./executeReminderRun";
 export { executeEligibleReminderCandidates } from "./executeReminderRun";
@@ -19,12 +24,32 @@ export interface ReminderRunResult {
   remindersSent: number;
   remindersFailed: number;
   remindersSkipped: number;
+  /** Present when automatic sending was skipped before candidate discovery. */
+  automationSkipReason?: AutomationGateSkipReason;
   errors: Array<{ invoiceId: string; ruleId?: string; error: string }>;
 }
 
 export type RunDueRemindersOptions = {
   evaluationInstant?: Date;
+  /** Test hook — defaults to supabaseServer(). */
+  supabase?: Pick<SupabaseClient, "from">;
+  /** Test hook — defaults to getEligibleReminders. */
+  getEligibleRemindersFn?: typeof getEligibleReminders;
+  /** Test hook — defaults to sendReminderForInvoice. */
+  sendReminderFn?: Parameters<typeof executeEligibleReminderCandidates>[2];
 };
+
+function emptyRunResult(workspaceId: string): ReminderRunResult {
+  return {
+    workspaceId,
+    candidatesEligible: 0,
+    invoicesProcessed: 0,
+    remindersSent: 0,
+    remindersFailed: 0,
+    remindersSkipped: 0,
+    errors: [],
+  };
+}
 
 /**
  * Run due reminders for a single workspace using canonical eligibility.
@@ -34,19 +59,23 @@ export async function runDueRemindersForWorkspace(
   options: RunDueRemindersOptions = {}
 ): Promise<ReminderRunResult> {
   const evaluationInstant = options.evaluationInstant ?? new Date();
-
-  const result: ReminderRunResult = {
-    workspaceId,
-    candidatesEligible: 0,
-    invoicesProcessed: 0,
-    remindersSent: 0,
-    remindersFailed: 0,
-    remindersSkipped: 0,
-    errors: [],
-  };
+  const result = emptyRunResult(workspaceId);
 
   try {
-    const supabase = await supabaseServer();
+    const supabase = options.supabase ?? (await supabaseServer());
+
+    const automationGate = await loadAutomationGateForWorkspace(
+      supabase,
+      workspaceId
+    );
+
+    if (!automationGate.allowed) {
+      result.automationSkipReason = automationGate.skipReason;
+      console.log(
+        `[runDueRemindersForWorkspace] Skipping workspace ${workspaceId}: ${automationGateSkipMessage(automationGate.skipReason)}`
+      );
+      return result;
+    }
 
     const { data: emailSettings } = await supabase
       .from("workspace_email_settings")
@@ -61,9 +90,12 @@ export async function runDueRemindersForWorkspace(
       return result;
     }
 
-    const candidates = await getEligibleReminders(workspaceId, {
-      evaluationInstant,
-    });
+    const candidates = await (options.getEligibleRemindersFn ?? getEligibleReminders)(
+      workspaceId,
+      {
+        evaluationInstant,
+      }
+    );
 
     if (candidates.length === 0) {
       console.log(
@@ -79,7 +111,11 @@ export async function runDueRemindersForWorkspace(
     const execution = await executeEligibleReminderCandidates(
       workspaceId,
       candidates,
-      async (opts) => sendReminderForInvoice(opts)
+      options.sendReminderFn ??
+        (async (opts) => {
+          const { sendReminderForInvoice } = await import("./send");
+          return sendReminderForInvoice(opts);
+        })
     );
 
     return {
@@ -161,6 +197,7 @@ export async function runDueRemindersForAllWorkspaces(
       try {
         const workspaceResult = await runDueRemindersForWorkspace(workspace.id, {
           evaluationInstant: today,
+          supabase,
         });
         workspaceResults.push(workspaceResult);
       } catch (err) {

@@ -16,6 +16,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getAdminRevalidatePaths } from "@/lib/admin/adminPaths";
 import { getAdminInfrastructureStatus } from "@/lib/admin/adminInfrastructure";
 import { repairUserWorkspace } from "@/lib/admin/repairUserWorkspace";
+import { repairWorkspaceReminders } from "@/lib/admin/repairWorkspaceReminders";
 
 function revalidateAdmin() {
   for (const path of getAdminRevalidatePaths()) {
@@ -334,6 +335,39 @@ export async function adminCreateWorkspaceForUserAction(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Failed to create workspace",
+    };
+  }
+}
+
+export async function adminRepairWorkspaceRemindersAction(
+  workspaceId: string
+): Promise<{
+  ok: boolean;
+  templatesCreated?: number;
+  rulesCreated?: number;
+  error?: string;
+}> {
+  try {
+    const ctx = await assertAdmin();
+    if (!ctx.canAccessFullAdmin) {
+      return { ok: false, error: "Admin setup required before repairing reminders" };
+    }
+
+    const result = await repairWorkspaceReminders(workspaceId);
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
+
+    revalidateAdmin();
+    return {
+      ok: true,
+      templatesCreated: result.templatesCreated,
+      rulesCreated: result.rulesCreated,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed to repair reminders",
     };
   }
 }

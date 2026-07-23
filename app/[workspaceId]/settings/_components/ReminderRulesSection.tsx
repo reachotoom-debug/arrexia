@@ -3,6 +3,7 @@ import { ReminderRuleForm } from "./ReminderRuleForm";
 import { ReminderRuleToggle } from "./ReminderRuleToggle";
 import { SettingsCard } from "./SettingsCard";
 import { REMINDER_RULES_PAID_PLAN_MESSAGE } from "@/lib/billing/reminderRulesAccess";
+import { NO_REMINDER_TEMPLATES_MESSAGE } from "@/lib/reminders/canonicalDefaults";
 import { formatRuleWhenText } from "@/lib/reminders/shared";
 import type { Database } from "@/types/supabase/index";
 
@@ -16,6 +17,7 @@ interface ReminderRulesSectionProps {
   rules: ReminderRuleRow[];
   templates: ReminderTemplateRow[];
   canManageRules: boolean;
+  onGoToTemplates?: () => void;
 }
 
 function formatStatusLabel(forStatus: string): string {
@@ -67,6 +69,7 @@ export function ReminderRulesSection({
   rules,
   templates,
   canManageRules,
+  onGoToTemplates,
 }: ReminderRulesSectionProps) {
   const sortedRules = [...rules].sort(sortOffsetAscending);
 
@@ -87,6 +90,21 @@ export function ReminderRulesSection({
         </div>
       ) : null}
 
+      {canManageRules && templates.length === 0 ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>{NO_REMINDER_TEMPLATES_MESSAGE}</p>
+          {onGoToTemplates ? (
+            <button
+              type="button"
+              onClick={onGoToTemplates}
+              className="mt-2 font-semibold text-amber-950 underline underline-offset-4"
+            >
+              Go to Templates
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-muted-foreground">
           Rules determine when reminders are sent based on invoice status and due date.
@@ -96,6 +114,7 @@ export function ReminderRulesSection({
             workspaceId={workspaceId}
             templates={templates}
             existingRules={rules}
+            onGoToTemplates={onGoToTemplates}
           />
         ) : null}
       </div>
@@ -167,6 +186,7 @@ export function ReminderRulesSection({
                         templates={templates}
                         existingRules={rules}
                         iconOnly
+                        onGoToTemplates={onGoToTemplates}
                       />
                     </td>
                   ) : null}

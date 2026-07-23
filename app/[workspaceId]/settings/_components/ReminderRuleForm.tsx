@@ -8,6 +8,10 @@ import {
   type ReminderRuleInput,
 } from "@/lib/reminders/schema";
 import {
+  NO_REMINDER_TEMPLATES_MESSAGE,
+  REMINDER_RULE_FOR_STATUS_UI_OPTIONS,
+} from "@/lib/reminders/canonicalDefaults";
+import {
   createReminderRule,
   updateReminderRule,
   deleteReminderRule,
@@ -118,6 +122,7 @@ interface ReminderRuleFormProps {
   /** Used to block creating/editing into a timing that already exists. */
   existingRules: ReminderRuleRow[];
   iconOnly?: boolean;
+  onGoToTemplates?: () => void;
 }
 
 export function ReminderRuleForm({
@@ -126,6 +131,7 @@ export function ReminderRuleForm({
   templates,
   existingRules,
   iconOnly = false,
+  onGoToTemplates,
 }: ReminderRuleFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -167,6 +173,7 @@ export function ReminderRuleForm({
   const triggerType = watch("triggerType");
   const offsetDaysW = watch("offsetDays");
   const forStatusW = watch("forStatus");
+  const isLegacyDraftRule = rule?.for_status === "draft";
 
   // Auto-set offsetDays to 0 when triggerType is "on_due"
   useEffect(() => {
@@ -273,13 +280,18 @@ export function ReminderRuleForm({
   if (!isOpen) {
     if (!rule && templates.length === 0) {
       return (
-        <button
-          disabled
-          className="inline-flex items-center rounded-lg bg-slate-300 px-3 py-1.5 text-xs font-medium text-white cursor-not-allowed"
-          title="Create a template first"
-        >
-          + New Rule
-        </button>
+        <div className="flex max-w-sm flex-col items-end gap-2 text-right">
+          <p className="text-xs text-amber-800">{NO_REMINDER_TEMPLATES_MESSAGE}</p>
+          {onGoToTemplates ? (
+            <button
+              type="button"
+              onClick={onGoToTemplates}
+              className="inline-flex items-center rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-950 transition-colors hover:bg-amber-100"
+            >
+              Go to Templates
+            </button>
+          ) : null}
+        </div>
       );
     }
     return (
@@ -388,16 +400,47 @@ export function ReminderRuleForm({
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Applies To *
               </label>
-              <select
-                {...register("forStatus")}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              >
-                <option value="any">Any status</option>
-                <option value="sent">Sent only</option>
-                <option value="partially_paid">Partially Paid</option>
-                <option value="overdue">Overdue only</option>
-                <option value="draft">Draft</option>
-              </select>
+              {isLegacyDraftRule ? (
+                <>
+                  <input type="hidden" {...register("forStatus")} />
+                  <p className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    Draft (legacy rule)
+                  </p>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Update applies to
+                  </label>
+                  <select
+                    defaultValue=""
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      if (!value) return;
+                      setValue(
+                        "forStatus",
+                        value as ReminderRuleInput["forStatus"]
+                      );
+                    }}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  >
+                    <option value="">Keep Draft (legacy)</option>
+                    {REMINDER_RULE_FOR_STATUS_UI_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <select
+                  {...register("forStatus")}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                >
+                  {REMINDER_RULE_FOR_STATUS_UI_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <p className="mt-1 text-xs text-slate-500">
                 Which invoice statuses this rule applies to
               </p>

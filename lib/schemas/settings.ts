@@ -86,12 +86,9 @@ export const emailSettingsSchema = z
 
 export type EmailSettingsFormValues = z.infer<typeof emailSettingsSchema>;
 
-// Reminders Schema (only fields that exist in DB)
+/** Automation tab — master switch only (R2 timing lives in reminder_rules). */
 export const reminderSettingsSchema = z.object({
   enableAutomatic: z.boolean(),
-  afterDueDays: z.coerce.number().int().min(0, "Days must be non-negative").max(365, "Days must be at most 365"),
-  beforeDueDays: z.coerce.number().int().min(0, "Days must be non-negative").max(365, "Days must be at most 365"),
-  defaultChannel: z.union([z.literal("email"), z.literal("whatsapp")]),
 });
 
 export type ReminderChannel = "email" | "whatsapp";

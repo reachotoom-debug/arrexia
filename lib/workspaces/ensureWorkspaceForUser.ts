@@ -1,4 +1,7 @@
-import { getPlanStorageLimits } from "@/lib/billing/plans";
+import { getPlanStorageLimits, isWorkspacePlan } from "@/lib/billing/plans";
+import {
+  provisionDefaultReminderSetupSafe,
+} from "@/lib/reminders/provisionDefaultSetup";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const WORKSPACE_BOOTSTRAP_FAILED_MESSAGE =
@@ -152,6 +155,7 @@ export async function ensureWorkspaceSettings(
   const { error: insertError } = await admin.from("settings").insert({
     workspace_id: workspaceId,
     default_currency: "USD",
+    auto_send_reminders: false,
   });
 
   if (insertError && insertError.code !== "23505") {
@@ -255,6 +259,29 @@ async function finalizeWorkspaceBootstrap(
   await reloadWorkspace(admin, userId, workspaceId);
   await ensureWorkspaceSettings(admin, workspaceId, userId);
   await ensureDefaultWorkspacePlan(admin, workspaceId, userId);
+
+  const { data: planRow, error: planLookupError } = await admin
+    .from("workspace_plans")
+    .select("plan")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
+  if (planLookupError) {
+    logBootstrapFailure("provision_default_reminders", {
+      userId,
+      workspaceId,
+      supabaseCode: planLookupError.code,
+      internal: planLookupError.message,
+    });
+  } else {
+    const plan = isWorkspacePlan(planRow?.plan) ? planRow.plan : "free";
+    await provisionDefaultReminderSetupSafe({
+      workspaceId,
+      plan,
+      admin,
+    });
+  }
+
   return workspaceId;
 }
 
