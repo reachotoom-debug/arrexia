@@ -17,6 +17,11 @@ import { coerceMoney } from "../_utils/invoiceMoney";
 import { resolvePaymentInstructionLines, getInvoiceDueStatus, shouldShowDueTiming } from "@/lib/invoices/invoiceDisplay";
 import { prettyLabel } from "@/lib/formatters/prettyLabel";
 import { unstable_noStore as noStore } from "next/cache";
+import {
+  formatDateOnlyField,
+  formatWorkspaceDisplayDateTime,
+} from "@/lib/datetime/formatDateTime";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 
 interface InvoicePageProps {
   params: Promise<{ workspaceId: string; invoiceId: string }>;
@@ -34,6 +39,7 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
   const sandboxMode = isSandboxSenderActive();
   const sandboxTestRecipientEmail = getResendTestRecipientEmail();
   const supabase = await supabaseServer();
+  const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
 
   // 1) Load invoice (by id or invoice_number), including archived
   const invoiceSelect = `
@@ -242,31 +248,11 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
 
   const formatDate = (value: string | null | undefined) => {
     if (!value) return "—";
-    try {
-      return new Date(value).toLocaleDateString("en-US", {
-        month: "short",
-        day: "2-digit",
-        year: "numeric",
-      });
-    } catch {
-      return "—";
-    }
+    return formatDateOnlyField(value);
   };
 
-  const formatDateTime = (value: string | null | undefined) => {
-    if (!value) return "—";
-    try {
-      return new Date(value).toLocaleString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return "—";
-    }
-  };
+  const formatDateTime = (value: string | null | undefined) =>
+    formatWorkspaceDisplayDateTime(value, workspaceTimeZone);
 
   // Timeline events
   const timelineEvents = [

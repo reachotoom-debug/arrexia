@@ -23,6 +23,8 @@ import {
   CommandBarSearch,
 } from "@/components/layout/CommandBar";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { formatWorkspaceDisplayDateTime } from "@/lib/datetime/formatDateTime";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 
 type RemindersPageProps = {
   params: Promise<{ workspaceId: string }>;
@@ -62,6 +64,7 @@ export default async function RemindersPage({
   await requireWorkspace(workspaceId);
 
   const supabase = await supabaseServer();
+  const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
   const resolvedSearchParams = (await searchParams) || {};
 
   const searchQuery = (
@@ -282,18 +285,6 @@ export default async function RemindersPage({
     historyStart + historyPageSize
   );
 
-  function formatDateTime(dateString: string | null): string {
-    if (!dateString) return "—";
-    const date = new Date(dateString);
-    return date.toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
-
   const suggestedContent = (
     <div className="space-y-1.5 md:space-y-3">
       <CommandBar>
@@ -374,7 +365,10 @@ export default async function RemindersPage({
                         <td className={`${TABLE_TD} whitespace-nowrap`}>
                           <div className="text-sm text-slate-900">
                             {row.sent_at ? (
-                              formatDateTime(row.sent_at)
+                              formatWorkspaceDisplayDateTime(
+                                row.sent_at,
+                                workspaceTimeZone
+                              )
                             ) : (
                               <span className="text-slate-400">—</span>
                             )}

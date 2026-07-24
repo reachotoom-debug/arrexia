@@ -145,6 +145,9 @@ export function formatWorkspaceDisplayDateTime(
   return formatInstantInTimeZone(value, resolveSafeTimeZone(workspaceTimeZone));
 }
 
+/** Canonical alias for workspace-facing timestamp display (R2H). */
+export const formatWorkspaceDateTime = formatWorkspaceDisplayDateTime;
+
 export function formatWorkspaceDisplayDate(
   value: string | null | undefined,
   workspaceTimeZone: string | null | undefined

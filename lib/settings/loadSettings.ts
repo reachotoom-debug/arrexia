@@ -204,3 +204,25 @@ export async function loadWorkspaceSettings(
     timezone,
   };
 }
+
+/** Loads workspace IANA timezone once (settings.timezone). Avoid N+1 in list UIs. */
+export async function loadWorkspaceTimeZone(
+  workspaceId: string
+): Promise<string | null> {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase
+    .from("settings")
+    .select("timezone")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[loadWorkspaceTimeZone] settings lookup failed", {
+      workspaceId,
+      error,
+    });
+    return null;
+  }
+
+  return data?.timezone ?? null;
+}

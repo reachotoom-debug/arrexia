@@ -1,24 +1,35 @@
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase/server";
+import { requireWorkspace } from "@/lib/auth/server";
 import { formatCurrency } from "@/lib/format/currency";
 import { ArchivedBanner } from "@/components/ui/archived-banner";
 import { prettyLabel } from "@/lib/formatters/prettyLabel";
+import {
+  formatDateOnlyField,
+  formatWorkspaceDisplayDateTime,
+} from "@/lib/datetime/formatDateTime";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 
 interface PageProps {
   params: Promise<{ workspaceId: string; paymentId: string }>;
 }
 
-function formatDate(dateString: string | null | undefined): string {
+function formatPaymentDate(dateString: string | null | undefined): string {
   if (!dateString) return "—";
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDateOnlyField(dateString);
+}
+
+function formatTimestamp(
+  dateString: string | null | undefined,
+  workspaceTimeZone: string | null
+): string {
+  return formatWorkspaceDisplayDateTime(dateString, workspaceTimeZone);
 }
 
 export default async function PaymentViewPage({ params }: PageProps) {
   const { workspaceId, paymentId } = await params;
+  await requireWorkspace(workspaceId);
+  const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
 
   const supabase = await supabaseServer();
 
@@ -210,7 +221,7 @@ export default async function PaymentViewPage({ params }: PageProps) {
           <div>
             <div className="text-xs font-medium text-slate-500 mb-1">Date</div>
             <div className="text-sm text-slate-700">
-              {formatDate(payment.payment_date || payment.created_at)}
+              {formatPaymentDate(payment.payment_date || payment.created_at)}
             </div>
           </div>
 
@@ -264,11 +275,11 @@ export default async function PaymentViewPage({ params }: PageProps) {
         <ul className="space-y-2 text-sm text-slate-600">
           <li>
             <span className="font-medium text-slate-700">Created at:</span>{" "}
-            {formatDate(payment.created_at)}
+            {formatTimestamp(payment.created_at, workspaceTimeZone)}
           </li>
           <li>
             <span className="font-medium text-slate-700">Last updated:</span>{" "}
-            {formatDate(payment.updated_at)}
+            {formatTimestamp(payment.updated_at, workspaceTimeZone)}
           </li>
           <li>
             <span className="font-medium text-slate-700">Current status:</span>{" "}
