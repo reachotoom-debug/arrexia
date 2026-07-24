@@ -6,18 +6,24 @@ import { saveReminderSettings } from "../actions";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { SettingsCard } from "./SettingsCard";
+import Link from "next/link";
+import type { EmailSkipReason } from "@/lib/reminders/emailReadinessGate";
 import type { WorkspaceSettings } from "@/lib/settings/loadSettings";
 
 interface ReminderSettingsFormProps {
   workspaceId: string;
   settings: WorkspaceSettings;
   onGoToRules?: () => void;
+  emailReadyForAutomation: boolean;
+  emailSkipReason: EmailSkipReason | null;
 }
 
 export function ReminderSettingsForm({
   workspaceId,
   settings,
   onGoToRules,
+  emailReadyForAutomation,
+  emailSkipReason,
 }: ReminderSettingsFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -48,6 +54,14 @@ export function ReminderSettingsForm({
       });
     }
   };
+
+  const showEmailWarning =
+    settings.reminders.enableAutomatic && !emailReadyForAutomation;
+
+  const emailWarningMessage =
+    emailSkipReason === "smtp_configuration_incomplete"
+      ? "Automatic reminders cannot send until SMTP email settings are fully configured."
+      : "Automatic reminders cannot send until email settings are configured.";
 
   return (
     <form onSubmit={handleSubmit(onSubmit as any)} className="w-full max-w-5xl">
@@ -92,6 +106,21 @@ export function ReminderSettingsForm({
             manual sending.
           </p>
         </div>
+
+        {showEmailWarning ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-medium text-amber-900">{emailWarningMessage}</p>
+            <p className="mt-1 text-xs text-amber-800">
+              Suggested reminders and manual sending remain available.
+            </p>
+            <Link
+              href={`/${workspaceId}/settings?section=email`}
+              className="mt-2 inline-block text-sm font-semibold text-amber-900 underline underline-offset-4 hover:text-amber-950"
+            >
+              Configure email settings
+            </Link>
+          </div>
+        ) : null}
 
         {onGoToRules ? (
           <div>

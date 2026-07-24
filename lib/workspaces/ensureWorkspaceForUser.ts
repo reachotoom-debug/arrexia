@@ -3,6 +3,7 @@ import {
   provisionDefaultReminderSetupSafe,
 } from "@/lib/reminders/provisionDefaultSetup";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { ensureWorkspaceEmailSettings } from "./ensureWorkspaceEmailSettings";
 
 export const WORKSPACE_BOOTSTRAP_FAILED_MESSAGE =
   "Your account is confirmed, but workspace setup failed. Please try again.";
@@ -258,6 +259,7 @@ async function finalizeWorkspaceBootstrap(
 ): Promise<string> {
   await reloadWorkspace(admin, userId, workspaceId);
   await ensureWorkspaceSettings(admin, workspaceId, userId);
+  await ensureWorkspaceEmailSettings(admin, workspaceId);
   await ensureDefaultWorkspacePlan(admin, workspaceId, userId);
 
   const { data: planRow, error: planLookupError } = await admin

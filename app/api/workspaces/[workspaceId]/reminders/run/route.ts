@@ -37,6 +37,8 @@ export async function POST(
       timestamp: new Date().toISOString(),
       durationMs: duration,
       workspaceId: result.workspaceId,
+      automationSkipReason: result.automationSkipReason ?? null,
+      emailSkipReason: result.emailSkipReason ?? null,
       candidatesEligible: result.candidatesEligible,
       invoicesProcessed: result.invoicesProcessed,
       remindersSent: result.remindersSent,

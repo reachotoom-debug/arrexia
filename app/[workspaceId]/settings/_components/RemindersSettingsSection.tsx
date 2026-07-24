@@ -1,5 +1,6 @@
 import { getWorkspacePlan } from "@/lib/billing/getWorkspacePlan";
 import { canManageReminderRules } from "@/lib/billing/reminderRulesAccess";
+import { loadEmailReadinessForWorkspace } from "@/lib/reminders/emailReadinessGate";
 import { supabaseServer } from "@/lib/supabase/server";
 import { RemindersSettingsTabs } from "./RemindersSettingsTabs";
 import type { WorkspaceSettings } from "@/lib/settings/loadSettings";
@@ -15,7 +16,7 @@ export async function RemindersSettingsSection({
 }: RemindersSettingsSectionProps) {
   const supabase = await supabaseServer();
 
-  const [planResult, templatesResult, rulesResult] = await Promise.all([
+  const [planResult, templatesResult, rulesResult, emailReadiness] = await Promise.all([
     getWorkspacePlan(workspaceId),
     supabase
       .from("reminder_templates")
@@ -28,6 +29,7 @@ export async function RemindersSettingsSection({
       .eq("workspace_id", workspaceId)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true }),
+    loadEmailReadinessForWorkspace(supabase, workspaceId),
   ]);
 
   const templates = templatesResult.data ?? [];
@@ -40,6 +42,8 @@ export async function RemindersSettingsSection({
       templates={templates}
       rules={rules}
       canManageRules={canManageReminderRules(planResult.plan)}
+      emailReadyForAutomation={emailReadiness.ready}
+      emailSkipReason={emailReadiness.ready ? null : emailReadiness.skipReason}
     />
   );
 }

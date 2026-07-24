@@ -46,12 +46,17 @@ type PlanRow = {
   client_limit: number;
 };
 
+type EmailSettingsRow = {
+  workspace_id: string;
+};
+
 type MockState = {
   memberships: MembershipRow[];
   organizations: OrganizationRow[];
   workspaces: WorkspaceRow[];
   settings: SettingsRow[];
   plans: PlanRow[];
+  emailSettings: EmailSettingsRow[];
   authUsers: Map<string, { email: string }>;
   insertCounts: {
     organizations: number;
@@ -59,6 +64,7 @@ type MockState = {
     memberships: number;
     settings: number;
     plans: number;
+    emailSettings: number;
   };
   settingsInsertShouldFail?: boolean;
   planInsertShouldFail?: boolean;
@@ -220,6 +226,8 @@ class MockQueryBuilder {
         return this.state.settings;
       case "workspace_plans":
         return this.state.plans;
+      case "workspace_email_settings":
+        return this.state.emailSettings;
       default:
         return [];
     }
@@ -314,6 +322,19 @@ class MockQueryBuilder {
         });
         return { data: null, error: null };
       }
+      case "workspace_email_settings": {
+        stateInsertCount(this.state, "emailSettings");
+        const duplicateEmailSettings = this.state.emailSettings.some(
+          (emailSettings) => emailSettings.workspace_id === row.workspace_id
+        );
+        if (duplicateEmailSettings) {
+          return { data: null, error: { message: "duplicate email settings", code: "23505" } };
+        }
+        this.state.emailSettings.push({
+          workspace_id: String(row.workspace_id),
+        });
+        return { data: null, error: null };
+      }
       default:
         return { data: null, error: { message: `Unknown table ${this.table}`, code: "mock" } };
     }
@@ -331,6 +352,7 @@ function createEmptyState(userId: string, email: string): MockState {
     workspaces: [],
     settings: [],
     plans: [],
+    emailSettings: [],
     authUsers: new Map([[userId, { email }]]),
     insertCounts: {
       organizations: 0,
@@ -338,6 +360,7 @@ function createEmptyState(userId: string, email: string): MockState {
       memberships: 0,
       settings: 0,
       plans: 0,
+      emailSettings: 0,
     },
   };
 }
@@ -391,6 +414,10 @@ describe("ensureWorkspaceForUser bootstrap", () => {
     assert.equal(state.memberships[0]?.role, "owner");
     assert.equal(state.plans.length, 1);
     assert.equal(state.plans[0]?.workspace_id, workspaceId);
+    assert.equal(state.insertCounts.settings, 1);
+    assert.equal(state.insertCounts.emailSettings, 1);
+    assert.equal(state.settings[0]?.auto_send_reminders, false);
+    assert.equal(state.emailSettings[0]?.workspace_id, workspaceId);
   });
 
   it("Test 3 — repeated bootstrap returns the same workspace id", async () => {

@@ -10,6 +10,11 @@ import {
   loadAutomationGateForWorkspace,
   type AutomationGateSkipReason,
 } from "./automationGate";
+import {
+  emailReadinessSkipMessage,
+  loadEmailReadinessForWorkspace,
+  type EmailSkipReason,
+} from "./emailReadinessGate";
 import { getEligibleReminders } from "./getEligibleReminders";
 import { executeEligibleReminderCandidates } from "./executeReminderRun";
 
@@ -26,6 +31,8 @@ export interface ReminderRunResult {
   remindersSkipped: number;
   /** Present when automatic sending was skipped before candidate discovery. */
   automationSkipReason?: AutomationGateSkipReason;
+  /** Present when email is not ready for automatic sending. */
+  emailSkipReason?: EmailSkipReason;
   errors: Array<{ invoiceId: string; ruleId?: string; error: string }>;
 }
 
@@ -77,15 +84,15 @@ export async function runDueRemindersForWorkspace(
       return result;
     }
 
-    const { data: emailSettings } = await supabase
-      .from("workspace_email_settings")
-      .select("id")
-      .eq("workspace_id", workspaceId)
-      .single();
+    const emailReadiness = await loadEmailReadinessForWorkspace(
+      supabase,
+      workspaceId
+    );
 
-    if (!emailSettings) {
+    if (!emailReadiness.ready) {
+      result.emailSkipReason = emailReadiness.skipReason;
       console.log(
-        `[runDueRemindersForWorkspace] Skipping workspace ${workspaceId}: no email settings`
+        `[runDueRemindersForWorkspace] Skipping workspace ${workspaceId}: ${emailReadinessSkipMessage(emailReadiness.skipReason)}`
       );
       return result;
     }

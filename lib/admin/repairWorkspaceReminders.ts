@@ -6,12 +6,14 @@ import {
   resolveWorkspacePlanForProvisioning,
 } from "@/lib/reminders/provisionDefaultSetup";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { ensureWorkspaceEmailSettings } from "@/lib/workspaces/ensureWorkspaceEmailSettings";
 
 export type RepairWorkspaceRemindersResult =
   | {
       ok: true;
       templatesCreated: number;
       rulesCreated: number;
+      emailSettingsCreated: boolean;
     }
   | { ok: false; error: string };
 
@@ -47,6 +49,8 @@ export async function repairWorkspaceReminders(
   }
 
   try {
+    const emailProvision = await ensureWorkspaceEmailSettings(admin, trimmedWorkspaceId);
+
     const plan = await resolveWorkspacePlanForProvisioning(admin, trimmedWorkspaceId);
     if (!isWorkspacePlan(plan)) {
       return { ok: false, error: "Invalid workspace plan" };
@@ -67,6 +71,7 @@ export async function repairWorkspaceReminders(
         plan,
         templatesCreated: result.templatesCreated,
         rulesCreated: result.rulesCreated,
+        emailSettingsCreated: emailProvision.created,
       },
     });
 
@@ -74,6 +79,7 @@ export async function repairWorkspaceReminders(
       ok: true,
       templatesCreated: result.templatesCreated,
       rulesCreated: result.rulesCreated,
+      emailSettingsCreated: emailProvision.created,
     };
   } catch (error) {
     return {

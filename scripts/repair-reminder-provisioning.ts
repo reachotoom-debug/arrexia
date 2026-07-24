@@ -13,6 +13,7 @@ import { repairWorkspaceReminders } from "../lib/admin/repairWorkspaceReminders"
 import { isWorkspacePlan } from "../lib/billing/plans";
 import { provisionDefaultReminderSetup } from "../lib/reminders/provisionDefaultSetup";
 import { supabaseAdmin } from "../lib/supabase/admin";
+import { ensureWorkspaceEmailSettings } from "../lib/workspaces/ensureWorkspaceEmailSettings";
 
 async function main() {
   const workspaceId = process.argv[2]?.trim();
@@ -46,7 +47,8 @@ async function main() {
 
   const plan = isWorkspacePlan(planRow?.plan) ? planRow.plan : "free";
 
-  const [{ count: templateCount }, { count: ruleCount }] = await Promise.all([
+  const [{ count: templateCount }, { count: ruleCount }, { count: emailSettingsCount }] =
+    await Promise.all([
     admin
       .from("reminder_templates")
       .select("*", { count: "exact", head: true })
@@ -55,17 +57,30 @@ async function main() {
       .from("reminder_rules")
       .select("*", { count: "exact", head: true })
       .eq("workspace_id", workspaceId),
+    admin
+      .from("workspace_email_settings")
+      .select("*", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId),
   ]);
 
   console.log("Workspace:", workspace.name, workspaceId);
   console.log("Plan:", plan);
   console.log("Current templates:", templateCount ?? 0);
   console.log("Current rules:", ruleCount ?? 0);
+  console.log("Current email settings rows:", emailSettingsCount ?? 0);
 
   if (!apply) {
-    console.log("\nDry run — pass --apply to provision canonical reminder setup.");
+    console.log(
+      "\nDry run — pass --apply to provision email settings + canonical reminder setup."
+    );
+    console.log(
+      "Use --admin-audit to run through admin repair (audit logged) including email settings."
+    );
     return;
   }
+
+  const emailProvision = await ensureWorkspaceEmailSettings(admin, workspaceId);
+  console.log("Email settings provisioning:", emailProvision);
 
   if (useAdminRepair) {
     const result = await repairWorkspaceReminders(workspaceId);

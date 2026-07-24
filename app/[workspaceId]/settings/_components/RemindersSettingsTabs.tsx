@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { ReminderSettingsForm } from "./ReminderSettingsForm";
 import { ReminderTemplatesSection } from "./ReminderTemplatesSection";
 import { ReminderRulesSection } from "./ReminderRulesSection";
+import type { EmailSkipReason } from "@/lib/reminders/emailReadinessGate";
 import type { WorkspaceSettings } from "@/lib/settings/loadSettings";
 import type { Database } from "@/types/supabase/index";
 
@@ -22,12 +23,16 @@ export function RemindersSettingsTabs({
   templates,
   rules,
   canManageRules,
+  emailReadyForAutomation,
+  emailSkipReason,
 }: {
   workspaceId: string;
   settings: WorkspaceSettings;
   templates: ReminderTemplateRow[];
   rules: ReminderRuleRow[];
   canManageRules: boolean;
+  emailReadyForAutomation: boolean;
+  emailSkipReason: EmailSkipReason | null;
 }) {
   const [tab, setTab] = useState<TabId>("automation");
 
@@ -58,6 +63,8 @@ export function RemindersSettingsTabs({
           workspaceId={workspaceId}
           settings={settings}
           onGoToRules={() => setTab("rules")}
+          emailReadyForAutomation={emailReadyForAutomation}
+          emailSkipReason={emailSkipReason}
         />
       </div>
       <div className={cn(tab !== "templates" && "hidden")}>

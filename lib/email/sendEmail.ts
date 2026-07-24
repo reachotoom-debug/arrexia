@@ -15,6 +15,10 @@ import {
   parseEmailSenderAddress,
   resolveResendSender,
 } from "@/lib/email/getEmailSender";
+import {
+  isResendConfigured as isResendConfiguredImpl,
+  resolveEmailProvider as resolveEmailProviderImpl,
+} from "@/lib/email/resolveEmailProvider";
 
 export {
   SANDBOX_RECIPIENT_MISSING_MESSAGE,
@@ -93,18 +97,12 @@ export function resolveFromAddress(_options?: {
 }
 
 export function isResendConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY?.trim());
+  return isResendConfiguredImpl();
 }
 
 /** Prefer Resend when configured unless workspace explicitly chose SMTP. */
 export function resolveEmailProvider(settingsProvider?: string | null): "resend" | "smtp" {
-  if (settingsProvider === "smtp") {
-    return "smtp";
-  }
-  if (isResendConfigured()) {
-    return "resend";
-  }
-  return "smtp";
+  return resolveEmailProviderImpl(settingsProvider);
 }
 
 function delay(ms: number) {

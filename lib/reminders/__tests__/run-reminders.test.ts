@@ -406,6 +406,9 @@ function createAutomationRunnerSupabase(params: {
   settingsError?: boolean;
   settingsMissing?: boolean;
   hasEmailSettings?: boolean;
+  emailProvider?: string | null;
+  smtpHost?: string | null;
+  smtpPort?: number | null;
 }) {
   return {
     from(table: string) {
@@ -428,7 +431,10 @@ function createAutomationRunnerSupabase(params: {
               return { data: null, error: null };
             }
             return {
-              data: { auto_send_reminders: params.autoSendReminders },
+              data: {
+                auto_send_reminders: params.autoSendReminders,
+                email_provider: params.emailProvider ?? "resend",
+              },
               error: null,
             };
           },
@@ -443,11 +449,17 @@ function createAutomationRunnerSupabase(params: {
           eq() {
             return this;
           },
-          single: async () => {
+          maybeSingle: async () => {
             if (params.hasEmailSettings === false) {
-              return { data: null, error: { message: "not found", code: "PGRST116" } };
+              return { data: null, error: null };
             }
-            return { data: { id: "email-settings-1" }, error: null };
+            return {
+              data: {
+                smtp_host: params.smtpHost ?? null,
+                smtp_port: params.smtpPort ?? null,
+              },
+              error: null,
+            };
           },
         };
       }
@@ -614,11 +626,14 @@ describe("R2F master automation gate (runDueRemindersForWorkspace)", () => {
       "utf8"
     );
     assert.match(routeSrc, /runDueRemindersForWorkspace/);
+    assert.match(routeSrc, /automationSkipReason/);
+    assert.match(routeSrc, /emailSkipReason/);
     assert.doesNotMatch(routeSrc, /getEligibleReminders/);
     assert.doesNotMatch(routeSrc, /sendReminderForInvoice/);
 
     const runnerSrc = readFileSync("lib/reminders/run-reminders.ts", "utf8");
     assert.match(runnerSrc, /loadAutomationGateForWorkspace/);
+    assert.match(runnerSrc, /loadEmailReadinessForWorkspace/);
   });
 
   it("L — automation save upsert does not include legacy timing/channel fields", () => {
@@ -637,5 +652,92 @@ describe("R2F master automation gate (runDueRemindersForWorkspace)", () => {
       "utf8"
     );
     assert.doesNotMatch(formSrc, /reminder_before_days|reminder_after_days|reminder_channel|Before Due Date|After Due Date|Default Channel/i);
+  });
+});
+
+describe("R2G email readiness gate (runDueRemindersForWorkspace)", () => {
+  it("G — missing email settings returns emailSkipReason and zero sends", async () => {
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({
+        autoSendReminders: true,
+        hasEmailSettings: false,
+      }) as never,
+      getEligibleRemindersFn: async () => {
+        throw new Error("getEligibleReminders must not run when email settings are missing");
+      },
+    });
+
+    assert.equal(result.remindersSent, 0);
+    assert.equal(result.emailSkipReason, "email_settings_missing");
+    assert.equal(result.automationSkipReason, undefined);
+  });
+
+  it("F — automation ON + Resend-ready row executes candidate discovery", async () => {
+    let eligibleCalled = false;
+
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({
+        autoSendReminders: true,
+        hasEmailSettings: true,
+        emailProvider: "resend",
+      }) as never,
+      getEligibleRemindersFn: async () => {
+        eligibleCalled = true;
+        return evaluate({});
+      },
+      sendReminderFn: async () => ({ success: true, status: "sent" }),
+    });
+
+    assert.equal(eligibleCalled, true);
+    assert.equal(result.candidatesEligible, 1);
+    assert.equal(result.remindersSent, 1);
+    assert.equal(result.emailSkipReason, undefined);
+  });
+
+  it("I — SMTP provider with incomplete settings fails closed", async () => {
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: createAutomationRunnerSupabase({
+        autoSendReminders: true,
+        hasEmailSettings: true,
+        emailProvider: "smtp",
+        smtpHost: null,
+        smtpPort: null,
+      }) as never,
+      getEligibleRemindersFn: async () => evaluate({}),
+    });
+
+    assert.equal(result.remindersSent, 0);
+    assert.equal(result.emailSkipReason, "smtp_configuration_incomplete");
+  });
+
+  it("H — automation OFF exits before email readiness check", async () => {
+    let emailTableQueried = false;
+    const supabase = {
+      from(table: string) {
+        if (table === "settings") {
+          return createAutomationRunnerSupabase({ autoSendReminders: false }).from(
+            "settings"
+          );
+        }
+        if (table === "workspace_email_settings") {
+          emailTableQueried = true;
+          throw new Error("email readiness must not run when automation is OFF");
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+
+    const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      supabase: supabase as never,
+    });
+
+    assert.equal(result.automationSkipReason, "automation_disabled");
+    assert.equal(result.emailSkipReason, undefined);
+    assert.equal(emailTableQueried, false);
+  });
+
+  it("K — manual send path has no automatic email readiness gate", () => {
+    const sendSrc = readFileSync("lib/reminders/send.ts", "utf8");
+    assert.doesNotMatch(sendSrc, /loadEmailReadinessForWorkspace|emailSkipReason/);
   });
 });
