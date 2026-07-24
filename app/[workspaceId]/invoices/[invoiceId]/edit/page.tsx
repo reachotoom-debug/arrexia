@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { normalizeDateOnlyString } from "@/lib/datetime/formatDateTime";
 import { createRoutePerf, perfTime } from "@/lib/perf/server";
 import { InvoiceForm } from "../../_components/InvoiceForm";
 import { type InvoiceFormValues } from "@/lib/invoices/schema";
@@ -116,9 +117,13 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
   const invoiceItems = itemsResult.data;
   const client = clientResult.data;
 
-  // Format dates to YYYY-MM-DD
   const formatDate = (date: string | Date) => {
-    const d = new Date(date);
+    if (typeof date === "string") {
+      const normalized = normalizeDateOnlyString(date);
+      if (normalized) return normalized;
+    }
+    const d = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(d.getTime())) return "";
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");

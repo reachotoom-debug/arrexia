@@ -106,7 +106,10 @@ export function formatAdminDisplayDate(
 export function formatDateOnlyField(value: string | null | undefined): string {
   if (!value) return EMPTY_TIMESTAMP_PLACEHOLDER;
 
-  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const normalized = normalizeDateOnlyString(value);
+  if (!normalized) return EMPTY_TIMESTAMP_PLACEHOLDER;
+
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return EMPTY_TIMESTAMP_PLACEHOLDER;
 
   const year = Number(match[1]);
@@ -123,6 +126,16 @@ export function formatDateOnlyField(value: string | null | undefined): string {
   }
 
   return new Intl.DateTimeFormat("en-US", ADMIN_DATE_OPTIONS).format(calendarDate);
+}
+
+/**
+ * Extracts a calendar date prefix (YYYY-MM-DD) without timezone conversion.
+ * Use when loading date-only DB columns into form inputs.
+ */
+export function normalizeDateOnlyString(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
 }
 
 export function formatWorkspaceDisplayDateTime(
@@ -161,3 +174,6 @@ export function instantToWorkspaceCalendarDate(
     day: "2-digit",
   }).format(date);
 }
+
+/** @alias instantToWorkspaceCalendarDate — canonical workspace business date helper */
+export const getWorkspaceCalendarDate = instantToWorkspaceCalendarDate;

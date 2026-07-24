@@ -3,7 +3,7 @@
  * Pure evaluation lives here; Supabase I/O is isolated in getEligibleReminders().
  */
 
-import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
+import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
 import {
   evaluateReminderEligibility,
   type ReminderEligibilityReason,
@@ -284,9 +284,10 @@ export async function getEligibleReminders(
     .maybeSingle();
 
   const workspaceTimeZone = settingsRow?.timezone ?? "UTC";
-  const evaluationDate =
-    instantToWorkspaceCalendarDate(evaluationInstant, workspaceTimeZone) ??
-    evaluationInstant.toISOString().slice(0, 10);
+  const evaluationDate = resolveWorkspaceEvaluationDate(
+    evaluationInstant,
+    workspaceTimeZone
+  );
 
   const { data: rules, error: rulesError } = await supabase
     .from("reminder_rules")

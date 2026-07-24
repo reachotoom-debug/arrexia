@@ -3,6 +3,8 @@ import { PaymentForm } from "../_components/PaymentForm";
 import { PaymentFormSchema, type PaymentFormValues } from "@/lib/payments/schema";
 import { createPayment } from "../actions";
 import { getEligibleClientsForPayments } from "../_lib/eligible";
+import { loadWorkspaceSettings } from "@/lib/settings/loadSettings";
+import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
 
 interface NewPaymentPageProps {
   params: Promise<{ workspaceId: string }>;
@@ -12,6 +14,11 @@ export default async function NewPaymentPage({
   params,
 }: NewPaymentPageProps) {
   const { workspaceId } = await params;
+
+  const settings = await loadWorkspaceSettings(workspaceId);
+  const defaultPaymentDate =
+    getWorkspaceCalendarDateNow(settings.timezone) ??
+    new Date().toISOString().slice(0, 10);
 
   // Load only eligible clients (invoices will be loaded on-demand when client is selected)
   const eligibleClients = await getEligibleClientsForPayments(workspaceId);
@@ -86,6 +93,7 @@ export default async function NewPaymentPage({
           action={handleCreate}
           workspaceId={workspaceId}
           cancelUrl={`/${workspaceId}/payments`}
+          defaultPaymentDate={defaultPaymentDate}
         />
       )}
     </div>

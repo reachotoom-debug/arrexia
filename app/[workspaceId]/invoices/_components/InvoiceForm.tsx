@@ -32,6 +32,8 @@ interface InvoiceFormProps {
   initialClientId?: string;
   /** Invoice currency (for edit mode) or workspace default currency (for create mode) */
   currency?: string;
+  /** Workspace-local today (YYYY-MM-DD) for create-mode defaults */
+  defaultIssueDate?: string;
 }
 
 export function InvoiceForm({
@@ -47,6 +49,7 @@ export function InvoiceForm({
   prefilledClient,
   initialClientId,
   currency = "USD",
+  defaultIssueDate,
 }: InvoiceFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -60,8 +63,8 @@ export function InvoiceForm({
       initialData ?? {
         clientId: initialClientId ?? "",
         invoiceNumber: generatedInvoiceNumber ?? "INV-0001",
-        issueDate: new Date().toISOString().slice(0, 10),
-        dueDate: new Date().toISOString().slice(0, 10),
+        issueDate: defaultIssueDate ?? "",
+        dueDate: defaultIssueDate ?? "",
         poNumber: "",
         notes: "",
         status: "draft",
@@ -78,7 +81,7 @@ export function InvoiceForm({
           } as InvoiceItemFormValues,
         ],
       },
-    [initialData, generatedInvoiceNumber, initialClientId]
+    [initialData, generatedInvoiceNumber, initialClientId, defaultIssueDate]
   );
 
   const {

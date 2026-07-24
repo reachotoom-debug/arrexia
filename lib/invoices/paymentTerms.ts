@@ -1,3 +1,5 @@
+import { addCalendarDays } from "@/lib/reminders/ruleTrigger";
+
 export type PaymentTermsCode =
   | "due_on_receipt"
   | "net_7"
@@ -97,20 +99,8 @@ export function computeDueDate(
     return null;
   }
 
-  const base = new Date(issueDateISO);
-  if (Number.isNaN(base.getTime())) {
-    return null;
-  }
-
-  const result = new Date(base);
   const offset = typeof days === "number" && Number.isFinite(days) ? days : 0;
-  result.setDate(result.getDate() + offset);
-
-  try {
-    return result.toISOString().slice(0, 10);
-  } catch {
-    return null;
-  }
+  return addCalendarDays(issueDateISO, offset);
 }
 
 /**

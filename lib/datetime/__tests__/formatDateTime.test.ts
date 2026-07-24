@@ -7,7 +7,9 @@ import {
   formatAdminDisplayDateTime,
   formatDateOnlyField,
   formatInstantInTimeZone,
+  getWorkspaceCalendarDate,
   isValidTimeZone,
+  normalizeDateOnlyString,
   parseInstant,
   resolveSafeTimeZone,
 } from "../formatDateTime";
@@ -67,5 +69,18 @@ describe("parseInstant", () => {
     const parsed = parseInstant(UTC_INSTANT);
     assert.ok(parsed);
     assert.equal(parsed?.toISOString(), UTC_INSTANT);
+  });
+});
+
+describe("getWorkspaceCalendarDate", () => {
+  it("maps UTC instant to workspace calendar date via en-CA format", () => {
+    assert.equal(getWorkspaceCalendarDate(UTC_INSTANT, "Asia/Amman"), "2026-07-20");
+  });
+});
+
+describe("normalizeDateOnlyString", () => {
+  it("returns date prefix without shifting", () => {
+    assert.equal(normalizeDateOnlyString("2026-07-20"), "2026-07-20");
+    assert.equal(normalizeDateOnlyString(null), null);
   });
 });

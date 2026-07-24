@@ -32,6 +32,8 @@ interface PaymentFormProps {
   // For edit mode: display client/invoice names (read-only)
   clientName?: string;
   invoiceNumber?: string;
+  /** Workspace-local today (YYYY-MM-DD) for create-mode default payment date */
+  defaultPaymentDate?: string;
 }
 
 export function PaymentForm({
@@ -44,6 +46,7 @@ export function PaymentForm({
   cancelUrl,
   clientName,
   invoiceNumber,
+  defaultPaymentDate,
 }: PaymentFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -69,7 +72,7 @@ export function PaymentForm({
       clientId: "",
       invoiceId: "",
       amount: 0,
-      date: new Date().toISOString().slice(0, 10),
+      date: defaultPaymentDate ?? "",
       method: "cash",
       status: "completed",
       transactionId: "",
