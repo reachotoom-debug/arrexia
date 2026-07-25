@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { toCsv, formatDate } from "@/lib/csv/exportCsv";
+import { toCsv } from "@/lib/csv/exportCsv";
+import { instantToWorkspaceCalendarDate, resolveSafeTimeZone } from "@/lib/datetime/formatDateTime";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 
 const EXPORT_CHUNK_SIZE = 1000;
 
@@ -113,9 +115,13 @@ export async function GET(req: NextRequest) {
     await requireWorkspace(workspaceId);
 
     const supabase = await supabaseServer();
+    const workspaceTimeZone = resolveSafeTimeZone(await loadWorkspaceTimeZone(workspaceId));
 
     // Fetch all clients matching filters
     const clients = await fetchAllClients(supabase, workspaceId, status, q);
+
+    const formatTimestampForExport = (value: string | null | undefined): string =>
+      instantToWorkspaceCalendarDate(value ?? "", workspaceTimeZone) ?? "";
 
     // Prepare CSV headers and rows
     const headers = [
@@ -136,8 +142,8 @@ export async function GET(req: NextRequest) {
       Email: client.email || "",
       WhatsApp: client.whatsapp_phone || client.whatsapp || "",
       Status: client.archived_at ? "Archived" : client.is_active ? "Active" : "Inactive",
-      "Created At": formatDate(client.created_at),
-      "Archived At": formatDate(client.archived_at),
+      "Created At": formatTimestampForExport(client.created_at),
+      "Archived At": formatTimestampForExport(client.archived_at),
     }));
 
     // Generate CSV

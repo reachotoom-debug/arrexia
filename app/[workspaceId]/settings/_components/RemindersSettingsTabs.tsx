@@ -25,6 +25,7 @@ export function RemindersSettingsTabs({
   canManageRules,
   emailReadyForAutomation,
   emailSkipReason,
+  workspaceTimeZone,
 }: {
   workspaceId: string;
   settings: WorkspaceSettings;
@@ -33,6 +34,7 @@ export function RemindersSettingsTabs({
   canManageRules: boolean;
   emailReadyForAutomation: boolean;
   emailSkipReason: EmailSkipReason | null;
+  workspaceTimeZone: string;
 }) {
   const [tab, setTab] = useState<TabId>("automation");
 
@@ -68,7 +70,11 @@ export function RemindersSettingsTabs({
         />
       </div>
       <div className={cn(tab !== "templates" && "hidden")}>
-        <ReminderTemplatesSection workspaceId={workspaceId} templates={templates} />
+        <ReminderTemplatesSection
+          workspaceId={workspaceId}
+          templates={templates}
+          workspaceTimeZone={workspaceTimeZone}
+        />
       </div>
       <div className={cn(tab !== "rules" && "hidden")}>
         <ReminderRulesSection

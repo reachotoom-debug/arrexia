@@ -2,6 +2,8 @@ import { getWorkspacePlan } from "@/lib/billing/getWorkspacePlan";
 import { canManageReminderRules } from "@/lib/billing/reminderRulesAccess";
 import { loadEmailReadinessForWorkspace } from "@/lib/reminders/emailReadinessGate";
 import { supabaseServer } from "@/lib/supabase/server";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
+import { resolveSafeTimeZone } from "@/lib/datetime/formatDateTime";
 import { RemindersSettingsTabs } from "./RemindersSettingsTabs";
 import type { WorkspaceSettings } from "@/lib/settings/loadSettings";
 
@@ -16,21 +18,23 @@ export async function RemindersSettingsSection({
 }: RemindersSettingsSectionProps) {
   const supabase = await supabaseServer();
 
-  const [planResult, templatesResult, rulesResult, emailReadiness] = await Promise.all([
-    getWorkspacePlan(workspaceId),
-    supabase
-      .from("reminder_templates")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .order("updated_at", { ascending: false }),
-    supabase
-      .from("reminder_rules")
-      .select("*, reminder_templates(name)")
-      .eq("workspace_id", workspaceId)
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true }),
-    loadEmailReadinessForWorkspace(supabase, workspaceId),
-  ]);
+  const [planResult, templatesResult, rulesResult, emailReadiness, workspaceTimeZone] =
+    await Promise.all([
+      getWorkspacePlan(workspaceId),
+      supabase
+        .from("reminder_templates")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .order("updated_at", { ascending: false }),
+      supabase
+        .from("reminder_rules")
+        .select("*, reminder_templates(name)")
+        .eq("workspace_id", workspaceId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+      loadEmailReadinessForWorkspace(supabase, workspaceId),
+      loadWorkspaceTimeZone(workspaceId),
+    ]);
 
   const templates = templatesResult.data ?? [];
   const rules = rulesResult.data ?? [];
@@ -44,6 +48,7 @@ export async function RemindersSettingsSection({
       canManageRules={canManageReminderRules(planResult.plan)}
       emailReadyForAutomation={emailReadiness.ready}
       emailSkipReason={emailReadiness.ready ? null : emailReadiness.skipReason}
+      workspaceTimeZone={resolveSafeTimeZone(workspaceTimeZone)}
     />
   );
 }

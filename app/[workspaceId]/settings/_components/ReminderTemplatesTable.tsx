@@ -4,6 +4,7 @@ import { ReminderTemplateFormDialog } from "./ReminderTemplateFormDialog";
 import { ReminderTemplateDeleteButton } from "./ReminderTemplateDeleteButton";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { formatWorkspaceDisplayDate } from "@/lib/datetime/formatDateTime";
 import type { Database } from "@/types/supabase/index";
 
 type ReminderTemplateRow = Database["public"]["Tables"]["reminder_templates"]["Row"];
@@ -11,18 +12,13 @@ type ReminderTemplateRow = Database["public"]["Tables"]["reminder_templates"]["R
 interface ReminderTemplatesTableProps {
   workspaceId: string;
   templates: ReminderTemplateRow[];
-}
-
-function formatDate(dateString: string | null): string {
-  if (!dateString) return "—";
-  const date = new Date(dateString);
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+  workspaceTimeZone: string;
 }
 
 export function ReminderTemplatesTable({
   workspaceId,
   templates,
+  workspaceTimeZone,
 }: ReminderTemplatesTableProps) {
   return (
     <>
@@ -80,7 +76,10 @@ export function ReminderTemplatesTable({
                   </span>
                 </TableCell>
                 <TableCell className="text-slate-500">
-                  {formatDate(template.updated_at || template.created_at)}
+                  {formatWorkspaceDisplayDate(
+                    template.updated_at || template.created_at,
+                    workspaceTimeZone
+                  )}
                 </TableCell>
                 <TableCell>
                   <Badge

@@ -7,18 +7,24 @@ type ReminderTemplateRow = Database["public"]["Tables"]["reminder_templates"]["R
 interface ReminderTemplatesSectionProps {
   workspaceId: string;
   templates: ReminderTemplateRow[];
+  workspaceTimeZone: string;
 }
 
 export function ReminderTemplatesSection({
   workspaceId,
   templates,
+  workspaceTimeZone,
 }: ReminderTemplatesSectionProps) {
   return (
     <SettingsCard
       title="Templates"
       description="Customize the content Arrexia sends when reminding clients about invoices."
     >
-      <ReminderTemplatesTable workspaceId={workspaceId} templates={templates} />
+      <ReminderTemplatesTable
+        workspaceId={workspaceId}
+        templates={templates}
+        workspaceTimeZone={workspaceTimeZone}
+      />
     </SettingsCard>
   );
 }
