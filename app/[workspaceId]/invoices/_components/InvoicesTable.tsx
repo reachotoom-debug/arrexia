@@ -20,6 +20,7 @@ import {
   TABLE_TH,
   TABLE_TH_RIGHT,
 } from "@/components/table/tableShell";
+import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 import { DataTableShell } from "@/components/layout/DataTableShell";
 import { EntityCard } from "@/components/ui/EntityCard";
 import { EmptyState } from "@/components/ui/state";
@@ -147,7 +148,7 @@ export function InvoicesTable({
   }
 
   const formatListDate = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString() : "—";
+    d ? formatDateOnlyField(d) : "—";
 
   const content = (
     <div className="w-full">
@@ -354,10 +355,10 @@ export function InvoicesTable({
                     </div>
                   </td>
                   <td className={`hidden md:table-cell ${TABLE_TD} text-sm text-slate-500 whitespace-nowrap`}>
-                    {inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : "—"}
+                    {formatListDate(inv.issue_date)}
                   </td>
                   <td className={`hidden md:table-cell ${TABLE_TD} text-sm text-slate-500 whitespace-nowrap`}>
-                    {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "—"}
+                    {formatListDate(inv.due_date)}
                   </td>
                   <td className={`${TABLE_TD_RIGHT} text-sm text-blue-600`}>
                     {formatCurrency(inv.total, { currency: inv.currency })}

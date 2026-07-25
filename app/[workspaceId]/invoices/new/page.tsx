@@ -5,6 +5,7 @@ import { type InvoiceFormValues } from "@/lib/invoices/schema";
 import { createInvoice, getNextInvoiceNumber } from "../actions";
 import { loadWorkspaceSettings } from "@/lib/settings/loadSettings";
 import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
+import { resolveWorkspaceBusinessDate } from "@/lib/invoices/workspaceInvoiceAging";
 
 interface NewInvoicePageProps {
   params: Promise<{ workspaceId: string }>;
@@ -47,7 +48,7 @@ export default async function NewInvoicePage({
   const defaultCurrency = settings.payments.defaultCurrency || "USD";
   const defaultIssueDate =
     getWorkspaceCalendarDateNow(settings.timezone) ??
-    new Date().toISOString().slice(0, 10);
+    resolveWorkspaceBusinessDate(new Date(), settings.timezone);
 
   let generatedInvoiceNumber = "INV-0001";
   try {

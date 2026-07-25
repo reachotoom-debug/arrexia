@@ -7,6 +7,7 @@ import {
   differenceCalendarDays,
   normalizeDateOnlyString,
 } from "@/lib/datetime/workspaceCalendar";
+import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 
 export function isLegacyPaymentInstruction(text: string | null | undefined): boolean {
   const trimmed = text?.trim();
@@ -105,16 +106,7 @@ export function getInvoiceDueStatus(
 }
 
 export function formatInvoiceDate(dateString: string): string {
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return dateString;
-  }
+  return formatDateOnlyField(dateString);
 }
 
 export function resolveThankYouBody(

@@ -3,6 +3,8 @@
  * Handles CSV generation with UTF-8 BOM for Excel compatibility
  */
 
+import { normalizeDateOnlyString } from "@/lib/datetime/formatDateTime";
+
 /**
  * Escape a CSV cell value according to RFC 4180
  * - Wrap in double quotes if contains comma, newline, or double quote
@@ -28,6 +30,12 @@ export function escapeCsvCell(value: any): string {
  */
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "";
+
+  const trimmed = value.trim();
+  const dateOnly = normalizeDateOnlyString(trimmed);
+  if (dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return dateOnly;
+  }
 
   try {
     const date = new Date(value);
