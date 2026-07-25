@@ -293,7 +293,7 @@ describe("cron reminder execution (P0)", () => {
     };
     assert.equal(vercel.crons.length, 1);
     assert.equal(vercel.crons[0].path, "/api/internal/reminders/run");
-    assert.equal(vercel.crons[0].schedule, "0 * * * *");
+    assert.equal(vercel.crons[0].schedule, "0 6 * * *");
   });
 });
 
