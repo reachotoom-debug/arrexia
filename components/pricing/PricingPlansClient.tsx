@@ -36,7 +36,7 @@ export function PricingPlansClient() {
           savingsBadge={starterPricing.savingsBadge}
           subtitle="For freelancers & solo businesses"
           features={STARTER_FEATURES}
-          ctaLabel="Start Free Trial"
+          ctaLabel="Get started free"
           ctaHref={trialHref("starter")}
           showTrialMicrocopy
           footnote="Perfect for freelancers and small businesses."
@@ -50,7 +50,7 @@ export function PricingPlansClient() {
           savingsBadge={proPricing.savingsBadge}
           subtitle="For growing agencies & SMBs"
           features={PRO_FEATURES}
-          ctaLabel="Start Pro Trial"
+          ctaLabel="Get started free"
           ctaHref={trialHref("pro")}
           highlight
           badgeLabel="Most Popular"
@@ -67,7 +67,7 @@ export function PricingPlansClient() {
           savingsBadge={businessPricing.savingsBadge}
           subtitle="For larger teams"
           features={BUSINESS_FEATURES}
-          ctaLabel="Start Business Trial"
+          ctaLabel="Get started free"
           ctaHref={trialHref("business")}
           showTrialMicrocopy
           footnote="Higher limits and team controls for scaling collections."

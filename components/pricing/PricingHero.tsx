@@ -32,7 +32,7 @@ export function PricingHero({ trialHref }: PricingHeroProps) {
           <div className="flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row">
             <Link href={trialHref} className="w-full sm:w-auto">
               <Button size="lg" className="h-12 w-full px-8 text-base sm:w-auto">
-                Start 14-Day Free Trial
+                Get started free
               </Button>
             </Link>
             <Link href="#pricing" className="w-full sm:w-auto">

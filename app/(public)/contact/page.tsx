@@ -99,12 +99,12 @@ export default function ContactPage() {
         <div className="mt-12 rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <h2 className="text-xl font-semibold text-slate-900">Ready to try Arrexia?</h2>
           <p className="mx-auto mt-2 max-w-lg text-sm text-slate-600">
-            Start your free trial and bring clarity to receivables, collections, and cash flow.
+            Try Arrexia free and bring clarity to receivables, collections, and cash flow.
           </p>
           <div className="mt-6">
             <StartTrialLink href={trialHref("starter")} source="contact_page" plan="starter">
               <Button size="lg" className="h-12 px-8 text-base">
-                Start free trial
+                Get started free
               </Button>
             </StartTrialLink>
           </div>

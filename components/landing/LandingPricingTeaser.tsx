@@ -26,7 +26,7 @@ const TEASER_PLAN_CONFIG: TeaserPlanConfig[] = [
       "Manual reminders",
       "Basic risk score",
     ],
-    cta: { label: "Start free trial", href: trialHref("starter"), disabled: false },
+    cta: { label: "Get started free", href: trialHref("starter"), disabled: false },
   },
   {
     id: "pro",
@@ -38,7 +38,7 @@ const TEASER_PLAN_CONFIG: TeaserPlanConfig[] = [
       "Automated reminders",
       "Advanced risk analysis",
     ],
-    cta: { label: "Start Pro trial", href: trialHref("pro"), disabled: false },
+    cta: { label: "Get started free", href: trialHref("pro"), disabled: false },
   },
   {
     id: "business",
@@ -49,7 +49,7 @@ const TEASER_PLAN_CONFIG: TeaserPlanConfig[] = [
       "Advanced collections workflows",
       "Priority support",
     ],
-    cta: { label: "Start free trial", href: trialHref("business"), disabled: false },
+    cta: { label: "Get started free", href: trialHref("business"), disabled: false },
   },
   {
     id: "enterprise",

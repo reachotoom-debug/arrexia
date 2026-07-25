@@ -49,7 +49,7 @@ export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
     path: "/pricing",
     title: "Arrexia Pricing | Cash Collection Operations Plans",
     description:
-      "Compare Arrexia pricing for collections workflows, payment reminders, and accounts receivable operations. Start a 14-day free trial.",
+      "Compare Arrexia pricing for collections workflows, payment reminders, and accounts receivable operations. Get started free.",
     priority: 0.9,
     changeFrequency: "weekly",
   },

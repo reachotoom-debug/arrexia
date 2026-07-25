@@ -46,7 +46,7 @@ export function PublicNavbar() {
             </Link>
             <Link href={trialHref("starter")}>
               <Button size="sm" className="min-h-11 px-4">
-                Start free trial
+                Get started free
               </Button>
             </Link>
           </div>
@@ -75,7 +75,7 @@ export function PublicNavbar() {
             </Button>
           </Link>
           <Link href={trialHref("starter")}>
-            <Button className="min-h-11">Start free trial</Button>
+            <Button className="min-h-11">Get started free</Button>
           </Link>
         </div>
       </div>

@@ -12,7 +12,7 @@ export function BlogCta({ variant = "default" }: BlogCtaProps) {
     return (
       <div className="mt-10 flex flex-col gap-3 sm:flex-row">
         <StartTrialLink href={trialHref("starter")} source="blog_cta_compact" plan="starter">
-          <Button className="w-full sm:w-auto">Start Free Trial</Button>
+          <Button className="w-full sm:w-auto">Get started free</Button>
         </StartTrialLink>
         <Link href="/pricing">
           <Button variant="outline" className="w-full sm:w-auto">
@@ -34,7 +34,7 @@ export function BlogCta({ variant = "default" }: BlogCtaProps) {
       <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <StartTrialLink href={trialHref("starter")} source="blog_cta" plan="starter">
           <Button size="lg" className="h-11 px-7">
-            Start Free Trial
+            Get started free
           </Button>
         </StartTrialLink>
         <Link

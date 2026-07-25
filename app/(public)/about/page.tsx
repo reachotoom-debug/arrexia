@@ -121,12 +121,12 @@ export default function AboutPage() {
           <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6">
             <h2 className="text-2xl font-semibold text-slate-900">Ready to get started?</h2>
             <p className="mx-auto mt-3 max-w-xl text-base text-slate-600">
-              Start your free trial and bring clarity to receivables, collections, and cash flow.
+              Try Arrexia free and bring clarity to receivables, collections, and cash flow.
             </p>
             <div className="mt-8">
               <Link href={trialHref("starter")}>
                 <Button size="lg" className="h-12 px-8 text-base">
-                  Start free trial
+                  Get started free
                 </Button>
               </Link>
             </div>

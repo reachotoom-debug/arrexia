@@ -6,9 +6,8 @@ export type PlanId = WorkspacePlan | "business" | "enterprise";
 export type BillingInterval = "monthly" | "annual";
 
 export const PUBLIC_PRICING = {
-  trialDays: 14,
-  trialLabel: "14-day free trial",
-  trialMicrocopy: "14-day free trial • No credit card required",
+  trialLabel: "Try Arrexia free",
+  trialMicrocopy: "No credit card required",
   annualSavingsLabel: "Save 17% — 2 months free",
   annualSavingsShortLabel: "Save 17%",
 } as const;
@@ -42,7 +41,7 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     contactSalesOnly: false,
     selectableInBilling: false,
     mostPopular: false,
-    publicCtaLabel: "Start free trial",
+    publicCtaLabel: "Get started free",
     limits: ["5 invoices / month", "5 clients"],
     invoiceLimitMonthly: 5,
     clientLimit: 5,
@@ -58,7 +57,7 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     contactSalesOnly: false,
     selectableInBilling: true,
     mostPopular: false,
-    publicCtaLabel: "Start free trial",
+    publicCtaLabel: "Get started free",
     limits: [
       "Up to 25 active clients",
       "Up to 50 invoices / month",
@@ -78,7 +77,7 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     contactSalesOnly: false,
     selectableInBilling: true,
     mostPopular: true,
-    publicCtaLabel: "Start free trial",
+    publicCtaLabel: "Get started free",
     limits: [
       "Up to 250 active clients",
       "Up to 500 invoices / month",
@@ -98,7 +97,7 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     contactSalesOnly: false,
     selectableInBilling: false,
     mostPopular: false,
-    publicCtaLabel: "Start free trial",
+    publicCtaLabel: "Get started free",
     limits: [
       "Team permissions",
       "Custom domain",

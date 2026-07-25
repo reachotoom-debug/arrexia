@@ -39,7 +39,7 @@ export function LandingFinalCTA() {
                 size="lg"
                 className="h-12 bg-blue-600 px-8 text-base text-white shadow-lg shadow-blue-600/30 hover:bg-blue-500"
               >
-                Start 14-day free trial
+                Get started free
               </Button>
             </Link>
             <p className="text-sm text-slate-300">

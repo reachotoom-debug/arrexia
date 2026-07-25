@@ -54,7 +54,7 @@ export function buildSoftwareApplicationSchema() {
         price: starterPrice ?? 0,
         priceCurrency: "USD",
         url: absoluteUrl("/pricing"),
-        description: `${PUBLIC_PRICING.trialLabel} available. Paid plans start on Starter.`,
+        description: `${PUBLIC_PRICING.trialLabel}. Paid plans start on Starter.`,
       },
       {
         "@type": "Offer",

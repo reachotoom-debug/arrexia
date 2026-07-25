@@ -18,7 +18,7 @@ const DashboardMockup = dynamic(
 );
 
 const TRUST_BULLETS = [
-  "14-day free trial",
+  "Try Arrexia free",
   "No credit card required",
   "Setup in minutes",
 ] as const;
@@ -60,7 +60,7 @@ export function LandingHero() {
               className="w-full sm:w-auto"
             >
               <Button size="lg" className="h-12 w-full px-8 text-base sm:w-auto">
-                Start 14-day free trial
+                Get started free
               </Button>
             </StartTrialLink>
             <Link href="/pricing" className="w-full sm:w-auto">

@@ -59,12 +59,12 @@ export default function PricingPage() {
               Ready to get paid faster?
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-base text-slate-600 sm:text-lg">
-              Start your {PUBLIC_PRICING.trialLabel}. No credit card required.
+              {PUBLIC_PRICING.trialLabel}. {PUBLIC_PRICING.trialMicrocopy}.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link href={trialHref("starter")}>
                 <Button size="lg" className="h-12 px-8 text-base">
-                  Start 14-Day Free Trial
+                  Get started free
                 </Button>
               </Link>
               <Link href="/login">

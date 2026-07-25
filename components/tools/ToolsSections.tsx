@@ -5,7 +5,7 @@ import { trialHref } from "@/lib/billing/plans";
 
 const TRUST_ITEMS = [
   "No credit card required",
-  "Start your free trial in seconds",
+  "Get started in seconds",
   "Cancel anytime",
   "Secure & reliable",
 ] as const;
@@ -37,7 +37,7 @@ export function ToolsCtaSection() {
       <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <Link href={trialHref("starter")}>
           <Button size="lg" className="h-11 px-7">
-            Start Free Trial
+            Get started free
           </Button>
         </Link>
         <Link href="/pricing">

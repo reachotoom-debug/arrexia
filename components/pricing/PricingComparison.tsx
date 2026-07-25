@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatPublicComparisonPriceRow, PUBLIC_PRICING } from "@/lib/billing/plans";
+import { formatPublicComparisonPriceRow } from "@/lib/billing/plans";
 import { Check } from "lucide-react";
 
 type ComparisonRow = {
@@ -21,10 +21,10 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     highlight: true,
   },
   {
-    label: "Free trial",
-    starter: `✓ ${PUBLIC_PRICING.trialDays} days`,
-    pro: `✓ ${PUBLIC_PRICING.trialDays} days`,
-    business: `✓ ${PUBLIC_PRICING.trialDays} days`,
+    label: "Free to start",
+    starter: "✓",
+    pro: "✓",
+    business: "✓",
     enterprise: "Contact Sales",
   },
   {

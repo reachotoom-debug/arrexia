@@ -20,9 +20,9 @@ const FAQ_ITEMS = [
       "Yes. You can move between Starter and Pro as your client and invoice volume grows.",
   },
   {
-    question: "Is there a free trial?",
+    question: "Can I get started for free?",
     answer:
-      "Yes. Start with a 14-day free trial. No credit card required, and you can be set up in minutes.",
+      "Yes. Create a free Arrexia account with no credit card required. You can upgrade to Starter or Pro when your business needs more capacity.",
   },
 ] as const;
 

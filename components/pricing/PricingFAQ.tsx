@@ -6,7 +6,7 @@ const FAQ = [
     a: "No. Arrexia is a Cash Collection Operations Platform built around receivables tracking, automated payment follow-up, overdue visibility, and cash flow recovery.",
   },
   {
-    q: "Do I need a credit card for trial?",
+    q: "Do I need a credit card to get started?",
     a: "No.",
   },
   {
@@ -18,8 +18,8 @@ const FAQ = [
     a: "No — freelancers, agencies, consultants, and SMBs use Arrexia.",
   },
   {
-    q: "What happens after trial?",
-    a: "Choose a plan that fits your business.",
+    q: "What happens on the free plan?",
+    a: "You can use Arrexia on the free plan and upgrade to Starter or Pro when you need more capacity.",
   },
 ];
 

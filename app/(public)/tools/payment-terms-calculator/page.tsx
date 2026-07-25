@@ -98,7 +98,7 @@ export default function PaymentTermsCalculatorPage() {
           <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link href={trialHref("starter")}>
               <Button size="lg" className="h-11 px-7">
-                Start Free Trial
+                Get started free
               </Button>
             </Link>
             <Link href="/pricing">
