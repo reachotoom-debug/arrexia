@@ -17,6 +17,7 @@ import { logAuditEvent } from "@/lib/audit/log";
 import { assertInvoiceCreateAllowed } from "@/lib/billing/assertWithinPlanLimits";
 import { redirect } from "next/navigation";
 import { logPostgresUniqueViolation } from "@/lib/db/postgres-errors";
+import { normalizeDateOnlyString } from "@/lib/datetime/formatDateTime";
 
 const INV_PREFIX = "INV-";
 const DEFAULT_PAD_WIDTH = 4;
@@ -338,23 +339,23 @@ export async function updateInvoice(
   }
 
   // Step 3: Resolve effective payment terms days
-  // Use form values if provided, otherwise keep existing
   const issueDate = parsed.issueDate || invoiceRow.issue_date;
   const paymentTermsCode = (parsed.paymentTerms as PaymentTermsCode) || (invoiceRow.payment_terms as PaymentTermsCode);
-  const paymentTermsDays = parsed.paymentTermsDays ?? null;
+  // Presets derive days from the code; only custom may supply explicit days.
+  const explicitDaysForTerms =
+    paymentTermsCode === "custom" ? (parsed.paymentTermsDays ?? null) : null;
 
   const effectiveDays = resolvePaymentTermsDays(
     paymentTermsCode,
-    paymentTermsDays,
+    explicitDaysForTerms,
     clientDefaultDays,
     null // workspace default not available in schema
   );
 
-  // Step 4: Compute due date from issueDate + effectiveDays (server-side authoritative)
-  // Always recompute to ensure consistency
-  const dueDate = computeDueDate(issueDate, effectiveDays);
+  // Step 4: Persist submitted due date (authoritative on edit)
+  const dueDate = normalizeDateOnlyString(parsed.dueDate);
   if (!dueDate) {
-    return { error: `Invalid issue date: ${issueDate}` };
+    return { error: "Due date is required" };
   }
 
   // Step 5: Calculate invoice money values using the shared helper
@@ -370,14 +371,14 @@ export async function updateInvoice(
   // Ensure status is lowercase
   const normalizedStatus = parsed.status.toLowerCase() as "draft" | "sent" | "void";
 
-  // Step 6: Update invoice with computed due_date and payment_terms_days
+  // Step 6: Update invoice with submitted due_date and resolved payment_terms_days
   // IMPORTANT: Store all money calculation fields in the database for consistency
   // NOTE: client_id is NOT updated in edit mode - it remains fixed
   const { error: updateError } = await supabase
     .from("invoices")
     .update({
       issue_date: issueDate,
-      due_date: dueDate, // Computed server-side, not from form
+      due_date: dueDate,
       po_number: parsed.poNumber ?? null,
       notes: parsed.notes ?? null,
       status: normalizedStatus, // Lowercase: draft | sent | void

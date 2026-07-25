@@ -353,6 +353,9 @@ export function InvoiceForm({
                 onChange={(e) => {
                   register("paymentTerms").onChange(e);
                   setIsDueDateManuallyEdited(false);
+                  if (e.target.value !== "custom") {
+                    setValue("paymentTermsDays", undefined);
+                  }
                 }}
                 className={`mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${
                   isArchived ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""
