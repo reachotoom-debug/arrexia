@@ -7,6 +7,7 @@ import { prettyLabel } from "@/lib/formatters/prettyLabel";
 import {
   formatDateOnlyField,
   formatWorkspaceDisplayDateTime,
+  getWorkspaceCalendarDate,
 } from "@/lib/datetime/formatDateTime";
 import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 
@@ -14,9 +15,17 @@ interface PageProps {
   params: Promise<{ workspaceId: string; paymentId: string }>;
 }
 
-function formatPaymentDate(dateString: string | null | undefined): string {
-  if (!dateString) return "—";
-  return formatDateOnlyField(dateString);
+function formatPaymentDate(
+  paymentDate: string | null | undefined,
+  createdAt: string | null | undefined,
+  workspaceTimeZone: string | null
+): string {
+  if (paymentDate) return formatDateOnlyField(paymentDate);
+  if (createdAt) {
+    const calendarDate = getWorkspaceCalendarDate(createdAt, workspaceTimeZone);
+    return calendarDate ? formatDateOnlyField(calendarDate) : "—";
+  }
+  return "—";
 }
 
 function formatTimestamp(
@@ -221,7 +230,11 @@ export default async function PaymentViewPage({ params }: PageProps) {
           <div>
             <div className="text-xs font-medium text-slate-500 mb-1">Date</div>
             <div className="text-sm text-slate-700">
-              {formatPaymentDate(payment.payment_date || payment.created_at)}
+              {formatPaymentDate(
+                payment.payment_date,
+                payment.created_at,
+                workspaceTimeZone
+              )}
             </div>
           </div>
 

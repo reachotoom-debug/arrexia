@@ -252,9 +252,17 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
       ? getInvoiceDueStatus(invoice.due_date, workspaceToday)
       : null;
 
-  const formatDate = (value: string | null | undefined) => {
+  const formatInvoiceDate = (value: string | null | undefined) => {
     if (!value) return "—";
     return formatDateOnlyField(value);
+  };
+
+  const formatPaymentHistoryDate = (payment: {
+    payment_date: string | null;
+    created_at: string;
+  }) => {
+    if (payment.payment_date) return formatInvoiceDate(payment.payment_date);
+    return formatDateTime(payment.created_at);
   };
 
   const formatDateTime = (value: string | null | undefined) =>
@@ -459,11 +467,11 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
           <dl className="space-y-1 text-sm text-slate-700">
             <div className="flex justify-between">
               <dt className="text-slate-500">Issue Date</dt>
-              <dd>{formatDate(invoice.issue_date)}</dd>
+              <dd>{formatInvoiceDate(invoice.issue_date)}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Due Date</dt>
-              <dd>{formatDate(invoice.due_date)}</dd>
+              <dd>{formatInvoiceDate(invoice.due_date)}</dd>
             </div>
             <div className="flex justify-between items-center">
               <dt className="text-slate-500">Status</dt>
@@ -658,9 +666,7 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
                     className="border-b border-slate-100 hover:bg-slate-50"
                   >
                     <td className="px-3 py-2 text-slate-700">
-                      {formatDate(
-                        payment.payment_date || payment.created_at
-                      )}
+                      {formatPaymentHistoryDate(payment)}
                     </td>
                     <td className="px-3 py-2 text-right font-medium text-slate-900">
                       {formatCurrency(coerceMoney(payment.amount), moneyOpts)}

@@ -23,6 +23,7 @@ import {
   TABLE_TH_RIGHT,
 } from "@/components/table/tableShell";
 import { DataTableShell } from "@/components/layout/DataTableShell";
+import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 import { EntityCard } from "@/components/ui/EntityCard";
 import { EmptyState } from "@/components/ui/state";
 
@@ -153,15 +154,7 @@ export default function PaymentsTable({
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "—";
-    try {
-      return new Date(dateString).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    } catch {
-      return "Invalid Date";
-    }
+    return formatDateOnlyField(dateString);
   };
 
   const getStatusBadge = (status: string) => {

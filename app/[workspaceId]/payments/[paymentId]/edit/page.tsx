@@ -5,6 +5,11 @@ import { PaymentFormSchema, type PaymentFormValues } from "@/lib/payments/schema
 import { updatePayment } from "../../actions";
 import { getEligibleInvoicesForClient } from "../../_lib/eligible";
 import { getPaymentClients } from "../../_lib/getPaymentClients";
+import {
+  getWorkspaceCalendarDate,
+  normalizeDateOnlyString,
+} from "@/lib/datetime/formatDateTime";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 
 interface EditPaymentPageProps {
   params: Promise<{ workspaceId: string; paymentId: string }>;
@@ -15,6 +20,7 @@ export default async function EditPaymentPage({
 }: EditPaymentPageProps) {
   const { workspaceId, paymentId } = await params;
   const supabase = await supabaseServer();
+  const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
 
   // Load payment - need invoice_id, client_id, archived_at, payment_provider, and invoice archived_at
   const { data: payment, error: paymentError } = await supabase
@@ -132,13 +138,13 @@ export default async function EditPaymentPage({
   const hasInvoices = invoices.length > 0;
   const showEmptyState = !hasInvoices;
 
-  // Format date from created_at to YYYY-MM-DD
-  const formatDate = (dateString: string | Date) => {
-    const d = new Date(dateString);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+  const formatDateForInput = (paymentDate: string | null, createdAt: string | null) => {
+    const normalized = normalizeDateOnlyString(paymentDate);
+    if (normalized) return normalized;
+    if (createdAt) {
+      return getWorkspaceCalendarDate(createdAt, workspaceTimeZone) ?? "";
+    }
+    return "";
   };
 
   // Normalize method to match select option values (lowercase)
@@ -155,7 +161,7 @@ export default async function EditPaymentPage({
     clientId: payment.client_id,
     invoiceId: payment.invoice_id,
     amount: Number(payment.amount),
-    date: formatDate(payment.payment_date || payment.created_at), // Use payment_date if available, fallback to created_at
+    date: formatDateForInput(payment.payment_date, payment.created_at),
     method: normalizedMethod,
     status: payment.status as "pending" | "completed" | "failed" | "refunded",
     transactionId: payment.transaction_id ?? null,

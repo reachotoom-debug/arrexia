@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/format/currency";
+import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 
 interface Payment {
   id: string;
@@ -53,15 +54,7 @@ export function PaymentArchiveConfirmDialog({
   // Format date helper
   const formatDate = (dateString: string) => {
     if (!dateString) return "—";
-    try {
-      return new Date(dateString).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    } catch {
-      return "Invalid Date";
-    }
+    return formatDateOnlyField(dateString);
   };
 
   return (

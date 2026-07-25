@@ -5,6 +5,7 @@ import { createPayment } from "../actions";
 import { getEligibleClientsForPayments } from "../_lib/eligible";
 import { loadWorkspaceSettings } from "@/lib/settings/loadSettings";
 import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
+import { resolveWorkspaceBusinessDate } from "@/lib/invoices/workspaceInvoiceAging";
 
 interface NewPaymentPageProps {
   params: Promise<{ workspaceId: string }>;
@@ -18,7 +19,7 @@ export default async function NewPaymentPage({
   const settings = await loadWorkspaceSettings(workspaceId);
   const defaultPaymentDate =
     getWorkspaceCalendarDateNow(settings.timezone) ??
-    new Date().toISOString().slice(0, 10);
+    resolveWorkspaceBusinessDate(new Date(), settings.timezone);
 
   // Load only eligible clients (invoices will be loaded on-demand when client is selected)
   const eligibleClients = await getEligibleClientsForPayments(workspaceId);
