@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import {
@@ -43,5 +44,14 @@ describe("invoices_view repository contract", () => {
         `missing ${column}`
       );
     }
+  });
+
+  it("canonical migration uses workspace_business_date instead of CURRENT_DATE", () => {
+    const sql = readFileSync(
+      "supabase/migrations/20260725000000_invoices_view_workspace_business_date.sql",
+      "utf8"
+    );
+    assert.match(sql, /workspace_business_date/);
+    assert.doesNotMatch(sql, /CURRENT_DATE/i);
   });
 });

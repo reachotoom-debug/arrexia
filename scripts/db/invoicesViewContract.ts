@@ -1,6 +1,6 @@
 /**
  * Verified production invoices_view column contract (ordinal order).
- * Keep in sync with supabase/migrations/20260721000000_align_invoices_view_client_status_contract.sql
+ * Keep in sync with supabase/migrations/20260725000000_invoices_view_workspace_business_date.sql
  */
 
 export type ViewColumnDefinition = {
