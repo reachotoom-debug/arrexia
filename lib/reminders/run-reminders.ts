@@ -102,6 +102,7 @@ export async function runDueRemindersForWorkspace(
       workspaceId,
       {
         evaluationInstant,
+        supabase,
       }
     );
 
@@ -122,7 +123,10 @@ export async function runDueRemindersForWorkspace(
       options.sendReminderFn ??
         (async (opts) => {
           const { sendReminderForInvoice } = await import("./send");
-          return sendReminderForInvoice(opts);
+          return sendReminderForInvoice({
+            ...opts,
+            supabase: supabase as SupabaseClient,
+          });
         })
     );
 

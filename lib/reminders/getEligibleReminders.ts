@@ -3,6 +3,7 @@
  * Pure evaluation lives here; Supabase I/O is isolated in getEligibleReminders().
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
 import {
   evaluateReminderEligibility,
@@ -263,6 +264,8 @@ export function buildEligibleReminderCandidates(params: {
 export type GetEligibleRemindersOptions = {
   /** Override "now" for deterministic evaluation (tests / callers). */
   evaluationInstant?: Date;
+  /** Cron/service-role client; defaults to authenticated server client. */
+  supabase?: Pick<SupabaseClient, "from">;
 };
 
 /**
@@ -273,8 +276,8 @@ export async function getEligibleReminders(
   workspaceId: string,
   options: GetEligibleRemindersOptions = {}
 ): Promise<EligibleReminderCandidate[]> {
-  const { supabaseServer } = await import("@/lib/supabase/server");
-  const supabase = await supabaseServer();
+  const supabase =
+    options.supabase ?? (await (await import("@/lib/supabase/server")).supabaseServer());
   const evaluationInstant = options.evaluationInstant ?? new Date();
 
   const { data: settingsRow } = await supabase

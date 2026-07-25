@@ -3,6 +3,7 @@
  * Used by both manual send API and automated reminder runner
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
   buildReminderTemplateContext,
@@ -47,6 +48,8 @@ export interface SendReminderOptions {
   scheduledDate?: string | null;
   source?: "manual" | "auto_cron";
   userId?: string | null; // optional, for audit logging
+  /** Cron/service-role client; defaults to authenticated server client for manual sends. */
+  supabase?: SupabaseClient;
 }
 
 export interface SendReminderResult {
@@ -66,8 +69,17 @@ export interface SendReminderResult {
 export async function sendReminderForInvoice(
   options: SendReminderOptions
 ): Promise<SendReminderResult> {
-  const { workspaceId, invoiceId, ruleId, templateId, scheduledDate, source = "manual", userId = null } = options;
-  const supabase = await supabaseServer();
+  const {
+    workspaceId,
+    invoiceId,
+    ruleId,
+    templateId,
+    scheduledDate,
+    source = "manual",
+    userId = null,
+    supabase: supabaseOverride,
+  } = options;
+  const supabase = supabaseOverride ?? (await supabaseServer());
 
   const sourceLabel: "manual" | "auto" = source === "auto_cron" ? "auto" : "manual";
   let ruleBoundReminderTemplateId: string | null = null;
