@@ -1,6 +1,6 @@
 /**
  * Pure reminder rule trigger matching (no server dependencies).
- * Used by findApplicableRuleForInvoice, eligibility domain, and unit tests.
+ * Used by eligibility domain and unit tests.
  */
 
 export interface InvoiceTiming {

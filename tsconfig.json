@@ -36,7 +36,6 @@
     "components/clients",
     "components/invoices",
     "components/dashboard",
-    "components/payments",
-    "components/reminders"
+    "components/payments"
   ]
 }

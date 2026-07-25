@@ -25,7 +25,7 @@ export type CanonicalReminderStage = {
 
 /**
  * Canonical five-stage reminder sequence for Arrexia launch.
- * Copy aligned with lib/reminders/templates.ts (professional defaults).
+ * Professional default copy for canonical reminder_templates seeding.
  */
 export const CANONICAL_REMINDER_STAGES: readonly CanonicalReminderStage[] = [
   {
