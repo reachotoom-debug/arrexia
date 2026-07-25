@@ -28,15 +28,19 @@ import type {
   PaymentStatusParam,
   SortDir,
 } from "./_lib/buildPaymentsUrl";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
+import { resolvePaymentBusinessDate } from "@/lib/payments/paymentBusinessDate";
 
 const PAYMENT_PAGE_SIZE = 10;
 
-// Type for a payment row with joined invoice and client data
+// Payment list row — businessPaymentDate is always YYYY-MM-DD or null (never a TIMESTAMPTZ ISO string)
 type PaymentRow = {
   id: string;
   workspace_id: string;
   invoice_id: string | null;
-  payment_date: string;
+  businessPaymentDate: string | null;
+  paymentDateRaw: string | null;
+  createdAt: string;
   amount: number;
   currency: string;
   method: string | null;
@@ -44,7 +48,6 @@ type PaymentRow = {
   transaction_id: string | null;
   notes: string | null;
   payment_provider: string | null;
-  created_at: string;
   updated_at: string;
   archived_at: string | null;
   invoice_number: string | null;
@@ -162,8 +165,7 @@ async function loadPayments(
   q: string;
 }> {
   const supabase = await supabaseServer();
-  
-  // Get workspace payment existence count (for empty state logic)
+  const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
   // Query base payments table to check if ANY payments exist in workspace
   const { count: anyPaymentsCount } = await perfTime(
     "payments-list",
@@ -474,7 +476,13 @@ async function loadPayments(
       id: payment.id,
       workspace_id: payment.workspace_id,
       invoice_id: payment.invoice_id,
-      payment_date: payment.payment_date || payment.created_at,
+      businessPaymentDate: resolvePaymentBusinessDate({
+        paymentDate: payment.payment_date,
+        createdAt: payment.created_at,
+        workspaceTimeZone,
+      }),
+      paymentDateRaw: payment.payment_date ?? null,
+      createdAt: payment.created_at,
       amount: Number(payment.amount ?? 0),
       currency: payment.currency || "USD",
       method: payment.method,
@@ -482,7 +490,6 @@ async function loadPayments(
       transaction_id: payment.transaction_id,
       notes: payment.notes,
       payment_provider: payment.payment_provider,
-      created_at: payment.created_at,
       updated_at: payment.updated_at,
       archived_at: payment.archived_at || null,
       invoice_number,

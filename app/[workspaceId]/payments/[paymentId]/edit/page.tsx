@@ -5,11 +5,8 @@ import { PaymentFormSchema, type PaymentFormValues } from "@/lib/payments/schema
 import { updatePayment } from "../../actions";
 import { getEligibleInvoicesForClient } from "../../_lib/eligible";
 import { getPaymentClients } from "../../_lib/getPaymentClients";
-import {
-  getWorkspaceCalendarDate,
-  normalizeDateOnlyString,
-} from "@/lib/datetime/formatDateTime";
 import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
+import { resolvePaymentBusinessDate } from "@/lib/payments/paymentBusinessDate";
 
 interface EditPaymentPageProps {
   params: Promise<{ workspaceId: string; paymentId: string }>;
@@ -138,15 +135,6 @@ export default async function EditPaymentPage({
   const hasInvoices = invoices.length > 0;
   const showEmptyState = !hasInvoices;
 
-  const formatDateForInput = (paymentDate: string | null, createdAt: string | null) => {
-    const normalized = normalizeDateOnlyString(paymentDate);
-    if (normalized) return normalized;
-    if (createdAt) {
-      return getWorkspaceCalendarDate(createdAt, workspaceTimeZone) ?? "";
-    }
-    return "";
-  };
-
   // Normalize method to match select option values (lowercase)
   const normalizedMethod = payment.method
     ? (payment.method.toLowerCase() as "cash" | "bank_transfer" | "card" | "check" | "other")
@@ -161,7 +149,11 @@ export default async function EditPaymentPage({
     clientId: payment.client_id,
     invoiceId: payment.invoice_id,
     amount: Number(payment.amount),
-    date: formatDateForInput(payment.payment_date, payment.created_at),
+    date: resolvePaymentBusinessDate({
+      paymentDate: payment.payment_date,
+      createdAt: payment.created_at,
+      workspaceTimeZone,
+    }) ?? "",
     method: normalizedMethod,
     status: payment.status as "pending" | "completed" | "failed" | "refunded",
     transactionId: payment.transaction_id ?? null,

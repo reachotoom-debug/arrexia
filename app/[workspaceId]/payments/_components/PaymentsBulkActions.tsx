@@ -17,7 +17,7 @@ interface Payment {
   invoice_id: string | null;
   invoice_number: string | null;
   client_name: string | null;
-  payment_date: string;
+  businessPaymentDate: string | null;
 }
 
 interface PaymentsBulkActionsProps {

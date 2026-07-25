@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { toCsv, formatDate, formatMoney } from "@/lib/csv/exportCsv";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
+import { resolvePaymentBusinessDate } from "@/lib/payments/paymentBusinessDate";
 
 const EXPORT_CHUNK_SIZE = 1000;
 
@@ -132,6 +134,7 @@ export async function GET(req: NextRequest) {
     await requireWorkspace(workspaceId);
 
     const supabase = await supabaseServer();
+    const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
 
     // Fetch all payments matching filters
     const payments = await fetchAllPayments(supabase, workspaceId, status, q);
@@ -167,7 +170,12 @@ export async function GET(req: NextRequest) {
       const amount = Number(payment.amount ?? 0);
 
       return {
-        "Payment Date": formatDate(payment.payment_date || payment.paid_at),
+        "Payment Date":
+          resolvePaymentBusinessDate({
+            paymentDate: payment.payment_date,
+            createdAt: payment.created_at,
+            workspaceTimeZone,
+          }) ?? "",
         Amount: formatMoney(amount, currency),
         Currency: currency,
         Method: payment.method || "",

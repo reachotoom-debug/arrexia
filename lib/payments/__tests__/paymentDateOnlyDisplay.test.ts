@@ -90,22 +90,21 @@ describe("payment UI wiring (R2L)", () => {
     assert.equal(formatDate("2026-07-25"), "2026-07-25");
   });
 
-  it("9 — invoice payment history distinguishes DATE vs TIMESTAMPTZ fallback", () => {
+  it("9 — invoice payment history uses canonical business payment date", () => {
     const source = readFileSync(
       "app/[workspaceId]/invoices/[invoiceId]/page.tsx",
       "utf8"
     );
+    assert.match(source, /formatPaymentBusinessDate/);
     assert.match(source, /formatPaymentHistoryDate/);
-    assert.match(source, /payment\.payment_date/);
-    assert.match(source, /formatDateTime\(payment\.created_at\)/);
   });
 
-  it("10 — payment edit form uses normalizeDateOnlyString for DATE input", () => {
+  it("10 — payment edit form uses resolvePaymentBusinessDate for DATE input", () => {
     const source = readFileSync(
       "app/[workspaceId]/payments/[paymentId]/edit/page.tsx",
       "utf8"
     );
-    assert.match(source, /normalizeDateOnlyString/);
+    assert.match(source, /resolvePaymentBusinessDate/);
     assert.doesNotMatch(source, /new Date\(dateString\)/);
   });
 });

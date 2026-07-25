@@ -31,7 +31,12 @@ export interface PaymentRow {
   id: string;
   workspace_id: string;
   invoice_id: string | null;
-  payment_date: string;
+  /** Resolved workspace business payment date (YYYY-MM-DD) for display */
+  businessPaymentDate: string | null;
+  /** Raw DB payment_date DATE; null on legacy rows */
+  paymentDateRaw: string | null;
+  /** TIMESTAMPTZ audit instant */
+  createdAt: string;
   amount: number;
   currency: string;
   method: string | null;
@@ -39,7 +44,6 @@ export interface PaymentRow {
   transaction_id: string | null;
   notes: string | null;
   payment_provider: string | null;
-  created_at: string;
   updated_at: string;
   invoice_number: string | null;
   client_name: string | null;
@@ -213,7 +217,7 @@ export default function PaymentsTable({
                   />
                 }
                 title={p.client_name || "—"}
-                subtitle={formatDate(p.payment_date)}
+                subtitle={formatDate(p.businessPaymentDate)}
                 meta={
                   <div className="space-y-0.5 text-xs text-muted-foreground">
                     <div>
@@ -360,7 +364,7 @@ export default function PaymentsTable({
                     />
                   </td>
                   <td className={`${TABLE_TD} text-sm text-slate-700 whitespace-nowrap`}>
-                    {formatDate(p.payment_date)}
+                    {formatDate(p.businessPaymentDate)}
                   </td>
                   <td className={`${TABLE_CELL_TEXT_COL} ${TABLE_TD} text-sm text-slate-800`} title={p.client_name || "—"}>
                     {p.client_name || "—"}

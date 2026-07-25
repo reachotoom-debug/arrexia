@@ -23,6 +23,7 @@ import {
 } from "@/lib/datetime/formatDateTime";
 import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
 import { resolveWorkspaceBusinessDate } from "@/lib/invoices/workspaceInvoiceAging";
+import { formatPaymentBusinessDate } from "@/lib/payments/paymentBusinessDate";
 import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 
 interface InvoicePageProps {
@@ -260,10 +261,12 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
   const formatPaymentHistoryDate = (payment: {
     payment_date: string | null;
     created_at: string;
-  }) => {
-    if (payment.payment_date) return formatInvoiceDate(payment.payment_date);
-    return formatDateTime(payment.created_at);
-  };
+  }) =>
+    formatPaymentBusinessDate({
+      paymentDate: payment.payment_date,
+      createdAt: payment.created_at,
+      workspaceTimeZone,
+    });
 
   const formatDateTime = (value: string | null | undefined) =>
     formatWorkspaceDisplayDateTime(value, workspaceTimeZone);
@@ -295,7 +298,7 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
       : []),
     ...paymentList.map((payment) => ({
       event: "Payment recorded",
-      date: payment.payment_date || payment.created_at,
+      date: payment.created_at,
       description: `Payment of ${formatCurrency(
         coerceMoney(payment.amount),
         moneyOpts

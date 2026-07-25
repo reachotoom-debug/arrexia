@@ -12,7 +12,7 @@ interface Payment {
   client_name: string | null;
   amount: number;
   currency: string;
-  payment_date: string;
+  businessPaymentDate: string | null;
 }
 
 interface PaymentArchiveConfirmDialogProps {
@@ -52,7 +52,7 @@ export function PaymentArchiveConfirmDialog({
   const remainingCount = payments.length - 5;
 
   // Format date helper
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
     if (!dateString) return "—";
     return formatDateOnlyField(dateString);
   };
@@ -110,7 +110,7 @@ export function PaymentArchiveConfirmDialog({
                       )}
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">
-                      {formatDate(payment.payment_date)}
+                      {formatDate(payment.businessPaymentDate)}
                     </div>
                   </div>
                   <div className="text-sm font-medium text-slate-900 whitespace-nowrap">
