@@ -3,6 +3,11 @@
  * Safe for invoice detail page, branding utils, and settings UI.
  */
 
+import {
+  differenceCalendarDays,
+  normalizeDateOnlyString,
+} from "@/lib/datetime/workspaceCalendar";
+
 export function isLegacyPaymentInstruction(text: string | null | undefined): boolean {
   const trimmed = text?.trim();
   if (!trimmed) return false;
@@ -61,22 +66,27 @@ export function shouldShowDueTiming(
   return status === "sent" || status === "overdue" || status === "partially_paid";
 }
 
-export function dueDateDiffDays(dueDateIso: string): number {
-  const due = new Date(dueDateIso);
-  const now = new Date();
-  due.setHours(0, 0, 0, 0);
-  now.setHours(0, 0, 0, 0);
-  return Math.round((due.getTime() - now.getTime()) / 86400000);
+export function dueDateDiffDays(params: {
+  dueDate: string;
+  referenceDate: string;
+}): number {
+  const due = normalizeDateOnlyString(params.dueDate);
+  const reference = normalizeDateOnlyString(params.referenceDate);
+  if (!due || !reference) return 0;
+  return differenceCalendarDays(due, reference) ?? 0;
 }
 
 export type InvoiceDueStatusVariant = "overdue" | "soon";
 
-export function getInvoiceDueStatus(dueDateIso: string): {
+export function getInvoiceDueStatus(
+  dueDate: string,
+  referenceDate: string
+): {
   line: string;
   variant: InvoiceDueStatusVariant;
   bold: boolean;
 } {
-  const diff = dueDateDiffDays(dueDateIso);
+  const diff = dueDateDiffDays({ dueDate, referenceDate });
   if (diff < 0) {
     const n = Math.abs(diff);
     return {

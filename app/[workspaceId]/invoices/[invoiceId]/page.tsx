@@ -21,6 +21,8 @@ import {
   formatDateOnlyField,
   formatWorkspaceDisplayDateTime,
 } from "@/lib/datetime/formatDateTime";
+import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
+import { resolveWorkspaceBusinessDate } from "@/lib/invoices/workspaceInvoiceAging";
 import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 
 interface InvoicePageProps {
@@ -241,9 +243,13 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
     hasStructuredPaymentDetails
   );
 
+  const workspaceToday =
+    getWorkspaceCalendarDateNow(workspaceTimeZone) ??
+    resolveWorkspaceBusinessDate(new Date(), workspaceTimeZone);
+
   const dueTiming =
     invoice.due_date && shouldShowDueTiming(paymentStatus)
-      ? getInvoiceDueStatus(invoice.due_date)
+      ? getInvoiceDueStatus(invoice.due_date, workspaceToday)
       : null;
 
   const formatDate = (value: string | null | undefined) => {
