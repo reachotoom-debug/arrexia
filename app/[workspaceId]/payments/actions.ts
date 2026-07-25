@@ -490,8 +490,8 @@ export async function updatePayment(
 }
 
 export async function deletePayment(workspaceId: string, paymentId: string) {
-  // Get user for audit logging
   const { user } = await requireUser();
+  await requireWorkspace(workspaceId);
 
   const supabase = await supabaseServer();
 
@@ -560,6 +560,7 @@ export async function deletePayment(workspaceId: string, paymentId: string) {
  */
 export async function archivePayment(workspaceId: string, paymentId: string) {
   const { user } = await requireUser();
+  await requireWorkspace(workspaceId);
   const supabase = await supabaseServer();
 
   // Step 1: Fetch existing row to check state and get invoice_id
@@ -662,6 +663,7 @@ export async function archivePayment(workspaceId: string, paymentId: string) {
  */
 export async function unarchivePayment(workspaceId: string, paymentId: string) {
   const { user } = await requireUser();
+  await requireWorkspace(workspaceId);
   const supabase = await supabaseServer();
 
   // Step 1: Fetch existing row to check state and get invoice_id
@@ -767,6 +769,7 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
  */
 export async function bulkArchivePayments(workspaceId: string, paymentIds: string[]) {
   const { user } = await requireUser();
+  await requireWorkspace(workspaceId);
   const supabase = await supabaseServer();
 
   if (paymentIds.length === 0) {
@@ -866,6 +869,7 @@ export async function bulkArchivePayments(workspaceId: string, paymentIds: strin
  */
 export async function bulkUnarchivePayments(workspaceId: string, paymentIds: string[]) {
   const { user } = await requireUser();
+  await requireWorkspace(workspaceId);
   const supabase = await supabaseServer();
 
   if (paymentIds.length === 0) {

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -25,6 +26,7 @@ export async function archiveClient(
   cascade: boolean = false
 ): Promise<ActionResult> {
   try {
+    await requireWorkspace(workspaceId);
     const supabase = await supabaseServer();
 
     console.log("[archiveClient] updating public.clients", { workspaceId, clientId, cascade });
@@ -175,6 +177,7 @@ export async function unarchiveClient(
   cascade: boolean = false
 ): Promise<ActionResult> {
   try {
+    await requireWorkspace(workspaceId);
     const supabase = await supabaseServer();
 
     console.log("[unarchiveClient] updating public.clients", { workspaceId, clientId, cascade });

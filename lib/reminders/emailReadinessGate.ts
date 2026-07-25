@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isResendConfigured } from "@/lib/email/resolveEmailProvider";
 
 export type EmailSkipReason =
   | "email_settings_missing"
-  | "smtp_configuration_incomplete";
+  | "smtp_configuration_incomplete"
+  | "resend_not_configured";
 
 export type EmailReadinessResult =
   | { ready: true }
@@ -31,6 +33,11 @@ export function evaluateEmailReadiness(params: {
     if (!host || port == null || port <= 0) {
       return { ready: false, skipReason: "smtp_configuration_incomplete" };
     }
+    return { ready: true };
+  }
+
+  if (!isResendConfigured()) {
+    return { ready: false, skipReason: "resend_not_configured" };
   }
 
   return { ready: true };
@@ -74,6 +81,8 @@ export function emailReadinessSkipMessage(skipReason: EmailSkipReason): string {
       return "Workspace email settings are missing; automatic reminders skipped.";
     case "smtp_configuration_incomplete":
       return "SMTP email settings are incomplete; automatic reminders skipped.";
+    case "resend_not_configured":
+      return "Resend is not configured; automatic reminders skipped.";
     default:
       return "Email is not ready for automatic reminders.";
   }

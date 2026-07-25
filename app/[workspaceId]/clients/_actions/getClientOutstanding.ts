@@ -1,5 +1,6 @@
 "use server";
 
+import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 type OutstandingResult = { ok: true; outstanding: number } | { ok: false; error: string };
@@ -14,6 +15,7 @@ export async function getClientOutstanding(
   clientId: string
 ): Promise<OutstandingResult> {
   try {
+    await requireWorkspace(workspaceId);
     const supabase = await supabaseServer();
 
     console.log("[getClientOutstanding] computing outstanding", { workspaceId, clientId });

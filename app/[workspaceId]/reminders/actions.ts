@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireWorkspace } from "@/lib/auth/server";
 import { sendReminderForInvoice } from "@/lib/reminders/send";
 
 type SendReminderInput = {
@@ -16,6 +17,8 @@ type SendReminderInput = {
 export async function sendReminderAction(input: SendReminderInput) {
   const { workspaceId, invoiceId, explicitTemplateId, ruleId = null, scheduledDate = null } =
     input;
+
+  await requireWorkspace(workspaceId);
 
   try {
     // Use the shared sendReminderForInvoice function which handles:

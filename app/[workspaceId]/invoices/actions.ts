@@ -451,8 +451,8 @@ export async function updateInvoice(
 }
 
 export async function deleteInvoice(workspaceId: string, invoiceId: string) {
-  // Get user for audit logging
   const { user } = await requireUser();
+  await requireWorkspace(workspaceId);
 
   const supabase = await supabaseServer();
 

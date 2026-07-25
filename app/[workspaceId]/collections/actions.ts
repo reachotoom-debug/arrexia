@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { z } from "zod";
 
@@ -12,6 +13,7 @@ const updateNoteSchema = z.object({
 
 export async function updateCollectionsNote(rawInput: unknown) {
   const input = updateNoteSchema.parse(rawInput);
+  await requireWorkspace(input.workspaceId);
   const supabase = await supabaseServer();
 
   const { error } = await supabase

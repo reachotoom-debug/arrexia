@@ -24,7 +24,7 @@ export async function loadRuleOccurrenceHistory(
 
   if (error) {
     console.error("[loadRuleOccurrenceHistory] history load error", error);
-    return [];
+    throw new Error("Failed to load reminder history for duplicate guard");
   }
 
   return (data ?? []).map((row) => ({

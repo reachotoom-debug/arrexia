@@ -15,6 +15,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireWorkspace } from "@/lib/auth/server";
 import { 
   INVOICE_GROUPED_HEADERS, 
@@ -571,7 +572,7 @@ export async function previewInvoicesImport(
     samplePayload: rpcRows.slice(0, 2),
   });
   
-  const { data: rpcPreviewResult, error: rpcPreviewError } = await supabase.rpc(rpcName, {
+  const { data: rpcPreviewResult, error: rpcPreviewError } = await supabaseAdmin().rpc(rpcName, {
     p_workspace_id: workspaceId,
     p_rows: rpcRows,
     p_dry_run: dryRun,
@@ -1223,7 +1224,7 @@ export async function executeInvoicesImport(
     samplePayload: rawRows.slice(0, 2),
   });
   
-  const { data: rpcResult, error: rpcError } = await supabase.rpc(rpcName, {
+  const { data: rpcResult, error: rpcError } = await supabaseAdmin().rpc(rpcName, {
     p_workspace_id: workspaceId,
     p_rows: rawRows,
     p_dry_run: dryRun,

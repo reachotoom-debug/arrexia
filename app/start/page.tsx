@@ -53,7 +53,7 @@ export default async function StartPage({
   } = await supabase.auth.getUser();
 
   if (!user || error) {
-    redirect("/register");
+    redirect("/login");
   }
 
   try {

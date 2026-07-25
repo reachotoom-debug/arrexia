@@ -21,6 +21,7 @@ import {
 
 const WORKSPACE_ID = "ws-cron";
 const TZ = "America/Los_Angeles";
+process.env.RESEND_API_KEY = process.env.RESEND_API_KEY ?? "test-resend-key";
 
 function usableTemplate(id: string) {
   return { id, workspace_id: WORKSPACE_ID, is_enabled: true };

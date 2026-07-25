@@ -6,6 +6,8 @@ import {
   loadEmailReadinessForWorkspace,
 } from "../emailReadinessGate";
 
+const RESEND_ENV = process.env.RESEND_API_KEY;
+
 describe("evaluateEmailReadiness (R2G)", () => {
   it("G — missing email row fails closed", () => {
     const result = evaluateEmailReadiness({
@@ -17,20 +19,36 @@ describe("evaluateEmailReadiness (R2G)", () => {
     assert.equal(result.skipReason, "email_settings_missing");
   });
 
-  it("F — minimal row is ready for platform Resend", () => {
+  it("F — minimal row is ready for platform Resend when configured", () => {
+    process.env.RESEND_API_KEY = "test-key";
     const result = evaluateEmailReadiness({
       emailSettingsRow: { smtp_host: null, smtp_port: null },
       emailProvider: "resend",
     });
     assert.deepEqual(result, { ready: true });
+    process.env.RESEND_API_KEY = RESEND_ENV;
   });
 
-  it("minimal row is ready when email provider is unset (platform Resend default)", () => {
+  it("minimal row fails closed when Resend is not configured", () => {
+    delete process.env.RESEND_API_KEY;
+    const result = evaluateEmailReadiness({
+      emailSettingsRow: { smtp_host: null, smtp_port: null },
+      emailProvider: "resend",
+    });
+    assert.equal(result.ready, false);
+    if (result.ready) return;
+    assert.equal(result.skipReason, "resend_not_configured");
+    process.env.RESEND_API_KEY = RESEND_ENV;
+  });
+
+  it("minimal row is ready when email provider is unset and Resend configured", () => {
+    process.env.RESEND_API_KEY = "test-key";
     const result = evaluateEmailReadiness({
       emailSettingsRow: { smtp_host: null, smtp_port: null },
       emailProvider: null,
     });
     assert.deepEqual(result, { ready: true });
+    process.env.RESEND_API_KEY = RESEND_ENV;
   });
 
   it("I — SMTP selected with incomplete settings fails closed", () => {

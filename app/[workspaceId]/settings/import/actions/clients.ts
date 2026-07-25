@@ -17,6 +17,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireWorkspace } from "@/lib/auth/server";
 import Papa from "papaparse";
 // CLIENTS_HEADER_COUNT available if needed for strict validation
@@ -790,7 +791,7 @@ export async function executeClientsImport(
   }));
 
   // Call Postgres RPC rpc_import_clients
-  const { data, error } = await supabase.rpc("rpc_import_clients", {
+  const { data, error } = await supabaseAdmin().rpc("rpc_import_clients", {
     p_workspace_id: workspaceId,
     p_rows: rowsJsonb,
   });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireWorkspaceForApi } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { generateInvoicePdf } from "@/lib/invoices/pdf";
@@ -41,6 +42,8 @@ type ClientRow = {
 export async function GET(req: Request, { params }: RouteParams) {
 
   const { workspaceId, invoiceId } = await params;
+
+  await requireWorkspaceForApi(workspaceId);
 
   const supabase = await supabaseServer();
 
@@ -121,7 +124,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     )
 
     .eq("id", invoiceId)
-
+    .eq("workspace_id", workspaceId)
     .single();
 
 
@@ -156,6 +159,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       .from("invoices_view")
       .select("display_status, paid, outstanding")
       .eq("id", invoiceId)
+      .eq("workspace_id", workspaceId)
       .maybeSingle(),
 
     supabase

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth/server";
+import { requireUser, requireWorkspaceForApi } from "@/lib/auth/server";
 import { sendReminderForInvoice } from "@/lib/reminders/send";
 
 type SendReminderPayload = {
@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     // This check happens in sendReminderForInvoice but we can add it here too
 
     const { user } = await requireUser();
+    await requireWorkspaceForApi(workspaceId);
 
     // Call shared reminder sending helper
     // Reminders eligibility: clients must be active AND not archived

@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   automationGateSkipMessage,
   loadAutomationGateForWorkspace,
@@ -155,7 +156,7 @@ export async function runDueRemindersForAllWorkspaces(
   workspaceResults: ReminderRunResult[];
   errors: Array<{ workspaceId: string; error: string }>;
 }> {
-  const supabase = await supabaseServer();
+  const supabase = supabaseAdmin();
   const workspaceResults: ReminderRunResult[] = [];
   const errors: Array<{ workspaceId: string; error: string }> = [];
 

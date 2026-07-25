@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseRouteHandler } from "@/lib/supabase/route-handler";
 
 export async function GET(request: Request) {
-  const supabase = await supabaseServer();
+  const response = NextResponse.redirect(new URL("/pricing", request.url));
+  const supabase = await supabaseRouteHandler(response);
   await supabase.auth.signOut();
 
-  return NextResponse.redirect(new URL("/pricing", request.url));
+  return response;
 }

@@ -6,6 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireWorkspace } from "@/lib/auth/server";
 import { parseMMDDYYYY, generateTransactionId } from "@/lib/payments/import-utils";
 import { parseDelimited } from "@/lib/import/parseDelimited";
@@ -570,7 +571,7 @@ export async function executePaymentsImport(
 
   // Call Postgres RPC rpc_import_payments
   // RPC returns TABLE(row, status, payment_id, error) - always an array
-  const { data, error } = await supabase.rpc("rpc_import_payments", {
+  const { data, error } = await supabaseAdmin().rpc("rpc_import_payments", {
     p_workspace_id: workspaceId,
     p_dry_run: false,
     p_rows: rowsJsonb,
