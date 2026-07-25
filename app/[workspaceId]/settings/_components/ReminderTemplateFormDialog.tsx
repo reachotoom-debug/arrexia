@@ -16,7 +16,6 @@ import { useToast } from "@/components/ui/use-toast";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
@@ -79,6 +78,11 @@ export function ReminderTemplateFormDialog({
         },
   });
 
+  const closeDialog = () => {
+    setIsOpen(false);
+    reset();
+  };
+
   const onSubmit = async (data: ReminderTemplateInput) => {
     try {
       let result;
@@ -134,126 +138,153 @@ export function ReminderTemplateFormDialog({
         )}
       </DialogTrigger>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {mode === "create" ? "New reminder template" : "Edit reminder template"}
-          </DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit as any)} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Name *
-            </label>
-            <input
-              {...register("name")}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              placeholder="e.g., Friendly Reminder"
-            />
-            {errors.name && (
-              <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Description
-            </label>
-            <textarea
-              {...register("description")}
-              rows={2}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              placeholder="Optional description"
-            />
-            {errors.description && (
-              <p className="mt-1 text-xs text-red-600">{errors.description.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Channel *
-            </label>
-            <select
-              {...register("channel")}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-            >
-              <option value="email">Email</option>
-              <option value="whatsapp">WhatsApp</option>
-            </select>
-            {errors.channel && (
-              <p className="mt-1 text-xs text-red-600">{errors.channel.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Subject *
-            </label>
-            <input
-              {...register("subject")}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              placeholder="e.g., Reminder: Invoice {{invoice_number}}"
-            />
-            {errors.subject && (
-              <p className="mt-1 text-xs text-red-600">{errors.subject.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Body *
-            </label>
-            <textarea
-              {...register("body")}
-              rows={8}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              placeholder="Email body text..."
-            />
-            <p className="mt-1 text-xs text-slate-500">
-              Variables: {`{{client_name}}`}, {`{{invoice_number}}`}, {`{{amount_due}}`}, {`{{due_date}}`}, {`{{workspace_name}}`}
-            </p>
-            {errors.body && (
-              <p className="mt-1 text-xs text-red-600">{errors.body.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                {...register("isEnabled")}
-                className="mr-2 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
-              />
-              <span className="text-sm text-slate-700">Enabled</span>
-            </label>
-
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                {...register("isDefault")}
-                className="mr-2 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
-              />
-              <span className="text-sm text-slate-700">Default for this channel</span>
-            </label>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
-            <Button
+        <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden text-left">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+            <DialogTitle>
+              {mode === "create" ? "New reminder template" : "Edit reminder template"}
+            </DialogTitle>
+            <button
               type="button"
-              variant="outline"
-              onClick={() => {
-                setIsOpen(false);
-                reset();
-              }}
+              onClick={closeDialog}
+              aria-label="Close"
+              className="shrink-0 text-slate-400 hover:text-slate-600"
             >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : mode === "create" ? "Create" : "Update"}
-            </Button>
+              ✕
+            </button>
           </div>
-        </form>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="reminder-template-name"
+                  className="block text-left text-sm font-medium text-slate-700"
+                >
+                  Name <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="reminder-template-name"
+                  {...register("name")}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
+                  placeholder="e.g., Friendly Reminder"
+                />
+                {errors.name && (
+                  <p className="mt-1 text-left text-xs text-red-600">{errors.name.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="reminder-template-description"
+                  className="block text-left text-sm font-medium text-slate-700"
+                >
+                  Description
+                </label>
+                <textarea
+                  id="reminder-template-description"
+                  {...register("description")}
+                  rows={2}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
+                  placeholder="Optional description"
+                />
+                {errors.description && (
+                  <p className="mt-1 text-left text-xs text-red-600">
+                    {errors.description.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="reminder-template-channel"
+                  className="block text-left text-sm font-medium text-slate-700"
+                >
+                  Channel <span aria-hidden="true">*</span>
+                </label>
+                <select
+                  id="reminder-template-channel"
+                  {...register("channel")}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                </select>
+                {errors.channel && (
+                  <p className="mt-1 text-left text-xs text-red-600">{errors.channel.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="reminder-template-subject"
+                  className="block text-left text-sm font-medium text-slate-700"
+                >
+                  Subject <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="reminder-template-subject"
+                  {...register("subject")}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
+                  placeholder="e.g., Reminder: Invoice {{invoice_number}}"
+                />
+                {errors.subject && (
+                  <p className="mt-1 text-left text-xs text-red-600">{errors.subject.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="reminder-template-body"
+                  className="block text-left text-sm font-medium text-slate-700"
+                >
+                  Body <span aria-hidden="true">*</span>
+                </label>
+                <textarea
+                  id="reminder-template-body"
+                  {...register("body")}
+                  rows={6}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
+                  placeholder="Email body text..."
+                />
+                <p className="mt-1 text-left text-xs text-slate-500">
+                  Variables: {`{{client_name}}`}, {`{{invoice_number}}`}, {`{{amount_due}}`},{" "}
+                  {`{{due_date}}`}, {`{{workspace_name}}`}
+                </p>
+                {errors.body && (
+                  <p className="mt-1 text-left text-xs text-red-600">{errors.body.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-left">
+                  <input
+                    type="checkbox"
+                    {...register("isEnabled")}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                  />
+                  <span className="text-sm text-slate-700">Enabled</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-left">
+                  <input
+                    type="checkbox"
+                    {...register("isDefault")}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                  />
+                  <span className="text-sm text-slate-700">Default for this channel</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
+                <Button type="button" variant="outline" onClick={closeDialog}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Saving..." : mode === "create" ? "Create" : "Update"}
+                </Button>
+              </div>
+            </form>
+          </div>
         </DialogContent>
       </Dialog>
     </>

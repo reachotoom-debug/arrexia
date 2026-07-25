@@ -325,47 +325,57 @@ export function ReminderRuleForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-slate-900">
-              {rule ? "Edit Rule" : "New Rule"}
-            </h3>
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                setDuplicateTimingError(null);
-                reset();
-              }}
-              className="text-slate-400 hover:text-slate-600"
-            >
-              ✕
-            </button>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white text-left shadow-lg">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <h3 className="text-lg font-semibold text-slate-900">
+            {rule ? "Edit Rule" : "New Rule"}
+          </h3>
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              setDuplicateTimingError(null);
+              reset();
+            }}
+            aria-label="Close"
+            className="shrink-0 text-slate-400 hover:text-slate-600"
+          >
+            ✕
+          </button>
+        </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Name *
+            <div className="space-y-1.5">
+              <label
+                htmlFor="reminder-rule-name"
+                className="block text-left text-sm font-medium text-slate-700"
+              >
+                Name <span aria-hidden="true">*</span>
               </label>
               <input
+                id="reminder-rule-name"
                 {...register("name")}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
                 placeholder="e.g., 7 Days After Due"
               />
               {errors.name && (
-                <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>
+                <p className="mt-1 text-left text-xs text-red-600">{errors.name.message}</p>
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Trigger Type *
+            <div className="space-y-1.5">
+              <label
+                htmlFor="reminder-rule-trigger-type"
+                className="block text-left text-sm font-medium text-slate-700"
+              >
+                Trigger Type <span aria-hidden="true">*</span>
               </label>
               <select
+                id="reminder-rule-trigger-type"
                 {...register("triggerType")}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
               >
                 <option value="before_due">Before due date</option>
                 <option value="on_due">On due date</option>
@@ -374,42 +384,54 @@ export function ReminderRuleForm({
             </div>
 
             {watch("triggerType") !== "on_due" && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Offset Days *
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="reminder-rule-offset-days"
+                  className="block text-left text-sm font-medium text-slate-700"
+                >
+                  Offset Days <span aria-hidden="true">*</span>
                 </label>
                 <input
+                  id="reminder-rule-offset-days"
                   type="number"
                   {...register("offsetDays", { valueAsNumber: true })}
                   min="0"
                   max="365"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
                 />
-                <p className="mt-1 text-xs text-slate-500">
-                  Number of days {watch("triggerType") === "before_due" ? "before" : "after"} the due date
+                <p className="mt-1 text-left text-xs text-slate-500">
+                  Number of days {watch("triggerType") === "before_due" ? "before" : "after"} the
+                  due date
                 </p>
                 {errors.offsetDays && (
-                  <p className="mt-1 text-xs text-red-600">
+                  <p className="mt-1 text-left text-xs text-red-600">
                     {errors.offsetDays.message}
                   </p>
                 )}
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Applies To *
+            <div className="space-y-1.5">
+              <label
+                htmlFor="reminder-rule-for-status"
+                className="block text-left text-sm font-medium text-slate-700"
+              >
+                Applies To <span aria-hidden="true">*</span>
               </label>
               {isLegacyDraftRule ? (
                 <>
                   <input type="hidden" {...register("forStatus")} />
-                  <p className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700">
                     Draft (legacy rule)
                   </p>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                  <label
+                    htmlFor="reminder-rule-for-status-update"
+                    className="block text-left text-xs font-medium text-slate-600"
+                  >
                     Update applies to
                   </label>
                   <select
+                    id="reminder-rule-for-status-update"
                     defaultValue=""
                     onChange={(event) => {
                       const value = event.target.value;
@@ -419,7 +441,7 @@ export function ReminderRuleForm({
                         value as ReminderRuleInput["forStatus"]
                       );
                     }}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
                   >
                     <option value="">Keep Draft (legacy)</option>
                     {REMINDER_RULE_FOR_STATUS_UI_OPTIONS.map((option) => (
@@ -431,8 +453,9 @@ export function ReminderRuleForm({
                 </>
               ) : (
                 <select
+                  id="reminder-rule-for-status"
                   {...register("forStatus")}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
                 >
                   {REMINDER_RULE_FOR_STATUS_UI_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -441,23 +464,27 @@ export function ReminderRuleForm({
                   ))}
                 </select>
               )}
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-left text-xs text-slate-500">
                 Which invoice statuses this rule applies to
               </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Template *
+            <div className="space-y-1.5">
+              <label
+                htmlFor="reminder-rule-template"
+                className="block text-left text-sm font-medium text-slate-700"
+              >
+                Template <span aria-hidden="true">*</span>
               </label>
               {templates.length === 0 ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-800">
                   No templates available. Please create a template first.
                 </div>
               ) : (
                 <select
+                  id="reminder-rule-template"
                   {...register("templateId")}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-600"
                 >
                   {templates.map((template) => (
                     <option key={template.id} value={template.id}>
@@ -467,30 +494,30 @@ export function ReminderRuleForm({
                 </select>
               )}
               {errors.templateId && (
-                <p className="mt-1 text-xs text-red-600">
+                <p className="mt-1 text-left text-xs text-red-600">
                   {errors.templateId.message}
                 </p>
               )}
             </div>
 
             <div>
-              <label className="flex items-center">
+              <label className="flex items-center gap-2 text-left">
                 <input
                   type="checkbox"
                   {...register("isEnabled")}
-                  className="mr-2"
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-600"
                 />
                 <span className="text-sm text-slate-700">Enabled</span>
               </label>
             </div>
 
             {duplicateTimingError && (
-              <p className="text-sm text-red-600" role="alert">
+              <p className="text-left text-sm text-red-600" role="alert">
                 {duplicateTimingError}
               </p>
             )}
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+            <div className="flex items-center justify-between border-t border-slate-200 pt-4">
               <div>
                 {rule && (
                   <Button
@@ -522,7 +549,7 @@ export function ReminderRuleForm({
                 <button
                   type="submit"
                   disabled={isSubmitting || templates.length === 0}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSubmitting ? "Saving..." : rule ? "Update" : "Create"}
                 </button>
