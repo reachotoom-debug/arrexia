@@ -92,7 +92,10 @@ export async function sendReminderForInvoice(
       return organizationId;
     }
     if (!cachedWorkspaceOrganizationId) {
-      cachedWorkspaceOrganizationId = await getWorkspaceOrganizationId(workspaceId);
+      cachedWorkspaceOrganizationId = await getWorkspaceOrganizationId(
+        workspaceId,
+        supabase
+      );
     }
     return cachedWorkspaceOrganizationId;
   };

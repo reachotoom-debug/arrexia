@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { verifyCronReminderAuth } from "../cronAuth";
+import { getWorkspaceOrganizationId } from "@/lib/workspaces/getWorkspaceOrganizationId";
 import {
   buildEligibleReminderCandidates,
   type InvoiceCandidateRow,
@@ -287,13 +288,90 @@ describe("cron reminder execution (P0)", () => {
     assert.equal(blocked.length, 0);
   });
 
-  it("L — vercel.json defines hourly cron on internal route", () => {
+  it("L — vercel.json defines daily cron on internal route", () => {
     const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as {
       crons: Array<{ path: string; schedule: string }>;
     };
     assert.equal(vercel.crons.length, 1);
     assert.equal(vercel.crons[0].path, "/api/internal/reminders/run");
     assert.equal(vercel.crons[0].schedule, "0 6 * * *");
+  });
+
+  it("M — cron/service-role send resolves workspace organization_id via passed client", async () => {
+    const orgId = "org-cron-0008";
+    const workspaceId = "ws-inv-0008";
+    const supabase = {
+      from(table: string) {
+        assert.equal(table, "workspaces");
+        return {
+          select: () => ({
+            eq: (_col: string, id: string) => ({
+              single: async () => {
+                assert.equal(id, workspaceId);
+                return { data: { organization_id: orgId }, error: null };
+              },
+            }),
+          }),
+        };
+      },
+    };
+
+    const resolved = await getWorkspaceOrganizationId(
+      workspaceId,
+      supabase as never
+    );
+    assert.equal(resolved, orgId);
+  });
+
+  it("N — send passes service-role supabase into organization_id lookup", () => {
+    const sendSrc = readFileSync("lib/reminders/send.ts", "utf8");
+    assert.match(
+      sendSrc,
+      /getWorkspaceOrganizationId\(\s*workspaceId,\s*supabase\s*\)/
+    );
+    assert.match(sendSrc, /organization_id: resolvedOrganizationId/);
+    assert.match(sendSrc, /workspace_id: workspaceId/);
+  });
+
+  it("O — missing organization_id fails safely", async () => {
+    const supabase = {
+      from() {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: { organization_id: null }, error: null }),
+            }),
+          }),
+        };
+      },
+    };
+
+    await assert.rejects(
+      () => getWorkspaceOrganizationId("ws-missing-org", supabase as never),
+      /Workspace organization_id not found for workspace ws-missing-org/
+    );
+  });
+
+  it("P — manual send path keeps default organization_id lookup without injected client", () => {
+    const helperSrc = readFileSync(
+      "lib/workspaces/getWorkspaceOrganizationId.ts",
+      "utf8"
+    );
+    assert.match(helperSrc, /supabaseClient \?\? \(await supabaseServer\(\)\)/);
+
+    for (const file of [
+      "app/api/workspaces/[workspaceId]/reminders/send/route.ts",
+      "app/[workspaceId]/reminders/actions.ts",
+    ]) {
+      const src = readFileSync(file, "utf8");
+      assert.doesNotMatch(src, /getWorkspaceOrganizationId/);
+    }
+  });
+
+  it("Q — duplicate guard remains intact on cron send path", () => {
+    const sendSrc = readFileSync("lib/reminders/send.ts", "utf8");
+    assert.match(sendSrc, /checkRuleOccurrenceDuplicateBeforeSend/);
+    assert.match(sendSrc, /already_sent_for_rule/);
   });
 });
 

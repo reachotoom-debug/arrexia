@@ -1,10 +1,14 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /**
  * Resolve organization_id for a workspace (multi-tenant source of truth).
  */
-export async function getWorkspaceOrganizationId(workspaceId: string): Promise<string> {
-  const supabase = await supabaseServer();
+export async function getWorkspaceOrganizationId(
+  workspaceId: string,
+  supabaseClient?: Pick<SupabaseClient, "from">
+): Promise<string> {
+  const supabase = supabaseClient ?? (await supabaseServer());
 
   const { data, error } = await supabase
     .from("workspaces")
