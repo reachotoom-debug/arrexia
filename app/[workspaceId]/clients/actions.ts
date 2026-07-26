@@ -9,6 +9,7 @@ import {
 } from "@/lib/clients/schema";
 import { assertClientCreateAllowed, PlanLimitError, PLAN_LIMIT_CLIENTS_MESSAGE } from "@/lib/billing/assertWithinPlanLimits";
 import { type ActionResult, ok, fail } from "@/lib/actions/result";
+import { resolveClientPaymentTermsPersistence } from "@/lib/clients/paymentTermsPersistence";
 
 export async function createClient(
   workspaceId: string,
@@ -36,11 +37,8 @@ export async function createClient(
   
   const supabase = await supabaseServer();
 
-  // Convert paymentTerms string to number
-  const paymentTermsNum =
-    parsed.paymentTerms === "custom" || !parsed.paymentTerms
-      ? 30
-      : parseInt(parsed.paymentTerms, 10);
+  const { payment_terms, payment_terms_days } =
+    resolveClientPaymentTermsPersistence(parsed.paymentTerms);
 
   // Ensure defaults: is_active = true (default), archived_at = null
   // Note: We respect the form's status field, but default to active for new clients
@@ -57,7 +55,8 @@ export async function createClient(
     whatsapp: parsed.phone ?? null, // Map phone to whatsapp column
     company: parsed.company ?? null,
     country: parsed.country,
-    payment_terms: paymentTermsNum,
+    payment_terms,
+    payment_terms_days,
     status: parsed.status === "active" ? "active" : "archived",
     notes: parsed.notes ?? null,
     // Do NOT set created_at/updated_at - let database defaults handle it
@@ -113,11 +112,8 @@ export async function updateClient(
   const parsed = ClientFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
 
-  // Convert paymentTerms string to number
-  const paymentTermsNum =
-    parsed.paymentTerms === "custom" || !parsed.paymentTerms
-      ? 30
-      : parseInt(parsed.paymentTerms, 10);
+  const { payment_terms, payment_terms_days } =
+    resolveClientPaymentTermsPersistence(parsed.paymentTerms);
 
   const { error } = await supabase
     .from("clients")
@@ -127,7 +123,8 @@ export async function updateClient(
       whatsapp: parsed.phone ?? null,
       company: parsed.company ?? null,
       country: parsed.country,
-      payment_terms: paymentTermsNum,
+      payment_terms,
+      payment_terms_days,
       status: parsed.status === "active" ? "active" : "archived",
       is_active: parsed.status === "active", // Set is_active based on status
       notes: parsed.notes ?? null,

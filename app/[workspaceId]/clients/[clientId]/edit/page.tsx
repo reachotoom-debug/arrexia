@@ -4,6 +4,10 @@ import { ClientForm } from "../../_components/ClientForm";
 import { type ClientFormValues } from "@/lib/clients/schema";
 import { updateClient } from "../../actions";
 import { type ActionResult } from "@/lib/actions/result";
+import {
+  resolveClientFormPaymentTerms,
+  resolveClientFormStatus,
+} from "@/lib/clients/paymentTermsPersistence";
 
 interface EditClientPageProps {
   params: Promise<{ workspaceId: string; clientId: string }>;
@@ -42,8 +46,8 @@ export default async function EditClientPage({
     phone: client.whatsapp ?? "",
     company: client.company ?? "",
     country: client.country ?? "United States",
-    paymentTerms: client.payment_terms?.toString() ?? "30",
-    status: client.status === "archived" ? "inactive" : "active",
+    paymentTerms: resolveClientFormPaymentTerms(client),
+    status: resolveClientFormStatus(client),
     notes: client.notes ?? "",
   };
 

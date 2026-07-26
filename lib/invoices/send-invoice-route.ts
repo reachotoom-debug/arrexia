@@ -1,7 +1,12 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspaceForApi } from "@/lib/auth/server";
 import { sendInvoiceEmail } from "@/lib/invoices/send-email";
+import {
+  promoteDraftInvoiceToSentAfterSend,
+  revalidatePathsAfterInvoiceSent,
+} from "@/lib/invoices/promoteDraftInvoiceAfterSend";
 import { logAuditEvent } from "@/lib/audit/log";
 import { validateSandboxRecipient } from "@/lib/email/sendEmail";
 
@@ -47,7 +52,7 @@ export async function postSendInvoiceEmail(
 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select("id, workspace_id, client_id, invoice_number")
+    .select("id, workspace_id, client_id, invoice_number, status")
     .eq("id", invoiceId)
     .eq("workspace_id", workspaceId)
     .single();
@@ -142,6 +147,32 @@ export async function postSendInvoiceEmail(
     );
   }
 
+  const promotion = await promoteDraftInvoiceToSentAfterSend(
+    supabase,
+    workspaceId,
+    invoiceId,
+    invoice.status
+  );
+
+  if (promotion.promoted) {
+    revalidatePathsAfterInvoiceSent(workspaceId, invoiceId, revalidatePath);
+  } else if (promotion.reason === "update_failed") {
+    console.error("[send-invoice-email] email sent but status promotion failed:", {
+      workspaceId,
+      invoiceId,
+      error: promotion.error,
+    });
+    return jsonResponse(
+      {
+        ok: false,
+        success: false,
+        error:
+          "Invoice email was sent, but the invoice could not be marked as sent. Please try again or update the invoice status manually.",
+      },
+      500
+    );
+  }
+
   await logAuditEvent({
     workspaceId,
     userId: user.id,
@@ -153,6 +184,7 @@ export async function postSendInvoiceEmail(
       subject: result.subject,
       provider_message_id: result.providerMessageId,
       invoice_number: invoice.invoice_number,
+      status_promoted: promotion.promoted,
     },
   });
 
