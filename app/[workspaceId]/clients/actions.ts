@@ -148,13 +148,16 @@ export async function toggleClientActive(
   clientId: string,
   isActive: boolean
 ) {
+  const { workspace } = await requireWorkspace(workspaceId);
+  const validatedWorkspaceId = workspace.id;
+
   const supabase = await supabaseServer();
 
   const { error } = await supabase
     .from("clients")
     .update({ is_active: isActive })
     .eq("id", clientId)
-    .eq("workspace_id", workspaceId);
+    .eq("workspace_id", validatedWorkspaceId);
 
   if (error) {
     console.error("[toggleClientActive] update failed:", error);
@@ -180,18 +183,22 @@ function getErrorMessage(e: unknown): string {
  */
 export async function archiveClient(workspaceId: string, clientId: string): Promise<ActionResult> {
   try {
+    const { workspace } = await requireWorkspace(workspaceId);
+    const validatedWorkspaceId = workspace.id;
     const supabase = await supabaseServer();
 
-    console.log("[archiveClient] updating public.clients", { workspaceId, clientId });
+    console.log("[archiveClient] updating public.clients", {
+      workspaceId: validatedWorkspaceId,
+      clientId,
+    });
 
-    // Explicitly target the base table public.clients
-    const { error, data } = await supabase
+    const { error } = await supabase
       .from("clients")
       .update({ archived_at: new Date().toISOString() })
       .eq("id", clientId)
-      .eq("workspace_id", workspaceId)
+      .eq("workspace_id", validatedWorkspaceId)
       .select("id")
-      .single(); // Use select + single to verify the update target
+      .single();
 
     if (error) {
       console.error("[archiveClient] update failed", {
@@ -224,25 +231,30 @@ export async function archiveClient(workspaceId: string, clientId: string): Prom
 }
 
 /**
- * Unarchive client: sets archived_at = null and is_active = true (safe default)
+ * Unarchive client: sets archived_at = null only.
+ * Does not change is_active — an inactive archived client stays inactive after restore.
  * IMPORTANT: Updates ONLY the base table public.clients (not any view)
  */
 export async function unarchiveClient(workspaceId: string, clientId: string): Promise<ActionResult> {
   try {
+    const { workspace } = await requireWorkspace(workspaceId);
+    const validatedWorkspaceId = workspace.id;
     const supabase = await supabaseServer();
 
-    console.log("[unarchiveClient] updating public.clients", { workspaceId, clientId });
+    console.log("[unarchiveClient] updating public.clients", {
+      workspaceId: validatedWorkspaceId,
+      clientId,
+    });
 
-    // Explicitly target the base table public.clients
-    const { error, data } = await supabase
+    const { error } = await supabase
       .from("clients")
       .update({
         archived_at: null,
       })
       .eq("id", clientId)
-      .eq("workspace_id", workspaceId)
+      .eq("workspace_id", validatedWorkspaceId)
       .select("id")
-      .single(); // Use select + single to verify the update target
+      .single();
 
     if (error) {
       console.error("[unarchiveClient] update failed", {

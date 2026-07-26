@@ -1,18 +1,21 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AUTH_WORKSPACE_SETUP_FAILED_MESSAGE } from "@/lib/auth/authErrors";
-import { setWorkspacePlan } from "@/lib/billing/setWorkspacePlan";
-import type { WorkspacePlan } from "@/lib/billing/plans";
+import {
+  parsePublicSignupTrialPlan,
+  type PublicSignupTrialPlan,
+} from "@/lib/billing/publicTrialPlan";
 import { supabaseServer } from "@/lib/supabase/server";
 import { ensureWorkspaceForUser } from "@/lib/workspaces/ensureWorkspaceForUser";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>> | undefined;
 
-function parsePlan(searchParams: Record<string, string | string[] | undefined> | undefined): WorkspacePlan {
+function parseTrialPlan(
+  searchParams: Record<string, string | string[] | undefined> | undefined
+): PublicSignupTrialPlan | null {
   const raw = searchParams?.plan;
   const planValue = Array.isArray(raw) ? raw[0] : raw;
-  if (planValue === "starter" || planValue === "pro") return planValue;
-  return "free";
+  return parsePublicSignupTrialPlan(planValue);
 }
 
 function WorkspaceSetupFailedPanel() {
@@ -44,7 +47,7 @@ export default async function StartPage({
   searchParams?: SearchParams;
 }) {
   const resolvedSearch = searchParams ? await searchParams : undefined;
-  const plan = parsePlan(resolvedSearch);
+  const initialTrialPlan = parseTrialPlan(resolvedSearch);
 
   const supabase = await supabaseServer();
   const {
@@ -57,8 +60,7 @@ export default async function StartPage({
   }
 
   try {
-    const workspaceId = await ensureWorkspaceForUser(user.id);
-    await setWorkspacePlan(workspaceId, plan);
+    const workspaceId = await ensureWorkspaceForUser(user.id, { initialTrialPlan });
     redirect(`/${workspaceId}/dashboard`);
   } catch (bootstrapError) {
     if (process.env.NODE_ENV === "development") {

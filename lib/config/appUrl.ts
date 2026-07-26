@@ -1,4 +1,5 @@
 import { sanitizeNextPath } from "@/lib/auth/safeNextPath";
+import { parsePublicSignupTrialPlan } from "@/lib/billing/publicTrialPlan";
 
 const DEFAULT_LOCAL_APP_URL = "http://localhost:3000";
 const DEFAULT_PRODUCTION_APP_URL = "https://arrexia.app";
@@ -58,6 +59,8 @@ export type AuthCallbackUrlOptions = {
   origin?: string;
   next?: string | null;
   returnTo?: "/login" | "/register";
+  /** Allowlisted public trial plan (starter|pro) preserved through email/OAuth callback. */
+  plan?: string | null;
 };
 
 /**
@@ -85,6 +88,11 @@ export function buildAuthCallbackUrl(options: AuthCallbackUrlOptions = {}): stri
 
   if (options.returnTo) {
     url.searchParams.set("returnTo", options.returnTo);
+  }
+
+  const trialPlan = parsePublicSignupTrialPlan(options.plan);
+  if (trialPlan) {
+    url.searchParams.set("plan", trialPlan);
   }
 
   return url.toString();

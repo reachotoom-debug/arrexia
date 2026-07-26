@@ -279,6 +279,9 @@ export function getEnterpriseContactHref(): string {
   return "/contact";
 }
 
-export function trialHref(_plan?: "starter" | "pro" | "business") {
+export function trialHref(plan?: "starter" | "pro" | "business") {
+  if (plan === "starter" || plan === "pro") {
+    return `/register?plan=${plan}`;
+  }
   return "/register";
 }

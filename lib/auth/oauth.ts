@@ -12,6 +12,7 @@ export type { OAuthProvider };
 type SignInWithOAuthOptions = {
   next?: string | null;
   returnTo?: "/login" | "/register";
+  plan?: string | null;
 };
 
 export async function signInWithOAuthProvider(
@@ -23,6 +24,7 @@ export async function signInWithOAuthProvider(
   const redirectTo = buildAuthCallbackUrl({
     next: options.next,
     returnTo: options.returnTo ?? "/login",
+    plan: options.plan,
   });
 
   const { data, error } = await supabase.auth.signInWithOAuth({

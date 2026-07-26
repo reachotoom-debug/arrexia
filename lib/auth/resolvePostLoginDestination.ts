@@ -3,8 +3,13 @@ import { buildPostLoginDestinationPath } from "@/lib/auth/postLoginRecovery";
 import { resolveHonoredNextPath } from "@/lib/auth/safeNextPath";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ensureWorkspaceForUser } from "@/lib/workspaces/ensureWorkspaceForUser";
+import type { PublicSignupTrialPlan } from "@/lib/billing/publicTrialPlan";
 
 export const WORKSPACE_SETUP_FAILED_MESSAGE = AUTH_WORKSPACE_SETUP_FAILED_MESSAGE;
+
+export type PostLoginDestinationOptions = {
+  initialTrialPlan?: PublicSignupTrialPlan | null;
+};
 
 export type PostLoginDestinationResult = {
   path: string;
@@ -18,7 +23,8 @@ export type PostLoginDestinationError = {
 
 export async function resolvePostLoginDestination(
   userId: string,
-  nextUrl?: string | null
+  nextUrl?: string | null,
+  options?: PostLoginDestinationOptions
 ): Promise<PostLoginDestinationResult | PostLoginDestinationError> {
   const admin = supabaseAdmin();
 
@@ -42,7 +48,9 @@ export async function resolvePostLoginDestination(
   const workspaceFound = Boolean(existingMemberships?.[0]?.workspace_id);
 
   try {
-    const workspaceId = await ensureWorkspaceForUser(userId);
+    const workspaceId = await ensureWorkspaceForUser(userId, {
+      initialTrialPlan: options?.initialTrialPlan ?? null,
+    });
     const workspaceCreated = !workspaceFound;
     const memberWorkspaceIds = new Set(
       (existingMemberships ?? []).map((membership) => membership.workspace_id)

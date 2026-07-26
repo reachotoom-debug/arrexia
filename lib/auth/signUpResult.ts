@@ -23,8 +23,11 @@ export const SIGNUP_ALREADY_REGISTERED_MESSAGE =
 export const SIGNUP_READY_TO_SIGN_IN_MESSAGE =
   "Your account is ready. You can sign in now with your email and password.";
 
-export function getEmailRedirectTo(origin?: string): string | undefined {
-  return buildAuthCallbackUrl({ origin });
+export function getEmailRedirectTo(
+  origin?: string,
+  plan?: string | null
+): string | undefined {
+  return buildAuthCallbackUrl({ origin, plan });
 }
 
 export function getSupabaseProjectHost(): string {

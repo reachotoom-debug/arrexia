@@ -41,6 +41,7 @@ function GoogleIcon({ className }: { className?: string }) {
 type AuthSocialLoginProps = {
   next?: string | null;
   returnTo?: "/login" | "/register";
+  plan?: string | null;
   initialError?: string | null;
   disabled?: boolean;
 };
@@ -48,6 +49,7 @@ type AuthSocialLoginProps = {
 export function AuthSocialLogin({
   next,
   returnTo = "/login",
+  plan,
   initialError = null,
   disabled = false,
 }: AuthSocialLoginProps) {
@@ -68,7 +70,7 @@ export function AuthSocialLogin({
     setOauthError(null);
     setLoadingProvider(provider);
 
-    const { error } = await signInWithOAuthProvider(provider, { next, returnTo });
+    const { error } = await signInWithOAuthProvider(provider, { next, returnTo, plan });
 
     if (error) {
       setOauthError(getOAuthErrorMessage(provider, error.message));

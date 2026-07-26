@@ -8,16 +8,23 @@ import { SettingsCard } from "./SettingsCard";
 import {
   BILLING_UI_PLANS,
   formatMonthlyPrice,
+  formatPlanLabel,
   getPlanDefinition,
   type WorkspacePlan,
 } from "@/lib/billing/plans";
+import type { TrialDisplayInfo } from "@/lib/billing/getWorkspacePlan";
+import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 
 export function BillingPlansClient({
   workspaceId,
   currentPlan,
+  storedPlan,
+  trial,
 }: {
   workspaceId: string;
   currentPlan: WorkspacePlan;
+  storedPlan: WorkspacePlan;
+  trial: TrialDisplayInfo | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -77,7 +84,34 @@ export function BillingPlansClient({
           <p className="mt-1 text-xs text-slate-500">
             Choose the plan for this workspace. You can change plans anytime.
           </p>
-          {currentPlan !== "free" ? (
+          {trial?.status === "active" ? (
+            <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              <p className="font-medium">
+                {formatPlanLabel(trial.trialPlan)} trial
+              </p>
+              <p className="mt-0.5 text-blue-800">
+                {trial.daysRemaining === 1
+                  ? "1 day remaining"
+                  : `${trial.daysRemaining} days remaining`}
+                {trial.trialEndsAt
+                  ? ` · Trial ends ${formatDateOnlyField(trial.trialEndsAt)}`
+                  : null}
+              </p>
+            </div>
+          ) : null}
+          {trial?.status === "expired" ? (
+            <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <p className="font-medium">Trial ended</p>
+              <p className="mt-0.5">
+                Your {formatPlanLabel(trial.trialPlan)} trial has ended. Current effective
+                plan: {formatPlanLabel(currentPlan)}.
+                {trial.trialEndsAt
+                  ? ` Ended ${formatDateOnlyField(trial.trialEndsAt)}.`
+                  : null}
+              </p>
+            </div>
+          ) : null}
+          {trial ? null : currentPlan !== "free" ? (
             <p className="mt-2 text-xs text-slate-600">
               Current workspace plan:{" "}
               <span className="font-medium text-slate-800">
@@ -86,7 +120,9 @@ export function BillingPlansClient({
             </p>
           ) : (
             <p className="mt-2 text-xs text-slate-500">
-              Current workspace plan: Free (trial). Select Starter or Pro to upgrade.
+              Current effective plan: Free
+              {storedPlan !== "free" ? ` (stored plan: ${formatPlanLabel(storedPlan)})` : ""}.
+              Select Starter or Pro to upgrade.
             </p>
           )}
         </div>

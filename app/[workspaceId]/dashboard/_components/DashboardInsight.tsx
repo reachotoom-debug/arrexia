@@ -1,4 +1,5 @@
 import { formatCurrency as formatCurrencyHelper } from "@/lib/format/currency";
+import { FIRST_RUN_DASHBOARD_INSIGHT } from "@/lib/onboarding/workspaceOnboardingState";
 import { AlertTriangle, AlertCircle, TrendingUp, Info } from "lucide-react";
 import type { DashboardSummaryPremium } from "./PremiumKpiRow";
 
@@ -37,6 +38,10 @@ const WORSENING_DELTA = 10;
 
 function getDashboardInsight(summary: DashboardSummaryPremium): DashboardInsight {
   const { totals, deltas } = summary;
+
+  if (totals.totalInvoiced === 0 && totals.totalOutstanding === 0) {
+    return FIRST_RUN_DASHBOARD_INSIGHT;
+  }
 
   // Derived metrics
   const overdueRatio = totals.totalOutstanding > 0

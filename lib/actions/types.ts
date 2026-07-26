@@ -48,6 +48,7 @@ export type DailyActionSummary = {
   requiringAttentionMixedCurrency: boolean;
   remindersDueCount: number;
   newlyOverdueCount: number;
+  sentInvoiceCount: number;
 };
 
 export type ReminderActionContext = {

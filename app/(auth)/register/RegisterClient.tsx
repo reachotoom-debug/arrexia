@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, type RegisterFormValues } from "@/lib/schemas/auth";
@@ -37,6 +38,7 @@ import {
 import { useAuthUrlSanitizer } from "@/lib/auth/useAuthUrlSanitizer";
 import { getClientAppOrigin } from "@/lib/config/appUrl";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { parsePublicSignupTrialPlan } from "@/lib/billing/publicTrialPlan";
 
 type SuccessState = {
   outcome: SignUpOutcome;
@@ -44,6 +46,8 @@ type SuccessState = {
 };
 
 export function RegisterClient() {
+  const searchParams = useSearchParams();
+  const signupTrialPlan = parsePublicSignupTrialPlan(searchParams.get("plan"));
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -105,7 +109,7 @@ export function RegisterClient() {
     setResendMessage(null);
 
     const supabase = supabaseBrowser();
-    const emailRedirectTo = getEmailRedirectTo(getClientAppOrigin());
+    const emailRedirectTo = getEmailRedirectTo(getClientAppOrigin(), signupTrialPlan);
 
     const { error } = await supabase.auth.resend({
       type: "signup",
@@ -138,7 +142,7 @@ export function RegisterClient() {
     setResendMessage(null);
 
     const supabase = supabaseBrowser();
-    const emailRedirectTo = getEmailRedirectTo(getClientAppOrigin());
+    const emailRedirectTo = getEmailRedirectTo(getClientAppOrigin(), signupTrialPlan);
 
     try {
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -245,7 +249,11 @@ export function RegisterClient() {
     <AuthCard>
       <AuthBranding />
 
-      <AuthSocialLogin returnTo="/register" disabled={isSubmitDisabled} />
+      <AuthSocialLogin
+        returnTo="/register"
+        plan={signupTrialPlan}
+        disabled={isSubmitDisabled}
+      />
 
       <form method="post" onSubmit={handleSubmit(onSubmit)} className={authFormClass}>
         <div>

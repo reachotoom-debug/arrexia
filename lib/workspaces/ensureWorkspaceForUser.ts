@@ -1,4 +1,10 @@
-import { getPlanStorageLimits, isWorkspacePlan } from "@/lib/billing/plans";
+import { getPlanStorageLimits, isWorkspacePlan, type WorkspacePlan } from "@/lib/billing/plans";
+import {
+  resolveBootstrapWorkspacePlan,
+  type PublicSignupTrialPlan,
+} from "@/lib/billing/publicTrialPlan";
+import { createPublicTrialSubscription } from "@/lib/billing/createPublicTrialSubscription";
+import { revertWorkspacePlanToFree } from "@/lib/billing/revertWorkspacePlanToFree";
 import {
   provisionDefaultReminderSetupSafe,
 } from "@/lib/reminders/provisionDefaultSetup";
@@ -43,6 +49,16 @@ export class WorkspaceBootstrapError extends Error {
     });
   }
 }
+
+export type WorkspaceBootstrapOptions = {
+  /** Allowlisted starter/pro intent from signup — applied only when creating a new plan row. */
+  initialTrialPlan?: PublicSignupTrialPlan | null;
+};
+
+export type DefaultWorkspacePlanResult = {
+  planCreated: boolean;
+  plan: WorkspacePlan;
+};
 
 export type WorkspaceBootstrapAdmin = Pick<
   ReturnType<typeof supabaseAdmin>,
@@ -172,11 +188,12 @@ export async function ensureWorkspaceSettings(
 export async function ensureDefaultWorkspacePlan(
   admin: WorkspaceBootstrapAdmin,
   workspaceId: string,
-  userId: string
-): Promise<void> {
+  userId: string,
+  options?: { initialPlan?: WorkspacePlan }
+): Promise<DefaultWorkspacePlanResult> {
   const { data: existingPlan, error: lookupError } = await admin
     .from("workspace_plans")
-    .select("workspace_id")
+    .select("workspace_id, plan")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
 
@@ -185,13 +202,15 @@ export async function ensureDefaultWorkspacePlan(
   }
 
   if (existingPlan) {
-    return;
+    const plan = isWorkspacePlan(existingPlan.plan) ? existingPlan.plan : "free";
+    return { planCreated: false, plan };
   }
 
-  const defaultLimits = getPlanStorageLimits("free");
+  const plan = options?.initialPlan ?? "free";
+  const defaultLimits = getPlanStorageLimits(plan);
   const { error: insertError } = await admin.from("workspace_plans").insert({
     workspace_id: workspaceId,
-    plan: "free",
+    plan,
     invoice_limit_monthly: defaultLimits.invoice_limit_monthly,
     client_limit: defaultLimits.client_limit,
   });
@@ -199,7 +218,7 @@ export async function ensureDefaultWorkspacePlan(
   if (insertError?.code === "23505") {
     const { data: racedPlan, error: racedLookupError } = await admin
       .from("workspace_plans")
-      .select("workspace_id")
+      .select("workspace_id, plan")
       .eq("workspace_id", workspaceId)
       .maybeSingle();
 
@@ -213,13 +232,16 @@ export async function ensureDefaultWorkspacePlan(
     }
 
     if (racedPlan) {
-      return;
+      const racedPlanId = isWorkspacePlan(racedPlan.plan) ? racedPlan.plan : "free";
+      return { planCreated: false, plan: racedPlanId };
     }
   }
 
   if (insertError) {
     throwBootstrapError("create_default_plan", userId, insertError.code, insertError.message);
   }
+
+  return { planCreated: true, plan };
 }
 
 export async function ensureOwnerMembership(
@@ -255,12 +277,31 @@ export async function ensureOwnerMembership(
 async function finalizeWorkspaceBootstrap(
   admin: WorkspaceBootstrapAdmin,
   userId: string,
-  workspaceId: string
+  workspaceId: string,
+  options?: WorkspaceBootstrapOptions
 ): Promise<string> {
   await reloadWorkspace(admin, userId, workspaceId);
   await ensureWorkspaceSettings(admin, workspaceId, userId);
   await ensureWorkspaceEmailSettings(admin, workspaceId);
-  await ensureDefaultWorkspacePlan(admin, workspaceId, userId);
+
+  const initialPlan = resolveBootstrapWorkspacePlan(options?.initialTrialPlan);
+  const { planCreated, plan: bootstrappedPlan } = await ensureDefaultWorkspacePlan(
+    admin,
+    workspaceId,
+    userId,
+    {
+      initialPlan,
+    }
+  );
+  let plan = bootstrappedPlan;
+
+  if (planCreated && (plan === "starter" || plan === "pro")) {
+    const subscriptionResult = await createPublicTrialSubscription(workspaceId, plan, admin);
+    if (!subscriptionResult.ok) {
+      await revertWorkspacePlanToFree(admin, workspaceId);
+      plan = "free";
+    }
+  }
 
   const { data: planRow, error: planLookupError } = await admin
     .from("workspace_plans")
@@ -276,10 +317,10 @@ async function finalizeWorkspaceBootstrap(
       internal: planLookupError.message,
     });
   } else {
-    const plan = isWorkspacePlan(planRow?.plan) ? planRow.plan : "free";
+    const resolvedPlan = isWorkspacePlan(planRow?.plan) ? planRow.plan : plan;
     await provisionDefaultReminderSetupSafe({
       workspaceId,
-      plan,
+      plan: resolvedPlan,
       admin,
     });
   }
@@ -289,7 +330,8 @@ async function finalizeWorkspaceBootstrap(
 
 export async function bootstrapWorkspaceForUser(
   admin: WorkspaceBootstrapAdmin,
-  userId: string
+  userId: string,
+  options?: WorkspaceBootstrapOptions
 ): Promise<string> {
   const existingWorkspaceId = await loadExistingWorkspaceForUser(admin, userId);
   if (existingWorkspaceId) {
@@ -312,7 +354,7 @@ export async function bootstrapWorkspaceForUser(
 
   const racedWorkspaceId = await loadExistingWorkspaceForUser(admin, userId);
   if (racedWorkspaceId) {
-    return finalizeWorkspaceBootstrap(admin, userId, racedWorkspaceId);
+    return finalizeWorkspaceBootstrap(admin, userId, racedWorkspaceId, options);
   }
 
   const orgName = deriveOrganizationName(authUser.user?.email);
@@ -379,10 +421,13 @@ export async function bootstrapWorkspaceForUser(
     organizationId: workspaceRow.organization_id,
   });
 
-  return finalizeWorkspaceBootstrap(admin, userId, membershipWorkspaceId);
+  return finalizeWorkspaceBootstrap(admin, userId, membershipWorkspaceId, options);
 }
 
-export async function ensureWorkspaceForUser(userId: string): Promise<string> {
+export async function ensureWorkspaceForUser(
+  userId: string,
+  options?: WorkspaceBootstrapOptions
+): Promise<string> {
   const admin = supabaseAdmin();
-  return bootstrapWorkspaceForUser(admin, userId);
+  return bootstrapWorkspaceForUser(admin, userId, options);
 }

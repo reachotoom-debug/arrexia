@@ -13,6 +13,7 @@ import {
   WORKSPACE_SETUP_FAILED_MESSAGE,
 } from "@/lib/auth/resolvePostLoginDestination";
 import { sanitizeNextPath } from "@/lib/auth/safeNextPath";
+import { parsePublicSignupTrialPlan } from "@/lib/billing/publicTrialPlan";
 import { supabaseRouteHandler } from "@/lib/supabase/route-handler";
 
 function sanitizeReturnTo(returnTo: string | null): "/login" | "/register" {
@@ -110,7 +111,9 @@ export async function GET(request: Request) {
     return finalRedirect;
   }
 
-  const destination = await resolvePostLoginDestination(user.id, next);
+  const destination = await resolvePostLoginDestination(user.id, next, {
+    initialTrialPlan: parsePublicSignupTrialPlan(searchParams.get("plan")),
+  });
 
   if ("error" in destination) {
     const recoveryUrl = resolveAuthCallbackFailureRedirect({

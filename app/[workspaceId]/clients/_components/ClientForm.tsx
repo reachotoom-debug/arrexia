@@ -205,7 +205,9 @@ export function ClientForm({
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g. john@company.com"
             />
-            <p className="mt-1 text-xs text-slate-500">e.g. john@company.com</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Optional. Required for email reminders.
+            </p>
             {errors.email && (
               <p className="mt-1 text-xs text-red-600">
                 {errors.email.message}

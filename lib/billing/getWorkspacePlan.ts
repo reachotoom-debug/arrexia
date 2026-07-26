@@ -2,28 +2,33 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { perfTime } from "@/lib/perf/server";
 
 import {
-
   getPlanStorageLimits,
-
   isWorkspacePlan,
-
   type WorkspacePlan,
-
 } from "./plans";
-
-
+import { resolveEffectiveWorkspacePlan } from "./resolveEffectiveWorkspacePlan";
+import type { TrialDisplayInfo } from "./resolveEffectiveWorkspacePlan";
+import { loadWorkspaceSubscription } from "./workspaceSubscription";
 
 export type { WorkspacePlan };
-
-
+export type { TrialDisplayInfo };
 
 const DEFAULT_PLAN: WorkspacePlan = "free";
 
+export type WorkspacePlanResult = {
+  /** Effective entitlement used for limits and feature gates. */
+  plan: WorkspacePlan;
+  /** Row stored in workspace_plans (unchanged by trial expiration). */
+  storedPlan: WorkspacePlan;
+  invoiceLimitMonthly: number | null;
+  clientLimit: number | null;
+  trial: TrialDisplayInfo | null;
+};
 
-
-export async function getWorkspacePlan(workspaceId: string) {
-  const supabase = supabaseAdmin();
-
+async function loadStoredWorkspacePlan(
+  workspaceId: string,
+  supabase: ReturnType<typeof supabaseAdmin>
+): Promise<WorkspacePlan> {
   const { data, error } = await perfTime(
     "workspace-plan",
     "workspacePlansQuery",
@@ -41,14 +46,7 @@ export async function getWorkspacePlan(workspaceId: string) {
   }
 
   if (data) {
-    const plan = isWorkspacePlan(data.plan) ? data.plan : DEFAULT_PLAN;
-    const definitionLimits = getPlanStorageLimits(plan);
-
-    return {
-      plan,
-      invoiceLimitMonthly: definitionLimits.invoice_limit_monthly,
-      clientLimit: definitionLimits.client_limit,
-    };
+    return isWorkspacePlan(data.plan) ? data.plan : DEFAULT_PLAN;
   }
 
   const defaultLimits = getPlanStorageLimits(DEFAULT_PLAN);
@@ -71,11 +69,25 @@ export async function getWorkspacePlan(workspaceId: string) {
     );
   }
 
-  return {
-    plan: DEFAULT_PLAN,
-    invoiceLimitMonthly: defaultLimits.invoice_limit_monthly,
-    clientLimit: defaultLimits.client_limit,
-  };
+  return DEFAULT_PLAN;
 }
 
+export async function getWorkspacePlan(workspaceId: string): Promise<WorkspacePlanResult> {
+  const supabase = supabaseAdmin();
 
+  const [storedPlan, subscription] = await Promise.all([
+    loadStoredWorkspacePlan(workspaceId, supabase),
+    loadWorkspaceSubscription(workspaceId, supabase),
+  ]);
+
+  const resolution = resolveEffectiveWorkspacePlan(storedPlan, subscription);
+  const definitionLimits = getPlanStorageLimits(resolution.effectivePlan);
+
+  return {
+    plan: resolution.effectivePlan,
+    storedPlan: resolution.storedPlan,
+    invoiceLimitMonthly: definitionLimits.invoice_limit_monthly,
+    clientLimit: definitionLimits.client_limit,
+    trial: resolution.trial,
+  };
+}

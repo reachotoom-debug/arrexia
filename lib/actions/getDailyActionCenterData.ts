@@ -145,7 +145,8 @@ export async function getDailyActionCenterData(
 ): Promise<DailyActionCenterData> {
   const supabase = await supabaseServer();
 
-  const [eligibleReminders, invoicesResult, settingsResult] = await Promise.all([
+  const [eligibleReminders, invoicesResult, settingsResult, sentInvoiceCountResult] =
+    await Promise.all([
     getEligibleReminders(workspaceId),
     supabase
       .from("invoices_view")
@@ -176,6 +177,12 @@ export async function getDailyActionCenterData(
       .select("timezone, default_currency")
       .eq("workspace_id", workspaceId)
       .maybeSingle(),
+    supabase
+      .from("invoices_view")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("base_status", "sent")
+      .is("archived_at", null),
   ]);
 
   if (invoicesResult.error) {
@@ -185,6 +192,7 @@ export async function getDailyActionCenterData(
 
   const workspaceTimeZone = settingsResult.data?.timezone ?? "UTC";
   const defaultCurrency = settingsResult.data?.default_currency ?? "USD";
+  const sentInvoiceCount = sentInvoiceCountResult.count ?? 0;
   const rawInvoices = invoicesResult.data ?? [];
   const clientIds = [
     ...new Set(
@@ -232,6 +240,7 @@ export async function getDailyActionCenterData(
     reminderEligibleInvoiceIds,
     sentReminderDatesByInvoiceId,
     defaultCurrency,
+    sentInvoiceCount,
   });
 
   const collectionActionsWithExecution = attachExecutionMetadata(
@@ -248,4 +257,4 @@ export async function getDailyActionCenterData(
 }
 
 /** Reported DB round trips for R3C loader. */
-export const DAILY_ACTION_CENTER_DB_ROUND_TRIPS = 7 as const;
+export const DAILY_ACTION_CENTER_DB_ROUND_TRIPS = 8 as const;

@@ -1,5 +1,10 @@
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import {
+  CAUGHT_UP_COLLECTIONS_EMPTY,
+  FIRST_RUN_COLLECTIONS_EMPTY,
+  hasNeverEnteredCollectionsWorkflow,
+} from "@/lib/onboarding/workspaceOnboardingState";
 import { formatMoney } from "@/lib/utils/format-money";
 import Link from "next/link";
 import { ErrorState, EmptyState } from "@/components/ui/state";
@@ -64,6 +69,13 @@ async function getCollectionsData(
   pageSize: number
 ) {
   const supabase = await supabaseServer();
+
+  const { count: sentInvoiceCount } = await supabase
+    .from("invoices_view")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId)
+    .eq("base_status", "sent")
+    .is("archived_at", null);
 
   // Build base query for paginated invoices
   // CONSISTENCY: Match invoices list smart views exactly - risk_level, is_overdue, outstanding > 0
@@ -211,6 +223,7 @@ async function getCollectionsData(
       // Sum of outstanding amounts for all matching invoices (from metrics query)
       outstandingInView: totalOutstanding,
       mode: risk === "all" ? "All Risks" : risk === "high" ? "High Risk" : risk === "medium" ? "Medium Risk" : "Low Risk",
+      sentInvoiceCount: sentInvoiceCount ?? 0,
     },
   };
 }
@@ -399,28 +412,59 @@ export default async function CollectionsPage({
       {/* TABLE */}
       {count === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
-          <EmptyState
-            title={
-              risk === "low"
-                ? "No low risk overdue invoices"
-                : risk === "medium"
-                ? "No medium risk overdue invoices"
-                : risk === "high"
-                ? "No high risk overdue invoices"
-                : "No overdue invoices"
-            }
-            message={
-              risk === "low"
-                ? "No low risk invoices found. Try selecting a different risk level."
-                : risk === "medium"
-                ? "No medium risk invoices found. Try selecting a different risk level."
-                : risk === "high"
-                ? "No high risk invoices found. Try selecting a different risk level."
-                : "All your invoices are up to date. Great job!"
-            }
-            actionLabel="View invoices"
-            actionHref={`/${workspaceId}/invoices`}
-          />
+          {(() => {
+            const neverHadReceivables = hasNeverEnteredCollectionsWorkflow({
+              invoiceCount: summary.sentInvoiceCount,
+              sentInvoiceCount: summary.sentInvoiceCount,
+            });
+            const emptyCopy: {
+              title: string;
+              message: string;
+              actionLabel?: string;
+              actionHref?: string;
+            } =
+              risk === "all" && neverHadReceivables
+                ? FIRST_RUN_COLLECTIONS_EMPTY
+                : {
+                    title:
+                      risk === "low"
+                        ? "No low risk overdue invoices"
+                        : risk === "medium"
+                        ? "No medium risk overdue invoices"
+                        : risk === "high"
+                        ? "No high risk overdue invoices"
+                        : CAUGHT_UP_COLLECTIONS_EMPTY.title,
+                    message:
+                      risk === "low"
+                        ? "No low risk invoices found. Try selecting a different risk level."
+                        : risk === "medium"
+                        ? "No medium risk invoices found. Try selecting a different risk level."
+                        : risk === "high"
+                        ? "No high risk invoices found. Try selecting a different risk level."
+                        : CAUGHT_UP_COLLECTIONS_EMPTY.message,
+                    actionLabel:
+                      risk === "all" && !neverHadReceivables
+                        ? CAUGHT_UP_COLLECTIONS_EMPTY.actionLabel
+                        : neverHadReceivables
+                        ? FIRST_RUN_COLLECTIONS_EMPTY.actionLabel
+                        : undefined,
+                    actionHref:
+                      risk === "all"
+                        ? neverHadReceivables
+                          ? `/${workspaceId}/invoices/new`
+                          : `/${workspaceId}/invoices`
+                        : undefined,
+                  };
+
+            return (
+              <EmptyState
+                title={emptyCopy.title}
+                message={emptyCopy.message}
+                actionLabel={emptyCopy.actionLabel}
+                actionHref={emptyCopy.actionHref}
+              />
+            );
+          })()}
         </div>
       ) : (
         <>

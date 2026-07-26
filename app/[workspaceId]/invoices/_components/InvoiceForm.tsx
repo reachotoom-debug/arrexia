@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -268,6 +269,12 @@ export function InvoiceForm({
               </div>
             )
           )}
+          {mode === "create" && !isArchived ? (
+            <p className="text-xs text-slate-500">
+              Draft invoices are not included in collections. Send the invoice when it is
+              ready to begin tracking and follow-up.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -483,6 +490,16 @@ export function InvoiceForm({
                   )}
                 </div>
               </>
+            ) : clients.length === 0 ? (
+              <div className="mt-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                <p>You need at least one active client before creating an invoice.</p>
+                <Link
+                  href={`/${workspaceId}/clients/new`}
+                  className="mt-2 inline-block font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  Create a client
+                </Link>
+              </div>
             ) : (
               // Create mode: full dropdown
               <>

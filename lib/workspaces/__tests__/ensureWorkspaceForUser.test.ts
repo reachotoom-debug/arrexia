@@ -50,6 +50,14 @@ type EmailSettingsRow = {
   workspace_id: string;
 };
 
+type SubscriptionRow = {
+  workspace_id: string;
+  plan: string;
+  status: string;
+  trial_starts_at: string | null;
+  trial_ends_at: string | null;
+};
+
 type MockState = {
   memberships: MembershipRow[];
   organizations: OrganizationRow[];
@@ -57,6 +65,7 @@ type MockState = {
   settings: SettingsRow[];
   plans: PlanRow[];
   emailSettings: EmailSettingsRow[];
+  subscriptions: SubscriptionRow[];
   authUsers: Map<string, { email: string }>;
   insertCounts: {
     organizations: number;
@@ -65,9 +74,11 @@ type MockState = {
     settings: number;
     plans: number;
     emailSettings: number;
+    subscriptions: number;
   };
   settingsInsertShouldFail?: boolean;
   planInsertShouldFail?: boolean;
+  subscriptionInsertShouldFail?: boolean;
 };
 
 function newId(prefix: string, index: number): string {
@@ -106,6 +117,7 @@ class MockQueryBuilder {
   private orderAscending = true;
   private limitCount: number | null = null;
   private pendingInsert: Record<string, unknown> | null = null;
+  private pendingUpdate: Record<string, unknown> | null = null;
   private headCount = false;
 
   constructor(table: string, state: MockState) {
@@ -141,7 +153,23 @@ class MockQueryBuilder {
     return this;
   }
 
+  upsert(row: Record<string, unknown>) {
+    this.pendingInsert = row;
+    return this;
+  }
+
+  update(row: Record<string, unknown>) {
+    this.pendingUpdate = row;
+    return this;
+  }
+
   maybeSingle() {
+    if (this.pendingUpdate) {
+      const result = this.performUpdate();
+      this.pendingUpdate = null;
+      return Promise.resolve({ data: result.data, error: result.error });
+    }
+
     if (this.pendingInsert) {
       const result = this.performInsert();
       this.pendingInsert = null;
@@ -153,6 +181,18 @@ class MockQueryBuilder {
   }
 
   single() {
+    if (this.pendingUpdate) {
+      const result = this.performUpdate();
+      this.pendingUpdate = null;
+      if (result.error || !result.data) {
+        return Promise.resolve({
+          data: null,
+          error: result.error ?? { message: "update returned no row", code: "PGRST116" },
+        });
+      }
+      return Promise.resolve({ data: result.data, error: null });
+    }
+
     if (this.pendingInsert) {
       const result = this.performInsert();
       this.pendingInsert = null;
@@ -182,6 +222,12 @@ class MockQueryBuilder {
     if (this.headCount) {
       const count = this.getRows().length;
       return Promise.resolve({ count, error: null }).then(onfulfilled, onrejected);
+    }
+
+    if (this.pendingUpdate) {
+      const result = this.performUpdate();
+      this.pendingUpdate = null;
+      return Promise.resolve({ data: result.data, error: result.error }).then(onfulfilled, onrejected);
     }
 
     if (this.pendingInsert) {
@@ -228,6 +274,8 @@ class MockQueryBuilder {
         return this.state.plans;
       case "workspace_email_settings":
         return this.state.emailSettings;
+      case "workspace_subscriptions":
+        return this.state.subscriptions;
       default:
         return [];
     }
@@ -335,9 +383,55 @@ class MockQueryBuilder {
         });
         return { data: null, error: null };
       }
+      case "workspace_subscriptions": {
+        stateInsertCount(this.state, "subscriptions");
+        if (this.state.subscriptionInsertShouldFail) {
+          return {
+            data: null,
+            error: { message: "subscription insert failed", code: "42501" },
+          };
+        }
+        this.state.subscriptions.push({
+          workspace_id: String(row.workspace_id),
+          plan: String(row.plan),
+          status: String(row.status),
+          trial_starts_at: (row.trial_starts_at as string | null) ?? null,
+          trial_ends_at: (row.trial_ends_at as string | null) ?? null,
+        });
+        return { data: null, error: null };
+      }
       default:
         return { data: null, error: { message: `Unknown table ${this.table}`, code: "mock" } };
     }
+  }
+
+  private performUpdate(): {
+    data: Record<string, unknown> | null;
+    error: { message: string; code: string } | null;
+  } {
+    const patch = this.pendingUpdate ?? {};
+
+    if (this.table === "workspace_plans") {
+      const target = this.state.plans.find((plan) =>
+        this.filters.every((filter) => filter(plan as unknown as Record<string, unknown>))
+      );
+
+      if (!target) {
+        return { data: null, error: { message: "plan not found", code: "PGRST116" } };
+      }
+
+      if (patch.plan !== undefined) target.plan = String(patch.plan);
+      if (patch.invoice_limit_monthly !== undefined) {
+        target.invoice_limit_monthly = Number(patch.invoice_limit_monthly);
+      }
+      if (patch.client_limit !== undefined) {
+        target.client_limit = Number(patch.client_limit);
+      }
+
+      return { data: { workspace_id: target.workspace_id }, error: null };
+    }
+
+    return { data: null, error: { message: `Unknown update table ${this.table}`, code: "mock" } };
   }
 }
 
@@ -353,6 +447,7 @@ function createEmptyState(userId: string, email: string): MockState {
     settings: [],
     plans: [],
     emailSettings: [],
+    subscriptions: [],
     authUsers: new Map([[userId, { email }]]),
     insertCounts: {
       organizations: 0,
@@ -361,6 +456,7 @@ function createEmptyState(userId: string, email: string): MockState {
       settings: 0,
       plans: 0,
       emailSettings: 0,
+      subscriptions: 0,
     },
   };
 }
@@ -554,5 +650,93 @@ describe("ensureWorkspaceSettings", () => {
     assert.equal(state.settings.length, 1);
     assert.equal(state.settings[0]?.workspace_id, workspaceId);
     assert.equal(state.settings[0]?.auto_send_reminders, false);
+  });
+});
+
+describe("ensureDefaultWorkspacePlan trial intent (R5 P2)", () => {
+  it("assigns starter limits on first plan row when requested", async () => {
+    const userId = "user-starter-plan";
+    const workspaceId = "ws-starter-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "starter@example.com");
+    const admin = createMockAdmin(state);
+
+    const result = await ensureDefaultWorkspacePlan(admin, workspaceId, userId, {
+      initialPlan: "starter",
+    });
+
+    assert.equal(result.planCreated, true);
+    assert.equal(result.plan, "starter");
+    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.plans[0]?.client_limit, 25);
+    assert.equal(state.plans[0]?.invoice_limit_monthly, 50);
+  });
+
+  it("bootstrap with starter creates enforceable subscription metadata", async () => {
+    const userId = "user-starter-bootstrap";
+    const state = createEmptyState(userId, "starter-bootstrap@example.com");
+    const admin = createMockAdmin(state);
+
+    await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "starter" });
+
+    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.insertCounts.subscriptions, 1);
+    assert.equal(state.subscriptions[0]?.status, "trial");
+    assert.ok(state.subscriptions[0]?.trial_ends_at);
+  });
+
+  it("falls back to free when subscription metadata cannot be created", async () => {
+    const userId = "user-subscription-fail";
+    const state = createEmptyState(userId, "fail@example.com");
+    state.subscriptionInsertShouldFail = true;
+    const admin = createMockAdmin(state);
+
+    const workspaceId = await bootstrapWorkspaceForUser(admin, userId, {
+      initialTrialPlan: "pro",
+    });
+
+    assert.ok(workspaceId.startsWith("ws-"));
+    assert.equal(state.plans[0]?.plan, "free");
+    assert.equal(state.plans[0]?.client_limit, 5);
+    assert.equal(state.subscriptions.length, 0);
+  });
+
+  it("does not upgrade an existing workspace plan", async () => {
+    const userId = "user-existing-pro";
+    const workspaceId = "ws-existing-pro-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "existing@example.com");
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      invoice_limit_monthly: 5,
+      client_limit: 5,
+    });
+    const admin = createMockAdmin(state);
+
+    const result = await ensureDefaultWorkspacePlan(admin, workspaceId, userId, {
+      initialPlan: "pro",
+    });
+
+    assert.equal(result.planCreated, false);
+    assert.equal(result.plan, "free");
+    assert.equal(state.plans.length, 1);
+    assert.equal(state.plans[0]?.plan, "free");
+  });
+
+  it("bootstrap retry remains idempotent for new users", async () => {
+    const userId = "user-starter-idempotent";
+    const state = createEmptyState(userId, "idempotent@example.com");
+    const admin = createMockAdmin(state);
+
+    const first = await bootstrapWorkspaceForUser(admin, userId, {
+      initialTrialPlan: "starter",
+    });
+    const second = await bootstrapWorkspaceForUser(admin, userId, {
+      initialTrialPlan: "pro",
+    });
+
+    assert.equal(first, second);
+    assert.equal(state.plans.length, 1);
+    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.insertCounts.organizations, 1);
   });
 });

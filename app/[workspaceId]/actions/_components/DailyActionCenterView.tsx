@@ -3,6 +3,11 @@ import { clsx } from "clsx";
 import { formatMoney } from "@/lib/utils/format-money";
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 import { milestoneReasonLabel } from "@/lib/actions/collectionActivity";
+import {
+  CAUGHT_UP_ACTIONS_EMPTY,
+  FIRST_RUN_ACTIONS_EMPTY,
+  hasNeverEnteredCollectionsWorkflow,
+} from "@/lib/onboarding/workspaceOnboardingState";
 import { EmptyState } from "@/components/ui/state";
 import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
 import {
@@ -69,10 +74,26 @@ export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterVi
   const { summary, collectionActions } = data;
 
   if (summary.actionsTodayCount === 0) {
+    const onboardingSignals = {
+      invoiceCount: summary.sentInvoiceCount,
+      sentInvoiceCount: summary.sentInvoiceCount,
+    };
+    const emptyCopy = hasNeverEnteredCollectionsWorkflow(onboardingSignals)
+      ? FIRST_RUN_ACTIONS_EMPTY
+      : CAUGHT_UP_ACTIONS_EMPTY;
+
     return (
       <EmptyState
-        title="Nothing needs immediate attention today."
-        message="Your collections queue is up to date."
+        title={emptyCopy.title}
+        message={emptyCopy.message}
+        actionLabel={
+          hasNeverEnteredCollectionsWorkflow(onboardingSignals) ? "Create invoice" : undefined
+        }
+        actionHref={
+          hasNeverEnteredCollectionsWorkflow(onboardingSignals)
+            ? `/${workspaceId}/invoices/new`
+            : undefined
+        }
       />
     );
   }

@@ -44,6 +44,7 @@ function build(params: {
     reminderEligibleInvoiceIds: params.reminderEligible ?? new Set(),
     sentReminderDatesByInvoiceId: params.sentByInvoice ?? new Map(),
     defaultCurrency: params.defaultCurrency ?? "USD",
+    sentInvoiceCount: 1,
   });
 }
 

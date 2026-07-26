@@ -102,9 +102,15 @@ export function buildDailyActionCategories(params: {
   reminderEligibleInvoiceIds: Set<string>;
   sentReminderDatesByInvoiceId: Map<string, string[]>;
   defaultCurrency: string;
+  sentInvoiceCount: number;
 }): Pick<DailyActionCenterData, "summary" | "collectionActions"> {
-  const { invoices, reminderEligibleInvoiceIds, sentReminderDatesByInvoiceId, defaultCurrency } =
-    params;
+  const {
+    invoices,
+    reminderEligibleInvoiceIds,
+    sentReminderDatesByInvoiceId,
+    defaultCurrency,
+    sentInvoiceCount,
+  } = params;
 
   const collectionActionsById = new Map<string, CollectionActionItem>();
 
@@ -151,6 +157,7 @@ export function buildDailyActionCategories(params: {
       requiringAttentionMixedCurrency: requiringAttention.isMixedCurrency,
       remindersDueCount,
       newlyOverdueCount,
+      sentInvoiceCount,
     },
     collectionActions,
   };
