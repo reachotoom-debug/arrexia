@@ -37,6 +37,7 @@ export async function sendReminderAction(input: SendReminderInput) {
     });
 
     revalidatePath(`/${workspaceId}/reminders`);
+    revalidatePath(`/${workspaceId}/actions`);
 
     return {
       ok: result.success,

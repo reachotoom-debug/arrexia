@@ -315,3 +315,116 @@ describe("collection action sort priority (R3B)", () => {
     ]);
   });
 });
+
+describe("resolveCollectionActionExecution (R3C)", () => {
+  const reminderAction = {
+    invoiceId: "inv-1",
+    invoiceNumber: "INV-001",
+    clientName: "Acme",
+    clientEmail: "client@example.com",
+    ruleId: "rule-7",
+    templateId: "tpl-1",
+    scheduledDate: "2026-07-08",
+  };
+
+  it("A — reminder-due row chooses exact rule-bound candidate", async () => {
+    const { resolveCollectionActionExecution } = await import(
+      "@/lib/actions/resolveCollectionActionExecution"
+    );
+
+    const execution = resolveCollectionActionExecution({
+      hasReminderDue: true,
+      reminderAction,
+      clientEmail: "fallback@example.com",
+    });
+
+    assert.equal(execution.mode, "rule_bound");
+    if (execution.mode === "rule_bound") {
+      assert.equal(execution.ruleId, "rule-7");
+      assert.equal(execution.templateId, "tpl-1");
+      assert.equal(execution.scheduledDate, "2026-07-08");
+      assert.equal(execution.clientEmail, "client@example.com");
+    }
+  });
+
+  it("B — milestone without reminder candidate chooses manual-send execution", async () => {
+    const { resolveCollectionActionExecution } = await import(
+      "@/lib/actions/resolveCollectionActionExecution"
+    );
+
+    const execution = resolveCollectionActionExecution({
+      hasReminderDue: false,
+      clientEmail: "client@example.com",
+    });
+
+    assert.deepEqual(execution, {
+      mode: "manual",
+      clientEmail: "client@example.com",
+    });
+  });
+
+  it("C — newly-overdue without reminder candidate chooses manual-send execution", async () => {
+    const { resolveCollectionActionExecution } = await import(
+      "@/lib/actions/resolveCollectionActionExecution"
+    );
+
+    const execution = resolveCollectionActionExecution({
+      hasReminderDue: false,
+      clientEmail: "newly@example.com",
+    });
+
+    assert.equal(execution.mode, "manual");
+  });
+
+  it("D — missing client email cannot send", async () => {
+    const { resolveCollectionActionExecution } = await import(
+      "@/lib/actions/resolveCollectionActionExecution"
+    );
+
+    assert.deepEqual(
+      resolveCollectionActionExecution({
+        hasReminderDue: false,
+        clientEmail: null,
+      }),
+      { mode: "view_only" }
+    );
+
+    assert.deepEqual(
+      resolveCollectionActionExecution({
+        hasReminderDue: true,
+        reminderAction: { ...reminderAction, clientEmail: null },
+        clientEmail: null,
+      }),
+      { mode: "view_only" }
+    );
+  });
+
+  it("E — reminder-due takes precedence when multiple reasons exist", async () => {
+    const { resolveCollectionActionExecution } = await import(
+      "@/lib/actions/resolveCollectionActionExecution"
+    );
+
+    const execution = resolveCollectionActionExecution({
+      hasReminderDue: true,
+      reminderAction,
+      clientEmail: "client@example.com",
+    });
+
+    assert.equal(execution.mode, "rule_bound");
+  });
+
+  it("F — no fabricated ruleId/scheduledDate for milestone manual send", async () => {
+    const { resolveCollectionActionExecution } = await import(
+      "@/lib/actions/resolveCollectionActionExecution"
+    );
+
+    const execution = resolveCollectionActionExecution({
+      hasReminderDue: false,
+      clientEmail: "client@example.com",
+    });
+
+    assert.equal(execution.mode, "manual");
+    assert.equal("ruleId" in execution, false);
+    assert.equal("scheduledDate" in execution, false);
+  });
+});

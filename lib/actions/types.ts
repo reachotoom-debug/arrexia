@@ -1,5 +1,6 @@
 import type { EligibleReminderCandidate } from "@/lib/reminders/getEligibleReminders";
 import type { AgingMilestoneDays } from "./collectionActivity";
+import type { CollectionActionExecution } from "./resolveCollectionActionExecution";
 
 export type ActionReason =
   | { type: "reminder_due" }
@@ -37,6 +38,7 @@ export type CollectionActionItem = {
   overdueDays: number;
   isHighRisk: boolean;
   reasons: ActionReason[];
+  execution?: CollectionActionExecution;
 };
 
 export type DailyActionSummary = {

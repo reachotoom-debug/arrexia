@@ -15,7 +15,7 @@ import {
   TABLE_TH_RIGHT,
 } from "@/components/table/tableShell";
 import { INVOICE_NUMBER_COL_CLASS } from "@/components/tables/invoiceTableColumns";
-import { SendReminderButton } from "../../reminders/_components/send-reminder-button";
+import { CollectionActionCell } from "./CollectionActionCell";
 import type { ActionReason, DailyActionCenterData } from "@/lib/actions/types";
 
 type DailyActionCenterViewProps = {
@@ -66,7 +66,7 @@ function SummaryCard({
 }
 
 export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterViewProps) {
-  const { summary, collectionActions, reminderActionsByInvoiceId } = data;
+  const { summary, collectionActions } = data;
 
   if (summary.actionsTodayCount === 0) {
     return (
@@ -147,13 +147,7 @@ export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterVi
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {collectionActions.map((item, index) => {
-                  const reminderAction = reminderActionsByInvoiceId[item.id];
-                  const hasReminderDue = item.reasons.some(
-                    (reason) => reason.type === "reminder_due"
-                  );
-
-                  return (
+                {collectionActions.map((item, index) => (
                     <tr key={item.id} className={TABLE_ROW}>
                       <td className="px-3 py-3 text-sm whitespace-nowrap">
                         <div className="flex flex-col gap-1">
@@ -221,37 +215,18 @@ export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterVi
                         </div>
                       </td>
                       <td className={clsx("px-3 py-3 text-sm whitespace-nowrap", TABLE_TD)}>
-                        {hasReminderDue && reminderAction ? (
-                          <SendReminderButton
+                        {item.execution ? (
+                          <CollectionActionCell
                             workspaceId={workspaceId}
-                            invoiceId={reminderAction.invoiceId}
-                            invoiceNumber={reminderAction.invoiceNumber}
-                            clientName={reminderAction.clientName}
-                            clientEmail={reminderAction.clientEmail}
-                            templateId={reminderAction.templateId}
-                            ruleId={reminderAction.ruleId}
-                            scheduledDate={reminderAction.scheduledDate}
+                            invoiceId={item.id}
+                            invoiceNumber={item.invoiceNumber}
+                            clientName={item.clientName}
+                            execution={item.execution}
                           />
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                              href={`/${workspaceId}/invoices/${item.id}`}
-                              className="text-sm font-medium text-blue-600 hover:underline"
-                            >
-                              View invoice
-                            </Link>
-                            <Link
-                              href={`/${workspaceId}/collections`}
-                              className="text-sm text-slate-500 hover:text-slate-700 hover:underline"
-                            >
-                              Collections
-                            </Link>
-                          </div>
-                        )}
+                        ) : null}
                       </td>
                     </tr>
-                  );
-                })}
+                  ))}
               </tbody>
             </table>
           </div>
