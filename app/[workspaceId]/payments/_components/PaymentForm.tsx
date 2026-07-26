@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo, useEffect, useState, useTransition } from "react";
+import { useMemo, useEffect, useState, useTransition, useRef } from "react";
 import {
   PaymentFormSchema,
   type PaymentFormValues,
@@ -34,6 +34,10 @@ interface PaymentFormProps {
   invoiceNumber?: string;
   /** Workspace-local today (YYYY-MM-DD) for create-mode default payment date */
   defaultPaymentDate?: string;
+  /** Preselect invoice after client invoices load (create mode) */
+  prefillInvoiceId?: string;
+  /** Optional post-save redirect target (create mode) */
+  returnTo?: string;
 }
 
 export function PaymentForm({
@@ -47,9 +51,13 @@ export function PaymentForm({
   clientName,
   invoiceNumber,
   defaultPaymentDate,
+  prefillInvoiceId,
+  returnTo,
 }: PaymentFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
+  const prefillInvoiceIdRef = useRef(prefillInvoiceId ?? initialData?.invoiceId ?? null);
+  const previousClientIdRef = useRef<string | null>(null);
 
   // State for lazy-loading invoices (create mode only)
   const [clientInvoices, setClientInvoices] = useState<Invoice[]>(isEdit ? invoices : []);
@@ -102,9 +110,15 @@ export function PaymentForm({
 
     // In create mode, clear invoices when client changes
     setClientInvoices([]);
-    setValue("invoiceId", "");
-    setSelectedInvoiceOutstanding(null);
-    clearErrors("amount");
+
+    const clientChanged = previousClientIdRef.current !== selectedClientId;
+    previousClientIdRef.current = selectedClientId;
+
+    if (clientChanged && !prefillInvoiceIdRef.current) {
+      setValue("invoiceId", "");
+      setSelectedInvoiceOutstanding(null);
+      clearErrors("amount");
+    }
 
     if (!selectedClientId) {
       return;
@@ -118,6 +132,15 @@ export function PaymentForm({
           clientId: selectedClientId,
         });
         setClientInvoices(loadedInvoices);
+
+        const pendingInvoiceId = prefillInvoiceIdRef.current;
+        if (
+          pendingInvoiceId &&
+          loadedInvoices.some((inv) => inv.id === pendingInvoiceId)
+        ) {
+          setValue("invoiceId", pendingInvoiceId);
+          prefillInvoiceIdRef.current = null;
+        }
       } catch (err) {
         console.error("[PaymentForm] failed to load client invoices", err);
         setClientInvoices([]);
@@ -211,6 +234,9 @@ export function PaymentForm({
       {isEdit && initialData?.invoiceId && (
         <input type="hidden" name="invoiceId" value={initialData.invoiceId} />
       )}
+      {!isEdit && returnTo ? (
+        <input type="hidden" name="returnTo" value={returnTo} />
+      ) : null}
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

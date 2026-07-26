@@ -25,6 +25,7 @@ import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
 import { resolveWorkspaceBusinessDate } from "@/lib/invoices/workspaceInvoiceAging";
 import { formatPaymentBusinessDate } from "@/lib/payments/paymentBusinessDate";
 import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
+import { canShowRecordPaymentCta } from "@/lib/invoices/invoiceFinancialState";
 
 interface InvoicePageProps {
   params: Promise<{ workspaceId: string; invoiceId: string }>;
@@ -253,6 +254,18 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
       ? getInvoiceDueStatus(invoice.due_date, workspaceToday)
       : null;
 
+  const showRecordPayment = canShowRecordPaymentCta({
+    isArchived,
+    baseStatus: invoice.status,
+    outstanding: displayOutstanding,
+    clientIsActive: client?.is_active === true,
+    clientArchived: Boolean(client?.archived_at),
+  });
+
+  const recordPaymentHref = invoice.client_id
+    ? `/${workspaceId}/payments/new?clientId=${encodeURIComponent(invoice.client_id)}&invoiceId=${encodeURIComponent(invoice.id)}&returnTo=${encodeURIComponent(`/${workspaceId}/invoices/${invoice.id}`)}`
+    : null;
+
   const formatInvoiceDate = (value: string | null | undefined) => {
     if (!value) return "—";
     return formatDateOnlyField(value);
@@ -365,6 +378,14 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
               >
                 Edit Invoice
               </Link>
+              {showRecordPayment && recordPaymentHref ? (
+                <Link
+                  href={recordPaymentHref}
+                  className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-blue-700"
+                >
+                  Record Payment
+                </Link>
+              ) : null}
               {showCloneInvoiceAction ? (
                 <Link
                   href={`/${workspaceId}/invoices/new?clone=${invoice.id}`}

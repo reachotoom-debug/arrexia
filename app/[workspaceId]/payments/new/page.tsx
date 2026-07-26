@@ -9,23 +9,56 @@ import { resolveWorkspaceBusinessDate } from "@/lib/invoices/workspaceInvoiceAgi
 
 interface NewPaymentPageProps {
   params: Promise<{ workspaceId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function readSearchParam(
+  value: string | string[] | undefined
+): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
 }
 
 export default async function NewPaymentPage({
   params,
+  searchParams,
 }: NewPaymentPageProps) {
   const { workspaceId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const prefillClientId = readSearchParam(resolvedSearchParams.clientId);
+  const prefillInvoiceId = readSearchParam(resolvedSearchParams.invoiceId);
+  const returnTo = readSearchParam(resolvedSearchParams.returnTo);
 
   const settings = await loadWorkspaceSettings(workspaceId);
   const defaultPaymentDate =
     getWorkspaceCalendarDateNow(settings.timezone) ??
     resolveWorkspaceBusinessDate(new Date(), settings.timezone);
 
-  // Load only eligible clients (invoices will be loaded on-demand when client is selected)
   const eligibleClients = await getEligibleClientsForPayments(workspaceId);
-  
-  // Map to format expected by PaymentForm (id and name only)
   const clients = eligibleClients.map((c) => ({ id: c.client_id, name: c.name }));
+
+  const prefillClientAllowed =
+    prefillClientId != null &&
+    clients.some((client) => client.id === prefillClientId);
+
+  const initialData: PaymentFormValues | undefined = prefillClientAllowed
+    ? {
+        clientId: prefillClientId,
+        invoiceId: prefillInvoiceId ?? "",
+        amount: 0,
+        date: defaultPaymentDate,
+        method: "cash",
+        status: "completed",
+        transactionId: "",
+        notes: "",
+        payment_provider: "",
+      }
+    : undefined;
+
+  const cancelUrl =
+    returnTo && returnTo.startsWith(`/${workspaceId}/`)
+      ? returnTo
+      : `/${workspaceId}/payments`;
 
   async function handleCreate(formData: FormData) {
     "use server";
@@ -53,15 +86,20 @@ export default async function NewPaymentPage({
     if ("error" in result) {
       throw new Error(result.error);
     }
+
+    const redirectTo = readSearchParam(
+      formData.get("returnTo")?.toString() as string | undefined
+    );
+    if (redirectTo && redirectTo.startsWith(`/${workspaceId}/`)) {
+      redirect(redirectTo);
+    }
     redirect(`/${workspaceId}/payments`);
   }
 
-  // Show empty state if no eligible clients (no clients with eligible invoices)
   const showEmptyState = clients.length === 0;
 
   return (
     <div className="w-full min-w-0">
-      {/* Empty state if no eligible clients */}
       {showEmptyState ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <div className="mb-4 rounded-full bg-slate-100 p-4 inline-block">
@@ -93,8 +131,11 @@ export default async function NewPaymentPage({
           invoices={[]}
           action={handleCreate}
           workspaceId={workspaceId}
-          cancelUrl={`/${workspaceId}/payments`}
+          cancelUrl={cancelUrl}
           defaultPaymentDate={defaultPaymentDate}
+          initialData={initialData}
+          prefillInvoiceId={prefillClientAllowed ? prefillInvoiceId : undefined}
+          returnTo={returnTo}
         />
       )}
     </div>

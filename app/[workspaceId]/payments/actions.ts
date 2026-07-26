@@ -13,6 +13,7 @@ import {
 } from "@/lib/payments/schema";
 import { logAuditEvent } from "@/lib/audit/log";
 import { logPostgresUniqueViolation } from "@/lib/db/postgres-errors";
+import { revalidateFinancialSurfacesAfterPayment } from "@/lib/payments/revalidateFinancialSurfaces";
 
 /**
  * Server action to load eligible invoices for a specific client (for payment recording)
@@ -292,10 +293,10 @@ export async function createPayment(
     console.error("[createPayment] audit log failed (non-blocking):", auditError);
   }
 
-  // Revalidate pages after insert
-  revalidatePath(`/${workspaceId}/invoices`); // Invoices page
-  revalidatePath(`/${workspaceId}/invoices/${parsed.invoiceId}`); // Invoice details
-  revalidatePath(`/${workspaceId}/payments`); // Payments list
+  revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath, {
+    invoiceId: parsed.invoiceId,
+    clientId: parsed.clientId,
+  });
 
   return { id: data.id };
 }
@@ -480,12 +481,11 @@ export async function updatePayment(
     },
   });
 
-  revalidatePath(`/${workspaceId}/payments`);
-  revalidatePath(`/${workspaceId}/payments/${paymentId}`);
-  revalidatePath(`/${workspaceId}/invoices`);
-  if (oldInvoiceId) {
-    revalidatePath(`/${workspaceId}/invoices/${oldInvoiceId}`);
-  }
+  revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath, {
+    invoiceId: oldInvoiceId,
+    clientId: oldClientId,
+    paymentId,
+  });
   return { success: true };
 }
 
@@ -498,7 +498,7 @@ export async function deletePayment(workspaceId: string, paymentId: string) {
   // Get payment details before archiving (to recalculate state and for audit log)
   const { data: existingPayment } = await supabase
     .from("payments")
-    .select("invoice_id, amount")
+    .select("invoice_id, client_id, amount")
     .eq("id", paymentId)
     .eq("workspace_id", workspaceId)
     .is("archived_at", null)
@@ -544,11 +544,11 @@ export async function deletePayment(workspaceId: string, paymentId: string) {
     },
   });
 
-  revalidatePath(`/${workspaceId}/payments`);
-  revalidatePath(`/${workspaceId}/invoices`);
-  if (existingPayment?.invoice_id) {
-    revalidatePath(`/${workspaceId}/invoices/${existingPayment.invoice_id}`);
-  }
+  revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath, {
+    invoiceId: existingPayment?.invoice_id,
+    clientId: existingPayment?.client_id,
+    paymentId,
+  });
 }
 
 /**
@@ -566,7 +566,7 @@ export async function archivePayment(workspaceId: string, paymentId: string) {
   // Step 1: Fetch existing row to check state and get invoice_id
   const { data: existing, error: fetchError } = await supabase
     .from("payments")
-    .select("id, workspace_id, invoice_id, archived_at")
+    .select("id, workspace_id, invoice_id, client_id, archived_at")
     .eq("id", paymentId)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
@@ -649,12 +649,11 @@ export async function archivePayment(workspaceId: string, paymentId: string) {
     console.error("[archivePayment] audit log failed (non-blocking):", auditError);
   }
 
-  // Step 6: Revalidate paths
-  revalidatePath(`/${workspaceId}/payments`);
-  if (existing.invoice_id) {
-    revalidatePath(`/${workspaceId}/invoices/${existing.invoice_id}`);
-    revalidatePath(`/${workspaceId}/invoices`);
-  }
+  revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath, {
+    invoiceId: existing.invoice_id,
+    clientId: existing.client_id,
+    paymentId,
+  });
 }
 
 /**
@@ -669,7 +668,7 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
   // Step 1: Fetch existing row to check state and get invoice_id
   const { data: existing, error: fetchError } = await supabase
     .from("payments")
-    .select("id, workspace_id, invoice_id, archived_at")
+    .select("id, workspace_id, invoice_id, client_id, archived_at")
     .eq("id", paymentId)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
@@ -752,12 +751,11 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
     console.error("[unarchivePayment] audit log failed (non-blocking):", auditError);
   }
 
-  // Step 6: Revalidate paths
-  revalidatePath(`/${workspaceId}/payments`);
-  if (existing.invoice_id) {
-    revalidatePath(`/${workspaceId}/invoices/${existing.invoice_id}`);
-    revalidatePath(`/${workspaceId}/invoices`);
-  }
+  revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath, {
+    invoiceId: existing.invoice_id,
+    clientId: existing.client_id,
+    paymentId,
+  });
 }
 
 /**
@@ -850,9 +848,7 @@ export async function bulkArchivePayments(workspaceId: string, paymentIds: strin
     console.error("[bulkArchivePayments] audit log failed (non-blocking):", auditError);
   }
 
-  // Step 5: Revalidate paths
-  revalidatePath(`/${workspaceId}/payments`);
-  revalidatePath(`/${workspaceId}/invoices`);
+  revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath);
   invoiceIds.forEach((invoiceId) => {
     revalidatePath(`/${workspaceId}/invoices/${invoiceId}`);
   });
@@ -950,9 +946,7 @@ export async function bulkUnarchivePayments(workspaceId: string, paymentIds: str
     console.error("[bulkUnarchivePayments] audit log failed (non-blocking):", auditError);
   }
 
-  // Step 5: Revalidate paths
-  revalidatePath(`/${workspaceId}/payments`);
-  revalidatePath(`/${workspaceId}/invoices`);
+  revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath);
   invoiceIds.forEach((invoiceId) => {
     revalidatePath(`/${workspaceId}/invoices/${invoiceId}`);
   });

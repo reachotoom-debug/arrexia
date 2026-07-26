@@ -18,6 +18,7 @@ import { assertInvoiceCreateAllowed } from "@/lib/billing/assertWithinPlanLimits
 import { redirect } from "next/navigation";
 import { logPostgresUniqueViolation } from "@/lib/db/postgres-errors";
 import { normalizeDateOnlyString } from "@/lib/datetime/formatDateTime";
+import { isInvoiceFullyPaid } from "@/lib/invoices/invoiceFinancialState";
 
 const INV_PREFIX = "INV-";
 const DEFAULT_PAD_WIDTH = 4;
@@ -322,6 +323,21 @@ export async function updateInvoice(
 
   if (invoiceRow.archived_at) {
     return { error: "Cannot edit an archived invoice. Unarchive it first." };
+  }
+
+  const { data: invoiceFinancial, error: invoiceFinancialError } = await supabase
+    .from("invoices_view")
+    .select("outstanding")
+    .eq("id", invoiceId)
+    .eq("workspace_id", validatedWorkspaceId)
+    .maybeSingle();
+
+  if (invoiceFinancialError) {
+    return { error: `Failed to load invoice financial state: ${invoiceFinancialError.message}` };
+  }
+
+  if (isInvoiceFullyPaid(invoiceFinancial?.outstanding)) {
+    return { error: "Cannot edit a fully paid invoice." };
   }
 
   // Step 2: Fetch client defaults for payment terms

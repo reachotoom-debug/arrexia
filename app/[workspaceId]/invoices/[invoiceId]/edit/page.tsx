@@ -6,6 +6,8 @@ import { createRoutePerf, perfTime } from "@/lib/perf/server";
 import { InvoiceForm } from "../../_components/InvoiceForm";
 import { type InvoiceFormValues } from "@/lib/invoices/schema";
 import { updateInvoice } from "../../actions";
+import { isInvoiceFullyPaid } from "@/lib/invoices/invoiceFinancialState";
+import Link from "next/link";
 
 interface EditInvoicePageProps {
   params: Promise<{ workspaceId: string; invoiceId: string }>;
@@ -76,12 +78,40 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
 
   const resolvedInvoiceId = invoice.id;
 
-  // For now, set isFullyPaid to false since we can't easily calculate it without querying payments
-  // The priority is to load and edit the core invoice fields without crashing
-  const isFullyPaid = false;
+  const { data: invoiceFinancial } = await perf.time("invoiceView", async () =>
+    supabase
+      .from("invoices_view")
+      .select("outstanding")
+      .eq("id", resolvedInvoiceId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle()
+  );
+
+  const isFullyPaid = isInvoiceFullyPaid(invoiceFinancial?.outstanding);
   
   // Check if invoice is archived
   const isArchived = invoice?.archived_at !== null;
+
+  if (isFullyPaid && !isArchived) {
+    perf.finish({ status: "fully-paid-locked" });
+    return (
+      <div className="mx-auto w-full max-w-2xl min-w-0 space-y-4">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+          <p className="text-base font-semibold">This invoice is fully paid</p>
+          <p className="mt-2">
+            Invoice details and line items are locked because the outstanding balance is zero.
+            Payment history remains available on the invoice detail page.
+          </p>
+          <Link
+            href={`/${workspaceId}/invoices/${resolvedInvoiceId}`}
+            className="mt-4 inline-flex items-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            Back to invoice
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // Fetch invoice items and client in parallel
   // NOTE: invoice_items has no workspace_id; scope via invoices join (already verified invoice belongs to workspace)
@@ -173,14 +203,6 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
           <p className="font-medium">Archived invoice (read-only)</p>
         </div>
       )}
-      {isFullyPaid && !isArchived && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <p className="font-medium">This invoice is fully paid.</p>
-          <p className="mt-1 text-xs">
-            Line items and totals are locked. You can only edit notes and status.
-          </p>
-        </div>
-      )}
       <InvoiceForm
         mode="edit"
         initialData={initialData}
@@ -189,7 +211,7 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
         onSubmit={handleUpdate}
         workspaceId={workspaceId}
         cancelUrl={`/${workspaceId}/invoices`}
-        isPaid={isFullyPaid}
+        isPaid={false}
         isArchived={isArchived}
         currency={invoice.currency || "USD"}
       />
