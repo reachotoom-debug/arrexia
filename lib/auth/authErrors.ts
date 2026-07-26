@@ -30,6 +30,15 @@ export const AUTH_PASSWORD_RESET_SEND_FAILURE_MESSAGE =
 export const AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE =
   "We couldn't update your password. Please request a new reset link and try again.";
 
+export const AUTH_ACCOUNT_NOT_ACTIVATED_MESSAGE =
+  "Please confirm your email using the signup confirmation link before signing in.";
+
+export const AUTH_ACCOUNT_NOT_ACTIVATED_RESET_MESSAGE =
+  "Complete account registration using your signup confirmation email before resetting your password.";
+
+export const AUTH_FORGOT_PASSWORD_GENERIC_SUCCESS_MESSAGE =
+  "If an account is eligible for password recovery, we'll send a reset link.";
+
 export type AuthErrorContext =
   | "login"
   | "register"

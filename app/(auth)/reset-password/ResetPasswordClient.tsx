@@ -94,16 +94,30 @@ export function ResetPasswordClient() {
     submitLockRef.current = true;
 
     try {
-      const supabase = supabaseBrowser();
-      const { error } = await supabase.auth.updateUser({ password: data.password });
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        cache: "no-store",
+        body: JSON.stringify({ password: data.password }),
+      });
 
-      if (error) {
-        logAuthErrorDev("reset-password", error);
-        setError("root", { message: mapPasswordResetUpdateError(error.message) });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.ok) {
+        logAuthErrorDev("reset-password", payload?.error ?? response.status);
+        setError("root", {
+          message: payload?.error ?? mapPasswordResetUpdateError("update failed"),
+        });
+
+        if (response.status === 403) {
+          setSessionExpired(true);
+        }
         return;
       }
 
-      await supabase.auth.signOut().catch(() => undefined);
       setCompleted(true);
     } finally {
       submitLockRef.current = false;

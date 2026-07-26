@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { activateAccount } from "@/lib/auth/accountActivation";
 import { mapAuthCallbackExchangeError } from "@/lib/auth/authErrors";
+import { resolveCallbackActivationMethod } from "@/lib/auth/callbackActivation";
 import { getServerAppOrigin } from "@/lib/config/appUrl";
 import { getOAuthCallbackErrorMessage, isSocialAuthEnabled } from "@/lib/auth/oauthErrors";
 import {
@@ -109,6 +111,18 @@ export async function GET(request: Request) {
     const finalRedirect = NextResponse.redirect(`${origin}${PASSWORD_RESET_NEXT_PATH}`);
     copyCookies(cookieHolder, finalRedirect);
     return finalRedirect;
+  }
+
+  if (successDecision.action === "continue_auth") {
+    const activationMethod = resolveCallbackActivationMethod({
+      isRecovery,
+      typeParam: recoveryType,
+      user,
+    });
+
+    if (activationMethod) {
+      await activateAccount(user.id, activationMethod);
+    }
   }
 
   const destination = await resolvePostLoginDestination(user.id, next, {

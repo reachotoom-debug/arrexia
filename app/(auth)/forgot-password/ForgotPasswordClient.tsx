@@ -17,14 +17,9 @@ import {
   authInputClass,
 } from "@/components/auth/authFormStyles";
 import {
+  AUTH_FORGOT_PASSWORD_GENERIC_SUCCESS_MESSAGE,
   logAuthErrorDev,
 } from "@/lib/auth/authErrors";
-import {
-  buildPasswordResetCallbackUrl,
-  mapPasswordResetRequestError,
-} from "@/lib/auth/passwordRecovery";
-import { getClientAppOrigin } from "@/lib/config/appUrl";
-import { supabaseBrowser } from "@/lib/supabase/client";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -55,23 +50,26 @@ export function ForgotPasswordClient() {
     setIsSending(true);
 
     try {
-      const supabase = supabaseBrowser();
-      const redirectTo = buildPasswordResetCallbackUrl(getClientAppOrigin());
-
-      if (process.env.NODE_ENV === "development") {
-        console.info("[auth/forgot-password] redirectTo:", redirectTo);
-      }
-
-      const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
-        redirectTo,
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ email: data.email }),
       });
 
-      if (error) {
-        logAuthErrorDev("forgot-password", error);
-        setError("root", { message: mapPasswordResetRequestError(error.message) });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; message?: string }
+        | null;
+
+      if (!response.ok || !payload?.ok) {
+        logAuthErrorDev("forgot-password", payload ?? response.status);
+        setSubmitted(true);
         return;
       }
 
+      setSubmitted(true);
+    } catch (error) {
+      logAuthErrorDev("forgot-password", error);
       setSubmitted(true);
     } finally {
       submitLockRef.current = false;
@@ -88,9 +86,7 @@ export function ForgotPasswordClient() {
 
         <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
           <p className="font-medium">Check your email</p>
-          <p className="mt-1 text-blue-600">
-            If an account exists for that address, we sent a password reset link.
-          </p>
+          <p className="mt-1 text-blue-600">{AUTH_FORGOT_PASSWORD_GENERIC_SUCCESS_MESSAGE}</p>
         </div>
 
         <div className={authFooterClass}>

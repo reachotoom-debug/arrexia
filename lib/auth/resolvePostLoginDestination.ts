@@ -1,4 +1,8 @@
-import { AUTH_WORKSPACE_SETUP_FAILED_MESSAGE } from "@/lib/auth/authErrors";
+import { assertBootstrapActivationAllowed } from "@/lib/auth/accountActivation";
+import {
+  AUTH_ACCOUNT_NOT_ACTIVATED_MESSAGE,
+  AUTH_WORKSPACE_SETUP_FAILED_MESSAGE,
+} from "@/lib/auth/authErrors";
 import { buildPostLoginDestinationPath } from "@/lib/auth/postLoginRecovery";
 import { resolveHonoredNextPath } from "@/lib/auth/safeNextPath";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -46,6 +50,24 @@ export async function resolvePostLoginDestination(
   }
 
   const workspaceFound = Boolean(existingMemberships?.[0]?.workspace_id);
+
+  const activationDecision = await assertBootstrapActivationAllowed(userId, workspaceFound);
+  if (!activationDecision.allowed) {
+    const errorMessage =
+      activationDecision.reason === "not_activated"
+        ? AUTH_ACCOUNT_NOT_ACTIVATED_MESSAGE
+        : WORKSPACE_SETUP_FAILED_MESSAGE;
+
+    logPostLoginDev({
+      userId,
+      workspaceFound,
+      workspaceCreated: false,
+      finalPath: null,
+      error: errorMessage,
+    });
+
+    return { error: errorMessage };
+  }
 
   try {
     const workspaceId = await ensureWorkspaceForUser(userId, {

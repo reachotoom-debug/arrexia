@@ -1,3 +1,5 @@
+import { assertBootstrapActivationAllowed } from "@/lib/auth/accountActivation";
+import { AUTH_ACCOUNT_NOT_ACTIVATED_MESSAGE } from "@/lib/auth/authErrors";
 import { getPlanStorageLimits, isWorkspacePlan, type WorkspacePlan } from "@/lib/billing/plans";
 import {
   resolveBootstrapWorkspacePlan,
@@ -429,5 +431,24 @@ export async function ensureWorkspaceForUser(
   options?: WorkspaceBootstrapOptions
 ): Promise<string> {
   const admin = supabaseAdmin();
+  const existingWorkspaceId = await loadExistingWorkspaceForUser(admin, userId);
+  const activationDecision = await assertBootstrapActivationAllowed(
+    userId,
+    Boolean(existingWorkspaceId)
+  );
+
+  if (!activationDecision.allowed) {
+    if (activationDecision.reason === "not_activated") {
+      throw new Error(AUTH_ACCOUNT_NOT_ACTIVATED_MESSAGE);
+    }
+
+    throwBootstrapError(
+      "load_existing_membership",
+      userId,
+      null,
+      "activation lookup failed"
+    );
+  }
+
   return bootstrapWorkspaceForUser(admin, userId, options);
 }
