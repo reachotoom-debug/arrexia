@@ -145,11 +145,11 @@ describe("buildEligibleReminderCandidates", () => {
     assert.equal(results.length, 0);
   });
 
-  it("keeps inactive non-archived client eligible", () => {
+  it("excludes inactive non-archived client", () => {
     const results = evaluate({
       invoices: [baseInvoice({ client_is_active: false })],
     });
-    assert.equal(results.length, 1);
+    assert.equal(results.length, 0);
   });
 
   it("matches partially paid overdue invoice for partially_paid rule", () => {

@@ -30,6 +30,7 @@ export type ReminderEligibilityReason =
   | "rule_disabled"
   | "invoice_archived"
   | "client_archived"
+  | "client_inactive"
   | "invoice_not_collectible"
   | "no_outstanding_balance"
   | "status_not_allowed"
@@ -61,7 +62,7 @@ export interface ReminderInvoiceEligibilityInput {
   baseStatus: string | null;
   archivedAt?: string | null;
   clientArchivedAt?: string | null;
-  /** Preserved for callers; inactive clients are NOT excluded in R2A. */
+  /** Inactive clients must not receive reminders (P1B lifecycle contract). */
   clientIsActive?: boolean | null;
 }
 
@@ -222,6 +223,10 @@ export function evaluateReminderEligibility(
 
   if (invoice.clientArchivedAt) {
     return ineligible("client_archived");
+  }
+
+  if (invoice.clientIsActive !== true) {
+    return ineligible("client_inactive");
   }
 
   if (!invoice.dueDate) {

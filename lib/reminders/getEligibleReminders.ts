@@ -354,7 +354,10 @@ export async function getEligibleReminders(
     )
     .eq("workspace_id", workspaceId)
     .gt("outstanding", 0)
-    .not("due_date", "is", null);
+    .not("due_date", "is", null)
+    .is("archived_at", null)
+    .eq("client_is_active", true)
+    .is("client_archived_at", null);
 
   if (invoicesError) {
     console.error("[getEligibleReminders] invoices load error", invoicesError);

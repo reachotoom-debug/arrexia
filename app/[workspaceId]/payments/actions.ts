@@ -14,6 +14,10 @@ import {
 import { logAuditEvent } from "@/lib/audit/log";
 import { logPostgresUniqueViolation } from "@/lib/db/postgres-errors";
 import { revalidateFinancialSurfacesAfterPayment } from "@/lib/payments/revalidateFinancialSurfaces";
+import {
+  getPaymentCreationBlockReason,
+  paymentCreationBlockMessage,
+} from "@/lib/receivables/operationalEligibility";
 
 /**
  * Server action to load eligible invoices for a specific client (for payment recording)
@@ -191,20 +195,29 @@ export async function createPayment(
   }
 
   if (clientRow.archived_at) {
-    return { error: "Cannot create payment for archived client" };
+    return { error: paymentCreationBlockMessage("archived_client") };
   }
 
   if (!clientRow.is_active) {
-    return { error: "Cannot create payment for inactive client" };
+    return { error: paymentCreationBlockMessage("inactive_client") };
   }
 
-  // Validate: base_status === 'sent' (not void, not draft)
-  if (invoiceView.base_status === "void") {
-    return { error: "Cannot create payment for void invoice" };
-  }
+  const paymentBlockReason = getPaymentCreationBlockReason({
+    clientArchived: Boolean(clientRow.archived_at),
+    clientIsActive: clientRow.is_active,
+    invoiceArchived: Boolean(invoiceRow.archived_at),
+    baseStatus: invoiceView.base_status,
+    outstanding: invoiceView.outstanding,
+  });
 
-  if (invoiceView.base_status === "draft") {
-    return { error: "Cannot create payment for draft invoice. Invoice must be sent first." };
+  if (paymentBlockReason === "void_invoice" || paymentBlockReason === "draft_invoice" || paymentBlockReason === "fully_paid") {
+    if (paymentBlockReason === "fully_paid") {
+      const currentOutstanding = Number(invoiceView.outstanding ?? 0);
+      return {
+        error: `Invoice has no outstanding balance (${currentOutstanding.toFixed(2)}). Cannot record payment.`,
+      };
+    }
+    return { error: paymentCreationBlockMessage(paymentBlockReason) };
   }
 
   // Validate: outstanding > 0

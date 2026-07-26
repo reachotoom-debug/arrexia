@@ -168,11 +168,11 @@ describe("R2C eligibility (canonical builder)", () => {
     assert.equal(results.length, 0);
   });
 
-  it("includes inactive non-archived client", () => {
+  it("excludes inactive non-archived client", () => {
     const results = evaluate({
       invoices: [invoice({ client_is_active: false })],
     });
-    assert.equal(results.length, 1);
+    assert.equal(results.length, 0);
   });
 
   it("excludes disabled template", () => {

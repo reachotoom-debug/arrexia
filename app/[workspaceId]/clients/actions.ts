@@ -236,9 +236,8 @@ export async function unarchiveClient(workspaceId: string, clientId: string): Pr
     // Explicitly target the base table public.clients
     const { error, data } = await supabase
       .from("clients")
-      .update({ 
+      .update({
         archived_at: null,
-        is_active: true, // Ensure client is active when unarchived
       })
       .eq("id", clientId)
       .eq("workspace_id", workspaceId)

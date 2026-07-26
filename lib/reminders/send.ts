@@ -332,22 +332,17 @@ export async function sendReminderForInvoice(
     invoiceView = fallbackInvoiceView;
   }
 
-  // Load client — rule-bound sends allow inactive non-archived clients (R2A/R2C).
+  // Load client — operational reminders require active, non-archived clients.
   let client: ClientForReminder | null = null;
   {
-    let eligibleClientQuery = supabase
+    const { data: eligibleClientData, error: eligibleClientError } = await supabase
       .from("clients")
       .select("id, name, email, archived_at, is_active")
       .eq("id", invoiceView.client_id)
       .eq("workspace_id", workspaceId)
-      .is("archived_at", null);
-
-    if (!ruleId) {
-      eligibleClientQuery = eligibleClientQuery.eq("is_active", true);
-    }
-
-    const { data: eligibleClientData, error: eligibleClientError } =
-      await eligibleClientQuery.maybeSingle();
+      .is("archived_at", null)
+      .eq("is_active", true)
+      .maybeSingle();
 
     if (eligibleClientError) {
       const errorMsg = "Failed to load client for this invoice";
@@ -440,7 +435,7 @@ export async function sendReminderForInvoice(
   let skipReason: string | null = null;
   if (client.archived_at) {
     skipReason = "client_archived";
-  } else if (!ruleId && client.is_active !== true) {
+  } else if (client.is_active !== true) {
     skipReason = "client_inactive";
   } else if (!client.email) {
     skipReason = "client_email_missing";

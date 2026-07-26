@@ -8,6 +8,7 @@ import { ArchivedBanner } from "@/components/ui/archived-banner";
 import { InactiveBanner } from "@/components/ui/inactive-banner";
 import { ToggleClientActive } from "./_components/ToggleClientActive";
 import { getClientState, resolveClientStatus } from "@/lib/clients/state";
+import { countsTowardClientCollectibleOutstanding } from "@/lib/receivables/operationalEligibility";
 import { ClientInvoicesTable } from "./_components/ClientInvoicesTable";
 
 interface ClientPageProps {
@@ -79,14 +80,21 @@ export default async function ClientPage({ params }: ClientPageProps) {
     status: invoice.base_status ?? invoice.display_status ?? "sent", // Use base_status or display_status
   }));
 
-  // Calculate metrics - exclude void invoices (ACTIVE invoices only)
+  const collectibleInvoices = invoicesWithTotals.filter((invoice) =>
+    countsTowardClientCollectibleOutstanding({
+      displayStatus: invoice.display_status,
+      baseStatus: invoice.base_status,
+    })
+  );
+
+  // Calculate metrics - exclude void and draft from collectible outstanding KPIs
   const totalInvoices = invoicesWithTotals.length;
   const totalBilled = invoicesWithTotals.reduce(
     (sum, inv) => sum + inv.total,
     0
   );
   const totalPaid = invoicesWithTotals.reduce((sum, inv) => sum + inv.paid, 0);
-  const outstandingBalance = invoicesWithTotals.reduce(
+  const outstandingBalance = collectibleInvoices.reduce(
     (sum, inv) => sum + inv.outstanding,
     0
   );

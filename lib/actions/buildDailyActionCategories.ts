@@ -1,4 +1,4 @@
-import { NON_COLLECTIBLE_BASE_STATUSES } from "@/lib/reminders/eligibility";
+import { isOperationalReceivableInvoice } from "@/lib/receivables/operationalEligibility";
 import {
   computeRequiringAttentionTotal,
   shouldShowAgingMilestoneAction,
@@ -12,15 +12,13 @@ import type {
 } from "./types";
 
 export function isChaseableInvoice(row: ChaseableInvoiceRow): boolean {
-  if (row.archivedAt != null) return false;
-  if (!(row.outstanding > 0)) return false;
-  if (!row.clientIsActive) return false;
-  if (row.clientArchivedAt != null) return false;
-  const base = (row.baseStatus ?? "").toLowerCase();
-  if ((NON_COLLECTIBLE_BASE_STATUSES as readonly string[]).includes(base)) {
-    return false;
-  }
-  return true;
+  return isOperationalReceivableInvoice({
+    archivedAt: row.archivedAt,
+    baseStatus: row.baseStatus,
+    outstanding: row.outstanding,
+    clientIsActive: row.clientIsActive,
+    clientArchivedAt: row.clientArchivedAt,
+  });
 }
 
 function triggerTier(reasons: ActionReason[]): number {

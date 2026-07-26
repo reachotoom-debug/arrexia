@@ -328,7 +328,7 @@ async function loadClients(
     const searchPattern = `%${escapedSearch}%`;
     // Use PostgREST or() syntax for multiple ILIKE conditions
     query = query.or(
-      `name.ilike.${searchPattern},company.ilike.${searchPattern},email.ilike.${searchPattern},whatsapp_phone.ilike.${searchPattern}`
+      `name.ilike.${searchPattern},company.ilike.${searchPattern},email.ilike.${searchPattern},whatsapp_phone.ilike.${searchPattern},whatsapp.ilike.${searchPattern}`
     );
   }
 

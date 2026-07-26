@@ -123,7 +123,7 @@ describe("evaluateReminderEligibility — archive", () => {
 });
 
 describe("evaluateReminderEligibility — inactive client", () => {
-  it("inactive but non-archived client is NOT rejected solely for inactivity", () => {
+  it("inactive but non-archived client is rejected", () => {
     const result = evaluateReminderEligibility(
       baseInput({
         invoice: {
@@ -133,8 +133,8 @@ describe("evaluateReminderEligibility — inactive client", () => {
         },
       })
     );
-    assert.equal(result.eligible, true);
-    assert.equal(result.reason, "eligible");
+    assert.equal(result.eligible, false);
+    assert.equal(result.reason, "client_inactive");
   });
 });
 
