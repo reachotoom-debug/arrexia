@@ -6,6 +6,7 @@ import { DashboardInsight } from "./_components/DashboardInsight";
 import { ArFocusView } from "./_components/ArFocusView";
 import { OwnerOverviewView } from "./_components/OwnerOverviewView";
 import { CollectionsModeView } from "./_components/CollectionsModeView";
+import { DailyActionCenterCta } from "./_components/DailyActionCenterCta";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ScrollTabStrip } from "@/components/layout/ScrollTabStrip";
@@ -119,6 +120,7 @@ export default async function DashboardPage({
       {/* Tab Content */}
       {view === "standard" && (
         <section className="mt-6 space-y-6">
+          <DailyActionCenterCta workspaceId={workspaceId} />
           {/* High-level metrics only */}
           <DashboardKpiRow summary={dashboardSummary} showPaymentsLast30Days />
           <DashboardInsight summary={dashboardSummary} />

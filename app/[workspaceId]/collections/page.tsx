@@ -294,6 +294,14 @@ export default async function CollectionsPage({
         <PageHeader
           title="Collections"
           description="Overdue invoices with outstanding balances for follow-up."
+          secondaryActions={
+            <Link
+              href={`/${workspaceId}/actions`}
+              className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+            >
+              Today&apos;s actions →
+            </Link>
+          }
           primaryAction={
             <Link href={`/${workspaceId}/invoices/new`} className={primaryCtaClass}>
               New Invoice

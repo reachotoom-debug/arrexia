@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  ListChecks,
   Users,
   FileText,
   CreditCard,
@@ -18,7 +19,7 @@ export type NavItem = {
 
 /**
  * Get workspace navigation items in the canonical order.
- * Includes: dashboard, clients, invoices, payments, collections, reminders, settings
+ * Includes: dashboard, actions, clients, invoices, payments, collections, reminders, settings
  */
 export function getWorkspaceNavItems(workspaceId: string): NavItem[] {
   return [
@@ -27,6 +28,12 @@ export function getWorkspaceNavItems(workspaceId: string): NavItem[] {
       label: "Dashboard",
       href: `/${workspaceId}/dashboard`,
       icon: LayoutDashboard,
+    },
+    {
+      slug: "actions",
+      label: "Actions",
+      href: `/${workspaceId}/actions`,
+      icon: ListChecks,
     },
     {
       slug: "clients",

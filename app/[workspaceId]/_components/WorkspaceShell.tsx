@@ -33,6 +33,7 @@ function getPageContainerVariant(pathname: string | null): PageContainerVariant 
     "collections",
     "reminders",
     "dashboard",
+    "actions",
   ];
   if (tableListSections.includes(section) && parts.length === 2) {
     return "tables";
