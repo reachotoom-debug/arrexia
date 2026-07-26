@@ -1,5 +1,5 @@
 import type { AuthError, Session, User } from "@supabase/supabase-js";
-import { buildAuthCallbackUrl } from "@/lib/config/appUrl";
+import { buildSignupEmailRedirectTo } from "@/lib/config/appUrl";
 
 export type SignUpResultData = {
   user: User | null;
@@ -27,7 +27,7 @@ export function getEmailRedirectTo(
   origin?: string,
   plan?: string | null
 ): string | undefined {
-  return buildAuthCallbackUrl({ origin, plan });
+  return buildSignupEmailRedirectTo(origin, plan);
 }
 
 export function getSupabaseProjectHost(): string {

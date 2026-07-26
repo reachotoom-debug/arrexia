@@ -97,3 +97,17 @@ export function buildAuthCallbackUrl(options: AuthCallbackUrlOptions = {}): stri
 
   return url.toString();
 }
+
+/** Post-signup-confirmation destination passed through Supabase `.RedirectTo` / confirm `next`. */
+export function buildSignupEmailRedirectTo(
+  origin?: string,
+  plan?: string | null
+): string {
+  const base = normalizeAuthRedirectOrigin(origin);
+  const url = new URL("/start", base);
+  const trialPlan = parsePublicSignupTrialPlan(plan);
+  if (trialPlan) {
+    url.searchParams.set("plan", trialPlan);
+  }
+  return url.toString();
+}

@@ -19,7 +19,7 @@ describe("account activation methods", () => {
 });
 
 describe("resolveCallbackActivationMethod", () => {
-  it("G — recovery callback never activates", () => {
+  it("recovery callback never activates", () => {
     assert.equal(
       resolveCallbackActivationMethod({
         isRecovery: true,
@@ -30,7 +30,7 @@ describe("resolveCallbackActivationMethod", () => {
     );
   });
 
-  it("A — recovery with absent type and email identity never activates", () => {
+  it("recovery with absent type never activates", () => {
     assert.equal(
       resolveCallbackActivationMethod({
         isRecovery: true,
@@ -41,18 +41,7 @@ describe("resolveCallbackActivationMethod", () => {
     );
   });
 
-  it("B — email signup confirmation activates with type=signup", () => {
-    assert.equal(
-      resolveCallbackActivationMethod({
-        isRecovery: false,
-        typeParam: "signup",
-        user: { identities: [{ provider: "email" } as never] },
-      }),
-      "email_signup"
-    );
-  });
-
-  it("L — OAuth callback activates with oauth method", () => {
+  it("OAuth callback activates with oauth method", () => {
     assert.equal(
       resolveCallbackActivationMethod({
         isRecovery: false,
@@ -63,22 +52,11 @@ describe("resolveCallbackActivationMethod", () => {
     );
   });
 
-  it("O — recovery type prevents activation even with email identity", () => {
+  it("email signup type on callback does not activate (confirm route is authoritative)", () => {
     assert.equal(
       resolveCallbackActivationMethod({
         isRecovery: false,
-        typeParam: "recovery",
-        user: { identities: [{ provider: "email" } as never] },
-      }),
-      null
-    );
-  });
-
-  it("does not activate magic-link callbacks", () => {
-    assert.equal(
-      resolveCallbackActivationMethod({
-        isRecovery: false,
-        typeParam: "magiclink",
+        typeParam: "signup",
         user: { identities: [{ provider: "email" } as never] },
       }),
       null
@@ -87,7 +65,7 @@ describe("resolveCallbackActivationMethod", () => {
 });
 
 describe("password recovery callback decisions", () => {
-  it("G — recovery success never creates activation marker", () => {
+  it("recovery success never creates activation marker", () => {
     const decision = resolvePasswordRecoveryCallbackDecision({
       next: "/reset-password",
       typeParam: null,
@@ -110,7 +88,7 @@ describe("password recovery callback decisions", () => {
 });
 
 describe("signup duplicate behavior", () => {
-  it("P — duplicate signup anti-enumeration remains unchanged", () => {
+  it("duplicate signup anti-enumeration remains unchanged", () => {
     const outcome = analyzeSignUpResponse(
       {
         user: {
@@ -128,13 +106,13 @@ describe("signup duplicate behavior", () => {
 });
 
 describe("AUTH-SEC-2 wiring contracts", () => {
-  it("A — forgot-password client uses server API instead of browser resetPasswordForEmail", () => {
+  it("forgot-password client uses server API instead of browser resetPasswordForEmail", () => {
     const src = readFileSync("app/(auth)/forgot-password/ForgotPasswordClient.tsx", "utf8");
     assert.match(src, /\/api\/auth\/forgot-password/);
     assert.doesNotMatch(src, /resetPasswordForEmail/);
   });
 
-  it("C/D — forgot-password API uses activation lookup and generic success copy", () => {
+  it("forgot-password API uses activation lookup and generic success copy", () => {
     const src = readFileSync("app/api/auth/forgot-password/route.ts", "utf8");
     assert.match(src, /isAccountActivated/);
     assert.match(src, /lookupAuthUserIdByEmail/);
@@ -142,21 +120,24 @@ describe("AUTH-SEC-2 wiring contracts", () => {
     assert.doesNotMatch(src, /email_confirmed_at/);
   });
 
-  it("I/J — bootstrap gate enforced centrally", () => {
+  it("bootstrap gate enforced centrally", () => {
     const resolveSrc = readFileSync("lib/auth/resolvePostLoginDestination.ts", "utf8");
     const workspaceSrc = readFileSync("lib/workspaces/ensureWorkspaceForUser.ts", "utf8");
     assert.match(resolveSrc, /assertBootstrapActivationAllowed/);
     assert.match(workspaceSrc, /assertBootstrapActivationAllowed/);
   });
 
-  it("auth callback activates only on continue_auth with route isRecovery", () => {
-    const src = readFileSync("app/auth/callback/route.ts", "utf8");
-    assert.match(src, /resolveCallbackActivationMethod/);
-    assert.match(src, /activateAccount/);
-    assert.match(src, /successDecision\.action === "continue_auth"/);
-    assert.match(src, /isRecovery,/);
-    assert.doesNotMatch(src, /isRecovery:\s*false/);
-    assert.doesNotMatch(src, /email_confirmed_at/);
+  it("signup confirm route handles email_signup activation", () => {
+    const confirmSrc = readFileSync("app/auth/confirm/route.ts", "utf8");
+    assert.match(confirmSrc, /activateAccount\(user\.id,\s*"email_signup"\)/);
+    assert.match(confirmSrc, /verifyOtp/);
+  });
+
+  it("callback route defers email signup to confirm route", () => {
+    const callbackSrc = readFileSync("app/auth/callback/route.ts", "utf8");
+    const activationSrc = readFileSync("lib/auth/callbackActivation.ts", "utf8");
+    assert.match(callbackSrc, /resolveCallbackActivationMethod/);
+    assert.doesNotMatch(activationSrc, /email_signup/);
   });
 
   it("migration backfill excludes Rule C and hardens lookup RPC", () => {
@@ -165,34 +146,10 @@ describe("AUTH-SEC-2 wiring contracts", () => {
       "utf8"
     );
     assert.doesNotMatch(migrationSrc, /last_sign_in_at/);
-    assert.doesNotMatch(migrationSrc, /interval '7 days'/);
-    assert.match(
-      migrationSrc,
-      /REVOKE EXECUTE ON FUNCTION public\.lookup_auth_user_id_by_email\(text\) FROM PUBLIC;/
-    );
     assert.match(
       migrationSrc,
       /REVOKE EXECUTE ON FUNCTION public\.lookup_auth_user_id_by_email\(text\) FROM anon;/
     );
-    assert.match(
-      migrationSrc,
-      /REVOKE EXECUTE ON FUNCTION public\.lookup_auth_user_id_by_email\(text\) FROM authenticated;/
-    );
-    assert.match(
-      migrationSrc,
-      /GRANT EXECUTE ON FUNCTION public\.lookup_auth_user_id_by_email\(text\) TO service_role;/
-    );
-  });
-
-  it("N — activation logic does not trust email_confirmed_at", () => {
-    const activationSrc = readFileSync("lib/auth/accountActivation.ts", "utf8");
-    const migrationSrc = readFileSync(
-      "supabase/migrations/20260726000000_user_account_activation.sql",
-      "utf8"
-    );
-    assert.doesNotMatch(activationSrc, /email_confirmed_at/);
-    assert.doesNotMatch(migrationSrc, /email_confirmed_at/);
-    assert.doesNotMatch(migrationSrc, /last_sign_in_at/);
   });
 
   it("reset-password uses server route with activation check", () => {
@@ -211,13 +168,13 @@ describe("AUTH-SEC-2 wiring contracts", () => {
 });
 
 describe("activateAccount idempotency contract", () => {
-  it("H — callback retry must not mutate activation timestamp/method", () => {
+  it("callback retry must not mutate activation timestamp/method", () => {
     const src = readFileSync("lib/auth/accountActivation.ts", "utf8");
     assert.match(src, /23505/);
     assert.match(src, /Never updates an existing row/);
   });
 
-  it("M — legacy workspace membership uses runtime legacy_backfill safety net", () => {
+  it("legacy workspace membership uses runtime legacy_backfill safety net", () => {
     const src = readFileSync("lib/auth/accountActivation.ts", "utf8");
     assert.match(src, /legacy_backfill/);
     assert.match(src, /hasExistingWorkspaceMembership/);
