@@ -1,12 +1,17 @@
 import type { EligibleReminderCandidate } from "@/lib/reminders/getEligibleReminders";
+import type { AgingMilestoneDays } from "./collectionActivity";
 
-export type NeedsActionReason = "reminder_due" | "high_risk" | "newly_overdue";
+export type ActionReason =
+  | { type: "reminder_due" }
+  | { type: "newly_overdue" }
+  | { type: "aging_milestone"; milestoneDays: AgingMilestoneDays };
 
 export type ChaseableInvoiceRow = {
   id: string;
   invoiceNumber: string | null;
   clientId: string | null;
   clientName: string | null;
+  clientEmail: string | null;
   dueDate: string | null;
   outstanding: number;
   currency: string | null;
@@ -20,63 +25,42 @@ export type ChaseableInvoiceRow = {
   archivedAt: string | null;
 };
 
-export type NeedsActionItem = {
+export type CollectionActionItem = {
   id: string;
   invoiceNumber: string | null;
   clientName: string | null;
+  clientEmail: string | null;
   dueDate: string | null;
   outstanding: number;
   currency: string | null;
   displayStatus: string | null;
   overdueDays: number;
-  reasons: NeedsActionReason[];
-};
-
-export type HighRiskItem = {
-  id: string;
-  invoiceNumber: string | null;
-  clientName: string | null;
-  dueDate: string | null;
-  outstanding: number;
-  currency: string | null;
-  overdueDays: number;
+  isHighRisk: boolean;
+  reasons: ActionReason[];
 };
 
 export type DailyActionSummary = {
-  needsActionCount: number;
+  actionsTodayCount: number;
+  requiringAttentionAmount: number | null;
+  requiringAttentionCurrency: string;
+  requiringAttentionMixedCurrency: boolean;
   remindersDueCount: number;
-  highRiskCount: number;
-  overdueCount: number;
+  newlyOverdueCount: number;
+};
+
+export type ReminderActionContext = {
+  invoiceId: string;
+  invoiceNumber: string | null;
+  clientName: string | null;
+  clientEmail: string | null;
+  ruleId: string;
+  templateId: string | null;
+  scheduledDate: string;
 };
 
 export type DailyActionCenterData = {
   summary: DailyActionSummary;
-  needsAction: NeedsActionItem[];
-  reminders: EligibleReminderCandidate[];
-  highRisk: HighRiskItem[];
-};
-
-export type SuggestedReminderRow = {
-  id: string;
-  invoice_id: string;
-  invoice_number: string | null;
-  status: string | null;
-  due_date: string | null;
-  outstanding: number | null;
-  currency: string | null;
-  client: {
-    id: string;
-    name: string | null;
-    email: string | null;
-  } | null;
-  days_from_due: number | null;
-  tag: string;
-  is_overdue: boolean;
-  client_name: string | null;
-  client_email: string | null;
-  rule_id: string;
-  rule_name: string;
-  rule_label: string;
-  template_id: string | null;
-  scheduled_date: string;
+  collectionActions: CollectionActionItem[];
+  reminderActionsByInvoiceId: Record<string, ReminderActionContext>;
+  eligibleReminders: EligibleReminderCandidate[];
 };

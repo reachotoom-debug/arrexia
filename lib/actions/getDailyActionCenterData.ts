@@ -1,10 +1,11 @@
+import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
 import { buildDailyActionCategories } from "./buildDailyActionCategories";
 import type {
   ChaseableInvoiceRow,
   DailyActionCenterData,
-  SuggestedReminderRow,
+  ReminderActionContext,
 } from "./types";
 
 function mapInvoiceRow(raw: {
@@ -29,6 +30,7 @@ function mapInvoiceRow(raw: {
     invoiceNumber: raw.invoice_number ?? null,
     clientId: raw.client_id ?? null,
     clientName: raw.client_name ?? null,
+    clientEmail: null,
     dueDate: raw.due_date ?? null,
     outstanding: Number(raw.outstanding ?? 0),
     currency: raw.currency ?? null,
@@ -46,36 +48,43 @@ function mapInvoiceRow(raw: {
   };
 }
 
-export function mapEligibleRemindersToSuggestedRows(
-  candidates: Awaited<ReturnType<typeof getEligibleReminders>>
-): SuggestedReminderRow[] {
-  return candidates.map((c) => ({
-    id: c.id,
-    invoice_id: c.invoiceId,
-    invoice_number: c.invoiceNumber,
-    status: c.displayStatus,
-    due_date: c.dueDate,
-    outstanding: c.outstanding,
-    currency: c.currency,
-    client:
-      c.clientId && (c.clientName || c.clientEmail)
-        ? {
-            id: c.clientId,
-            name: c.clientName,
-            email: c.clientEmail,
-          }
-        : null,
-    days_from_due: c.daysFromDueDate,
-    tag: c.ruleLabel,
-    is_overdue: c.isOverdue,
-    client_name: c.clientName,
-    client_email: c.clientEmail,
-    rule_id: c.ruleId,
-    rule_name: c.ruleName,
-    rule_label: c.ruleLabel,
-    template_id: c.templateId,
-    scheduled_date: c.scheduledDate,
-  }));
+function buildSentReminderDatesByInvoice(
+  rows: Array<{ invoice_id: string; sent_at: string }>,
+  workspaceTimeZone: string
+): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+
+  for (const row of rows) {
+    const calendarDate = instantToWorkspaceCalendarDate(row.sent_at, workspaceTimeZone);
+    if (!calendarDate) continue;
+
+    const dates = map.get(row.invoice_id) ?? [];
+    dates.push(calendarDate);
+    map.set(row.invoice_id, dates);
+  }
+
+  return map;
+}
+
+function buildReminderActionsByInvoiceId(
+  eligibleReminders: Awaited<ReturnType<typeof getEligibleReminders>>
+): Record<string, ReminderActionContext> {
+  const map: Record<string, ReminderActionContext> = {};
+
+  for (const candidate of eligibleReminders) {
+    if (map[candidate.invoiceId]) continue;
+    map[candidate.invoiceId] = {
+      invoiceId: candidate.invoiceId,
+      invoiceNumber: candidate.invoiceNumber,
+      clientName: candidate.clientName,
+      clientEmail: candidate.clientEmail,
+      ruleId: candidate.ruleId,
+      templateId: candidate.templateId,
+      scheduledDate: candidate.scheduledDate,
+    };
+  }
+
+  return map;
 }
 
 export async function getDailyActionCenterData(
@@ -83,7 +92,7 @@ export async function getDailyActionCenterData(
 ): Promise<DailyActionCenterData> {
   const supabase = await supabaseServer();
 
-  const [eligibleReminders, invoicesResult] = await Promise.all([
+  const [eligibleReminders, invoicesResult, settingsResult] = await Promise.all([
     getEligibleReminders(workspaceId),
     supabase
       .from("invoices_view")
@@ -109,6 +118,11 @@ export async function getDailyActionCenterData(
       .eq("workspace_id", workspaceId)
       .gt("outstanding", 0)
       .is("archived_at", null),
+    supabase
+      .from("settings")
+      .select("timezone, default_currency")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle(),
   ]);
 
   if (invoicesResult.error) {
@@ -116,21 +130,53 @@ export async function getDailyActionCenterData(
     throw new Error("Failed to load daily action center data");
   }
 
+  const workspaceTimeZone = settingsResult.data?.timezone ?? "UTC";
+  const defaultCurrency = settingsResult.data?.default_currency ?? "USD";
   const invoices = (invoicesResult.data ?? []).map(mapInvoiceRow);
+  const invoiceIds = invoices.map((invoice) => invoice.id);
+
+  let sentReminderDatesByInvoiceId = new Map<string, string[]>();
+  if (invoiceIds.length > 0) {
+    const { data: sentReminders, error: sentRemindersError } = await supabase
+      .from("reminders")
+      .select("invoice_id, sent_at")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "sent")
+      .not("sent_at", "is", null)
+      .in("invoice_id", invoiceIds);
+
+    if (sentRemindersError) {
+      console.error(
+        "[getDailyActionCenterData] sent reminders load error",
+        sentRemindersError
+      );
+      throw new Error("Failed to load collection activity data");
+    }
+
+    sentReminderDatesByInvoiceId = buildSentReminderDatesByInvoice(
+      (sentReminders ?? []) as Array<{ invoice_id: string; sent_at: string }>,
+      workspaceTimeZone
+    );
+  }
+
   const reminderEligibleInvoiceIds = new Set(
     eligibleReminders.map((candidate) => candidate.invoiceId)
   );
 
-  const { summary, needsAction, highRisk } = buildDailyActionCategories({
+  const { summary, collectionActions } = buildDailyActionCategories({
     invoices,
     reminderEligibleInvoiceIds,
-    remindersDueRowCount: eligibleReminders.length,
+    sentReminderDatesByInvoiceId,
+    defaultCurrency,
   });
 
   return {
     summary,
-    needsAction,
-    reminders: eligibleReminders,
-    highRisk,
+    collectionActions,
+    reminderActionsByInvoiceId: buildReminderActionsByInvoiceId(eligibleReminders),
+    eligibleReminders,
   };
 }
+
+/** Reported DB round trips for R3B loader (see implementation report). */
+export const DAILY_ACTION_CENTER_DB_ROUND_TRIPS = 6 as const;

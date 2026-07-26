@@ -1,13 +1,15 @@
 import { NON_COLLECTIBLE_BASE_STATUSES } from "@/lib/reminders/eligibility";
+import {
+  computeRequiringAttentionTotal,
+  shouldShowAgingMilestoneAction,
+  shouldShowEarlyOverdueAction,
+} from "./collectionActivity";
 import type {
+  ActionReason,
   ChaseableInvoiceRow,
+  CollectionActionItem,
   DailyActionCenterData,
-  HighRiskItem,
-  NeedsActionItem,
-  NeedsActionReason,
 } from "./types";
-
-const HIGH_RISK_DISPLAY_LIMIT = 10;
 
 export function isChaseableInvoice(row: ChaseableInvoiceRow): boolean {
   if (row.archivedAt != null) return false;
@@ -21,30 +23,20 @@ export function isChaseableInvoice(row: ChaseableInvoiceRow): boolean {
   return true;
 }
 
-export function isOverdueChaseable(row: ChaseableInvoiceRow): boolean {
-  return isChaseableInvoice(row) && row.isOverdue;
+function triggerTier(reasons: ActionReason[]): number {
+  if (reasons.some((reason) => reason.type === "reminder_due")) return 0;
+  if (reasons.some((reason) => reason.type === "aging_milestone")) return 1;
+  if (reasons.some((reason) => reason.type === "newly_overdue")) return 2;
+  return 3;
 }
 
-function reasonFlags(reasons: NeedsActionReason[]) {
-  return {
-    reminderDue: reasons.includes("reminder_due"),
-    highRisk: reasons.includes("high_risk"),
-    newlyOverdue: reasons.includes("newly_overdue"),
-  };
-}
+function compareCollectionActions(a: CollectionActionItem, b: CollectionActionItem): number {
+  const tierA = triggerTier(a.reasons);
+  const tierB = triggerTier(b.reasons);
+  if (tierA !== tierB) return tierA - tierB;
 
-function compareNeedsActionItems(a: NeedsActionItem, b: NeedsActionItem): number {
-  const aFlags = reasonFlags(a.reasons);
-  const bFlags = reasonFlags(b.reasons);
-
-  if (aFlags.reminderDue !== bFlags.reminderDue) {
-    return aFlags.reminderDue ? -1 : 1;
-  }
-  if (aFlags.highRisk !== bFlags.highRisk) {
-    return aFlags.highRisk ? -1 : 1;
-  }
-  if (aFlags.newlyOverdue !== bFlags.newlyOverdue) {
-    return aFlags.newlyOverdue ? -1 : 1;
+  if (a.isHighRisk !== b.isHighRisk) {
+    return a.isHighRisk ? -1 : 1;
   }
   if (a.overdueDays !== b.overdueDays) {
     return b.overdueDays - a.overdueDays;
@@ -52,92 +44,116 @@ function compareNeedsActionItems(a: NeedsActionItem, b: NeedsActionItem): number
   return b.outstanding - a.outstanding;
 }
 
-function compareHighRiskItems(a: HighRiskItem, b: HighRiskItem): number {
-  if (a.outstanding !== b.outstanding) {
-    return b.outstanding - a.outstanding;
-  }
-  return b.overdueDays - a.overdueDays;
-}
-
-function toNeedsActionItem(
+function toCollectionActionItem(
   row: ChaseableInvoiceRow,
-  reasons: NeedsActionReason[]
-): NeedsActionItem {
+  reasons: ActionReason[]
+): CollectionActionItem {
   return {
     id: row.id,
     invoiceNumber: row.invoiceNumber,
     clientName: row.clientName,
+    clientEmail: row.clientEmail,
     dueDate: row.dueDate,
     outstanding: row.outstanding,
     currency: row.currency,
     displayStatus: row.displayStatus,
     overdueDays: row.overdueDays,
+    isHighRisk: row.riskLevel === "high",
     reasons,
   };
 }
 
-function toHighRiskItem(row: ChaseableInvoiceRow): HighRiskItem {
-  return {
-    id: row.id,
-    invoiceNumber: row.invoiceNumber,
-    clientName: row.clientName,
-    dueDate: row.dueDate,
-    outstanding: row.outstanding,
-    currency: row.currency,
+function buildActionReasons(params: {
+  row: ChaseableInvoiceRow;
+  reminderEligible: boolean;
+  sentCalendarDates: readonly string[];
+}): ActionReason[] {
+  const { row, reminderEligible, sentCalendarDates } = params;
+  const reasons: ActionReason[] = [];
+
+  if (reminderEligible) {
+    reasons.push({ type: "reminder_due" });
+  }
+
+  const milestone = shouldShowAgingMilestoneAction({
+    isOverdue: row.isOverdue,
     overdueDays: row.overdueDays,
-  };
+    dueDate: row.dueDate,
+    sentCalendarDates,
+  });
+  if (milestone) {
+    reasons.push({ type: "aging_milestone", milestoneDays: milestone });
+  }
+
+  if (
+    shouldShowEarlyOverdueAction({
+      isOverdue: row.isOverdue,
+      overdueDays: row.overdueDays,
+      dueDate: row.dueDate,
+      sentCalendarDates,
+    })
+  ) {
+    reasons.push({ type: "newly_overdue" });
+  }
+
+  return reasons;
 }
 
 export function buildDailyActionCategories(params: {
   invoices: ChaseableInvoiceRow[];
   reminderEligibleInvoiceIds: Set<string>;
-  /** Eligible reminder occurrences (invoice × rule rows). */
-  remindersDueRowCount: number;
-}): Pick<DailyActionCenterData, "summary" | "needsAction" | "highRisk"> {
-  const { invoices, reminderEligibleInvoiceIds, remindersDueRowCount } = params;
+  sentReminderDatesByInvoiceId: Map<string, string[]>;
+  defaultCurrency: string;
+}): Pick<DailyActionCenterData, "summary" | "collectionActions"> {
+  const { invoices, reminderEligibleInvoiceIds, sentReminderDatesByInvoiceId, defaultCurrency } =
+    params;
 
-  const chaseableOverdue = invoices.filter(isOverdueChaseable);
-  const overdueCount = chaseableOverdue.length;
-
-  const highRiskAll = chaseableOverdue
-    .filter((row) => row.riskLevel === "high")
-    .slice()
-    .sort(compareHighRiskItems);
-
-  const highRiskCount = highRiskAll.length;
-  const highRisk = highRiskAll.slice(0, HIGH_RISK_DISPLAY_LIMIT);
-
-  const needsActionById = new Map<string, NeedsActionItem>();
+  const collectionActionsById = new Map<string, CollectionActionItem>();
 
   for (const row of invoices) {
     if (!isChaseableInvoice(row)) continue;
 
-    const reasons: NeedsActionReason[] = [];
-    if (reminderEligibleInvoiceIds.has(row.id)) {
-      reasons.push("reminder_due");
-    }
-    if (row.isOverdue && row.riskLevel === "high") {
-      reasons.push("high_risk");
-    }
-    if (row.isOverdue && row.overdueDays === 1) {
-      reasons.push("newly_overdue");
-    }
+    const sentCalendarDates = sentReminderDatesByInvoiceId.get(row.id) ?? [];
+    const reasons = buildActionReasons({
+      row,
+      reminderEligible: reminderEligibleInvoiceIds.has(row.id),
+      sentCalendarDates,
+    });
 
     if (reasons.length === 0) continue;
 
-    needsActionById.set(row.id, toNeedsActionItem(row, reasons));
+    collectionActionsById.set(row.id, toCollectionActionItem(row, reasons));
   }
 
-  const needsAction = Array.from(needsActionById.values()).sort(compareNeedsActionItems);
+  const collectionActions = Array.from(collectionActionsById.values()).sort(
+    compareCollectionActions
+  );
+
+  const requiringAttention = computeRequiringAttentionTotal({
+    outstandingAmounts: collectionActions.map((action) => ({
+      outstanding: action.outstanding,
+      currency: action.currency,
+    })),
+    defaultCurrency,
+  });
+
+  const remindersDueCount = collectionActions.filter((action) =>
+    action.reasons.some((reason) => reason.type === "reminder_due")
+  ).length;
+
+  const newlyOverdueCount = collectionActions.filter((action) =>
+    action.reasons.some((reason) => reason.type === "newly_overdue")
+  ).length;
 
   return {
     summary: {
-      needsActionCount: needsAction.length,
-      remindersDueCount: remindersDueRowCount,
-      highRiskCount,
-      overdueCount,
+      actionsTodayCount: collectionActions.length,
+      requiringAttentionAmount: requiringAttention.amount,
+      requiringAttentionCurrency: requiringAttention.currency,
+      requiringAttentionMixedCurrency: requiringAttention.isMixedCurrency,
+      remindersDueCount,
+      newlyOverdueCount,
     },
-    needsAction,
-    highRisk,
+    collectionActions,
   };
 }

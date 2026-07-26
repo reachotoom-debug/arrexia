@@ -1,9 +1,6 @@
 import { requireWorkspace } from "@/lib/auth/server";
 import { PageHeader } from "@/components/layout/PageHeader";
-import {
-  getDailyActionCenterData,
-  mapEligibleRemindersToSuggestedRows,
-} from "@/lib/actions/getDailyActionCenterData";
+import { getDailyActionCenterData } from "@/lib/actions/getDailyActionCenterData";
 import { DailyActionCenterView } from "./_components/DailyActionCenterView";
 
 type ActionsPageProps = {
@@ -15,19 +12,14 @@ export default async function ActionsPage({ params }: ActionsPageProps) {
   await requireWorkspace(workspaceId);
 
   const data = await getDailyActionCenterData(workspaceId);
-  const suggestedReminderRows = mapEligibleRemindersToSuggestedRows(data.reminders);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Daily Action Center"
-        description="Good morning. Here's what needs attention today."
+        description="What needs collection attention today."
       />
-      <DailyActionCenterView
-        workspaceId={workspaceId}
-        data={data}
-        suggestedReminderRows={suggestedReminderRows}
-      />
+      <DailyActionCenterView workspaceId={workspaceId} data={data} />
     </div>
   );
 }
