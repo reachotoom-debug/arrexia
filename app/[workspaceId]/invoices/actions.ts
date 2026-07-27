@@ -299,7 +299,6 @@ export async function updateInvoice(
   const { user } = await requireUser();
   const { workspace } = await requireWorkspace(workspaceId);
   const validatedWorkspaceId = workspace.id;
-  const organizationId = workspace.organization_id;
 
   const parsed = InvoiceFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
@@ -312,7 +311,7 @@ export async function updateInvoice(
   // Step 1: Fetch existing invoice to get current values
   const { data: invoiceRow, error: invoiceError } = await supabase
     .from("invoices")
-    .select("id, invoice_number, status, issue_date, due_date, client_id, organization_id, payment_terms, archived_at")
+    .select("id, invoice_number, status, issue_date, due_date, client_id, payment_terms, archived_at")
     .eq("id", invoiceId)
     .eq("workspace_id", validatedWorkspaceId)
     .single();
@@ -387,59 +386,56 @@ export async function updateInvoice(
   // Ensure status is lowercase
   const normalizedStatus = parsed.status.toLowerCase() as "draft" | "sent" | "void";
 
-  // Step 6: Update invoice with submitted due_date and resolved payment_terms_days
-  // IMPORTANT: Store all money calculation fields in the database for consistency
-  // NOTE: client_id is NOT updated in edit mode - it remains fixed
-  const { error: updateError } = await supabase
-    .from("invoices")
-    .update({
-      issue_date: issueDate,
-      due_date: dueDate,
-      po_number: parsed.poNumber ?? null,
-      notes: parsed.notes ?? null,
-      status: normalizedStatus, // Lowercase: draft | sent | void
-      payment_terms: paymentTermsCode,
-      payment_terms_days: effectiveDays, // Computed server-side
-      // Money fields - ALL computed server-side, stored in database as authoritative values
-      subtotal: money.subtotal,
-      discount_percent: money.discountPercent,
-      discount_amount: money.discountAmount,
-      tax_percent: money.taxPercent,
-      tax_amount: money.taxAmount,
-      amount: money.total,
-      // REMOVED: outstanding_amount, total_paid, payment_state (computed by invoices_view)
-      // REMOVED: client_id (fixed in edit mode, not updatable)
-    })
-    .eq("id", invoiceId)
-    .eq("workspace_id", validatedWorkspaceId);
-
-  if (updateError) {
-    return { error: `Failed to update invoice: ${updateError.message}` };
-  }
-
-  // Simple approach: delete all items and reinsert
-  // NOTE: invoice_items has no workspace_id; scope via invoices join (invoice already verified belongs to workspace)
-  await supabase.from("invoice_items").delete().eq("invoice_id", invoiceId);
-
-  // IMPORTANT: invoice_items table only contains: name, description, quantity, unit_price, invoice_id, organization_id, position
-  // We do NOT write: subtotal, line_total (these columns don't exist)
-  const itemsPayload = parsed.items.map((item, index) => ({
-    organization_id: invoiceRow.organization_id ?? organizationId,
-    invoice_id: invoiceRow.id,
+  // Step 6: Atomically update invoice header and replace line items (single DB transaction)
+  const itemsJson = parsed.items.map((item, index) => ({
     name: item.name,
     description: item.description ?? null,
     quantity: item.quantity,
-    // Persist user-entered unit_price directly (rounded to 2 decimals only).
     unit_price: roundCurrency2(Number(item.unit_price)),
     position: index + 1,
   }));
 
-  const { error: itemsError } = await supabase
-    .from("invoice_items")
-    .insert(itemsPayload);
+  const { error: rpcError } = await supabase.rpc("rpc_update_invoice_with_items", {
+    p_workspace_id: validatedWorkspaceId,
+    p_invoice_id: invoiceId,
+    p_issue_date: issueDate,
+    p_due_date: dueDate,
+    p_po_number: parsed.poNumber ?? null,
+    p_notes: parsed.notes ?? null,
+    p_status: normalizedStatus,
+    p_payment_terms: paymentTermsCode,
+    p_payment_terms_days: effectiveDays,
+    p_subtotal: money.subtotal,
+    p_discount_percent: money.discountPercent,
+    p_discount_amount: money.discountAmount,
+    p_tax_percent: money.taxPercent,
+    p_tax_amount: money.taxAmount,
+    p_amount: money.total,
+    p_items: itemsJson,
+  });
 
-  if (itemsError) {
-    return { error: `Failed to update invoice items: ${itemsError.message}` };
+  if (rpcError) {
+    const message = rpcError.message ?? "Unknown error";
+    if (message === "Invoice not found") {
+      return { error: `Failed to load invoice: ${message}` };
+    }
+    if (
+      message === "Cannot edit an archived invoice. Unarchive it first." ||
+      message === "Cannot edit a fully paid invoice."
+    ) {
+      return { error: message };
+    }
+    if (
+      message.includes("line item") ||
+      message.includes("Item name") ||
+      message.includes("Quantity") ||
+      message.includes("Unit price") ||
+      rpcError.code === "23502" ||
+      rpcError.code === "23503"
+    ) {
+      return { error: `Failed to update invoice items: ${message}` };
+    }
+    return { error: `Failed to update invoice: ${message}` };
   }
 
   // REMOVED: total_paid, outstanding_amount, payment_state recalculation
