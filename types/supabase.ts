@@ -1992,6 +1992,29 @@ export type Database = {
         Args: { p_rows: Json; p_workspace_id: string }
         Returns: Json
       }
+      rpc_create_invoice_with_items: {
+        Args: {
+          p_amount: number
+          p_client_id: string
+          p_currency: string
+          p_discount_amount: number
+          p_discount_percent: number
+          p_due_date: string
+          p_invoice_number: string
+          p_issue_date: string
+          p_items: Json
+          p_notes: string | null
+          p_payment_terms: string
+          p_payment_terms_days: number
+          p_po_number: string | null
+          p_status: string
+          p_subtotal: number
+          p_tax_amount: number
+          p_tax_percent: number
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       rpc_update_invoice_with_items: {
         Args: {
           p_amount: number

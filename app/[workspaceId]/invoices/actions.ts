@@ -189,83 +189,84 @@ export async function createInvoice(
     taxPercent: Number(parsed.taxPercent ?? 0),
   });
 
-  // Step 5: Insert invoice with computed due_date and payment_terms_days
-  // IMPORTANT: Store all money calculation fields in the database for consistency
-  // CRITICAL: MUST set workspace_id so invoices appear in the list page
-  // Guard: workspace_id must be present
+  // Step 5: Atomically create invoice header and line items (single DB transaction)
   if (!validatedWorkspaceId) {
     throw new Error("workspace_id is required");
   }
 
-  // Ensure status is lowercase
   const normalizedStatus = parsed.status.toLowerCase() as "draft" | "sent" | "void";
 
-  const { data: invoice, error: invoiceError } = await supabase
-    .from("invoices")
-    .insert({
-      workspace_id: validatedWorkspaceId, // Use validated workspace_id
-      organization_id: organizationId,
-      client_id: parsed.clientId,
-      invoice_number: normalizedInvoiceNumber,
-      issue_date: parsed.issueDate,
-      due_date: dueDate, // Computed server-side, not from form
-      po_number: parsed.poNumber ?? null,
-      notes: parsed.notes ?? null,
-      status: normalizedStatus, // Lowercase: draft | sent | void
-      payment_terms: parsed.paymentTerms,
-      payment_terms_days: effectiveDays, // Computed server-side
-      currency: defaultCurrency, // From workspace settings; existing invoices keep their original currency
-      // Money fields - ALL computed server-side, stored in database as authoritative values
-      subtotal: money.subtotal,
-      discount_percent: money.discountPercent,
-      discount_amount: money.discountAmount,
-      tax_percent: money.taxPercent,
-      tax_amount: money.taxAmount,
-      amount: money.total,
-      // REMOVED: total_paid, outstanding_amount, payment_state (computed by invoices_view)
-    })
-    .select("id, workspace_id, organization_id, status, amount, issue_date, due_date")
-    .single();
+  const itemsJson = parsed.items.map((item, index) => ({
+    name: item.name,
+    description: item.description ?? null,
+    quantity: item.quantity,
+    unit_price: roundCurrency2(Number(item.unit_price)),
+    position: index + 1,
+  }));
 
-  if (invoiceError || !invoice) {
-    console.error("[createInvoice] invoice insert failed:", invoiceError);
-    const code = (invoiceError as { code?: string } | null)?.code;
-    if (code === "23505") {
-      logPostgresUniqueViolation("createInvoice", invoiceError, {
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    "rpc_create_invoice_with_items",
+    {
+      p_workspace_id: validatedWorkspaceId,
+      p_client_id: parsed.clientId,
+      p_invoice_number: normalizedInvoiceNumber,
+      p_issue_date: parsed.issueDate,
+      p_due_date: dueDate,
+      p_po_number: parsed.poNumber ?? null,
+      p_notes: parsed.notes ?? null,
+      p_status: normalizedStatus,
+      p_payment_terms: parsed.paymentTerms,
+      p_payment_terms_days: effectiveDays,
+      p_currency: defaultCurrency,
+      p_subtotal: money.subtotal,
+      p_discount_percent: money.discountPercent,
+      p_discount_amount: money.discountAmount,
+      p_tax_percent: money.taxPercent,
+      p_tax_amount: money.taxAmount,
+      p_amount: money.total,
+      p_items: itemsJson,
+    }
+  );
+
+  if (rpcError) {
+    console.error("[createInvoice] rpc_create_invoice_with_items failed:", rpcError);
+    const code = (rpcError as { code?: string } | null)?.code;
+    if (
+      code === "23505" ||
+      (rpcError.message ?? "").includes("invoices_workspace_invoice_number_unique")
+    ) {
+      logPostgresUniqueViolation("createInvoice", rpcError, {
         workspaceId: validatedWorkspaceId,
         organizationId,
         invoiceNumber: normalizedInvoiceNumber,
       });
       return {
         ok: false,
-        fieldErrors: { invoice_number: "Invoice number already exists. Choose another." },
+        fieldErrors: {
+          invoice_number: "Invoice number already exists. Choose another.",
+        },
       };
     }
-    throw new Error(`Failed to create invoice: ${invoiceError?.message}`);
+    if (rpcError.message === "Cannot create invoice for archived client") {
+      throw new Error("Cannot create invoice for archived client");
+    }
+    if (rpcError.message === "Cannot create invoice for inactive client") {
+      throw new Error("Cannot create invoice for inactive client");
+    }
+    if (
+      rpcError.message?.includes("line item") ||
+      rpcError.message?.includes("Item name") ||
+      rpcError.message?.includes("Quantity") ||
+      rpcError.message?.includes("Unit price")
+    ) {
+      throw new Error(`Failed to create invoice items: ${rpcError.message}`);
+    }
+    throw new Error(`Failed to create invoice: ${rpcError.message}`);
   }
 
-  // 2) Insert items
-  // IMPORTANT: invoice_items table only contains: name, description, quantity, unit_price, invoice_id, organization_id, position
-  // We do NOT write: subtotal, line_total (these columns don't exist)
-  // NOTE: invoice_items has no workspace_id; scope via invoices join (invoice belongs to workspace)
-  const itemsPayload = parsed.items.map((item, index) => ({
-    organization_id: organizationId,
-    invoice_id: invoice.id,
-    name: item.name,
-    description: item.description ?? null,
-    quantity: item.quantity,
-    // Persist user-entered unit_price directly (rounded to 2 decimals only).
-    unit_price: roundCurrency2(Number(item.unit_price)),
-    position: index + 1,
-  }));
-
-  const { error: itemsError } = await supabase
-    .from("invoice_items")
-    .insert(itemsPayload);
-
-  if (itemsError) {
-    console.error("[createInvoice] items insert failed:", itemsError);
-    throw new Error(`Failed to create invoice items: ${itemsError.message}`);
+  const invoiceId = (rpcData as { invoice_id?: string } | null)?.invoice_id;
+  if (!invoiceId) {
+    throw new Error("Failed to create invoice: missing invoice_id from RPC");
   }
 
   // REMOVED: total_paid, outstanding_amount, payment_state updates
@@ -276,7 +277,7 @@ export async function createInvoice(
     workspaceId: validatedWorkspaceId,
     userId: user.id,
     entityType: "invoice",
-    entityId: invoice.id,
+    entityId: invoiceId,
     action: "created",
     metadata: {
       invoice_number: parsed.invoiceNumber,
@@ -287,7 +288,7 @@ export async function createInvoice(
   });
 
   revalidatePath(`/${workspaceId}/invoices`);
-  return invoice.id;
+  return invoiceId;
 }
 
 export async function updateInvoice(
