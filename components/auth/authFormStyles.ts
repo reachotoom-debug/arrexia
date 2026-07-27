@@ -17,6 +17,9 @@ export const authPasswordRowClass = "mb-2 flex items-baseline justify-between ga
 export const authInputClass =
   "block box-border w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition-shadow placeholder:text-slate-400 focus:border-[#4F6EF7] focus:ring-2 focus:ring-[#4F6EF7]/20";
 
+/** Password fields with an inline visibility toggle (extra right padding). */
+export const authPasswordInputClass = `${authInputClass} pr-11`;
+
 export const authButtonClass =
   "block box-border w-full rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-bold text-white shadow-sm shadow-blue-600/20 transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 

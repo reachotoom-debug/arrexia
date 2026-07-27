@@ -6,6 +6,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AuthBranding } from "@/components/auth/AuthBranding";
 import { AuthCard } from "@/components/auth/AuthCard";
+import { PasswordInput } from "@/components/auth/PasswordInput";
+import { ResetPasswordLoadingShell } from "@/components/auth/ResetPasswordLoadingShell";
 import {
   authButtonClass,
   authErrorClass,
@@ -13,7 +15,6 @@ import {
   authFooterClass,
   authFooterLinkClass,
   authFormClass,
-  authInputClass,
   authNoticeClass,
 } from "@/components/auth/authFormStyles";
 import { logAuthErrorDev } from "@/lib/auth/authErrors";
@@ -33,6 +34,7 @@ export function ResetPasswordClient() {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState<string | null>(null);
   const submitLockRef = useRef(false);
 
   const {
@@ -63,6 +65,9 @@ export function ResetPasswordClient() {
       const supabase = supabaseBrowser();
       const hasSession = await verifyRecoverySessionWithRetry(async () => {
         const { data } = await supabase.auth.getUser();
+        if (data.user?.email) {
+          setRecoveryEmail(data.user.email);
+        }
         return { data: { user: data.user } };
       });
 
@@ -125,12 +130,7 @@ export function ResetPasswordClient() {
   };
 
   if (isCheckingSession) {
-    return (
-      <AuthCard>
-        <AuthBranding />
-        <p className="text-center text-sm text-slate-500">Preparing password reset...</p>
-      </AuthCard>
-    );
+    return <ResetPasswordLoadingShell />;
   }
 
   if (sessionExpired) {
@@ -186,12 +186,23 @@ export function ResetPasswordClient() {
       </p>
 
       <form method="post" onSubmit={handleSubmit(onSubmit)} className={authFormClass}>
+        {recoveryEmail ? (
+          <input
+            type="email"
+            name="username"
+            autoComplete="username"
+            value={recoveryEmail}
+            readOnly
+            tabIndex={-1}
+            aria-hidden="true"
+            className="sr-only"
+          />
+        ) : null}
+
         <div>
           <label className={authFieldLabelClass}>New password</label>
-          <input
-            type="password"
+          <PasswordInput
             {...register("password")}
-            className={authInputClass}
             placeholder="••••••••"
             autoComplete="new-password"
             disabled={isSubmitting}
@@ -203,10 +214,8 @@ export function ResetPasswordClient() {
 
         <div>
           <label className={authFieldLabelClass}>Confirm password</label>
-          <input
-            type="password"
+          <PasswordInput
             {...register("confirmPassword")}
-            className={authInputClass}
             placeholder="••••••••"
             autoComplete="new-password"
             disabled={isSubmitting}

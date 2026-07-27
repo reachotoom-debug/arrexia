@@ -9,6 +9,7 @@ import { registerSchema, type RegisterFormValues } from "@/lib/schemas/auth";
 import { AuthBranding } from "@/components/auth/AuthBranding";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthSocialLogin } from "@/components/auth/AuthSocialLogin";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import {
   authButtonClass,
   authErrorClass,
@@ -232,7 +233,7 @@ export function RegisterClient() {
           ) : null}
 
           <Link href="/login" className={`${authButtonClass} inline-block text-center`}>
-            Back to Sign In
+            Back to sign in
           </Link>
 
           {outcome.kind === "already_registered" ? (
@@ -273,10 +274,8 @@ export function RegisterClient() {
 
         <div>
           <label className={authFieldLabelClass}>Password</label>
-          <input
-            type="password"
+          <PasswordInput
             {...register("password")}
-            className={authInputClass}
             placeholder="••••••••"
             autoComplete="new-password"
             disabled={isSubmitDisabled}
@@ -287,11 +286,9 @@ export function RegisterClient() {
         </div>
 
         <div>
-          <label className={authFieldLabelClass}>Confirm Password</label>
-          <input
-            type="password"
+          <label className={authFieldLabelClass}>Confirm password</label>
+          <PasswordInput
             {...register("confirmPassword")}
-            className={authInputClass}
             placeholder="••••••••"
             autoComplete="new-password"
             disabled={isSubmitDisabled}

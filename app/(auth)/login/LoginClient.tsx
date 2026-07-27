@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { AuthBranding } from "@/components/auth/AuthBranding";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthSocialLogin } from "@/components/auth/AuthSocialLogin";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import {
   authButtonClass,
   authErrorClass,
@@ -142,11 +143,9 @@ export function LoginClient() {
               Forgot password?
             </Link>
           </div>
-          <input
+          <PasswordInput
             id="login-password"
-            type="password"
             {...register("password")}
-            className={authInputClass}
             placeholder="••••••••"
             autoComplete="current-password"
             disabled={isSubmitting}
