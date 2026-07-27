@@ -112,7 +112,7 @@ export function ResetPasswordClient() {
           message: payload?.error ?? mapPasswordResetUpdateError("update failed"),
         });
 
-        if (response.status === 403) {
+        if (response.status === 401 || response.status === 403) {
           setSessionExpired(true);
         }
         return;

@@ -30,6 +30,15 @@ export const AUTH_PASSWORD_RESET_SEND_FAILURE_MESSAGE =
 export const AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE =
   "We couldn't update your password. Please request a new reset link and try again.";
 
+export const AUTH_PASSWORD_RESET_SAME_PASSWORD_MESSAGE =
+  "Choose a different password than your current one.";
+
+export const AUTH_PASSWORD_RESET_WEAK_PASSWORD_MESSAGE =
+  "Password does not meet security requirements. Use at least 6 characters.";
+
+export const AUTH_PASSWORD_RESET_REAUTHENTICATION_MESSAGE =
+  "This reset link can no longer be used to change your password. Please request a new reset link and try again.";
+
 export const AUTH_ACCOUNT_NOT_ACTIVATED_MESSAGE =
   "Please confirm your email using the signup confirmation link before signing in.";
 

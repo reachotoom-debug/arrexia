@@ -80,6 +80,7 @@ describe("AUTH-SEC-4A recover route wiring contracts", () => {
     assert.match(src, /PASSWORD_RESET_NEXT_PATH/);
     assert.match(src, /copyCookies/);
     assert.match(src, /supabaseRouteHandler/);
+    assert.doesNotMatch(src, /\.getUser\(/);
   });
 
   it("E — recover route NEVER calls activateAccount", () => {

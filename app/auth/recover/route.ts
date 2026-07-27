@@ -46,15 +46,6 @@ export async function GET(request: Request) {
     return redirectRecoveryExpired(origin);
   }
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return redirectRecoveryExpired(origin);
-  }
-
   const finalRedirect = NextResponse.redirect(`${origin}${PASSWORD_RESET_NEXT_PATH}`);
   copyCookies(cookieHolder, finalRedirect);
   return finalRedirect;

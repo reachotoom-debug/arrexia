@@ -152,11 +152,13 @@ describe("AUTH-SEC-2 wiring contracts", () => {
     );
   });
 
-  it("reset-password uses server route with activation check", () => {
+  it("reset-password uses server API with getUser authorization and activation check", () => {
     const clientSrc = readFileSync("app/(auth)/reset-password/ResetPasswordClient.tsx", "utf8");
     const apiSrc = readFileSync("app/api/auth/reset-password/route.ts", "utf8");
     assert.match(clientSrc, /\/api\/auth\/reset-password/);
+    assert.match(apiSrc, /\.auth\.getUser\(/);
     assert.match(apiSrc, /isAccountActivated/);
+    assert.doesNotMatch(apiSrc, /\.getSession\(/);
   });
 
   it("forgot-password generic message is enumeration-safe copy", () => {

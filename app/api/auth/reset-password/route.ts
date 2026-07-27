@@ -5,6 +5,10 @@ import {
   AUTH_ACCOUNT_NOT_ACTIVATED_RESET_MESSAGE,
   AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE,
 } from "@/lib/auth/authErrors";
+import {
+  logResetPasswordStageSafe,
+  mapRecoveryPasswordUpdateError,
+} from "@/lib/auth/resetPasswordUpdate";
 import { supabaseRouteHandler } from "@/lib/supabase/route-handler";
 
 const resetPasswordSchema = z.object({
@@ -31,27 +35,47 @@ function jsonResponse(
 }
 
 export async function POST(request: Request) {
+  let cookieHolder: NextResponse | undefined;
+
   try {
     const body = (await request.json().catch(() => null)) as unknown;
     const parsed = resetPasswordSchema.safeParse(body);
 
     if (!parsed.success) {
+      logResetPasswordStageSafe({ stage: "validate_body" });
       return jsonResponse({ ok: false, error: AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE }, 400);
     }
 
-    const cookieHolder = jsonResponse({ ok: true }, 200);
+    cookieHolder = jsonResponse({ ok: true }, 200);
     const supabase = await supabaseRouteHandler(cookieHolder);
+
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return jsonResponse({ ok: false, error: AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE }, 401);
+      logResetPasswordStageSafe({
+        stage: "resolve_session",
+        hasUser: false,
+        errorCode: userError?.code ?? null,
+        errorStatus: userError?.status ?? null,
+        errorMessage: userError?.message ?? "missing_user",
+      });
+      return jsonResponse(
+        { ok: false, error: AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE },
+        401,
+        cookieHolder
+      );
     }
 
     const activated = await isAccountActivated(user.id);
     if (!activated) {
+      logResetPasswordStageSafe({
+        stage: "activation_gate",
+        hasUser: true,
+        activationPassed: false,
+      });
       await supabase.auth.signOut().catch(() => undefined);
       return jsonResponse(
         { ok: false, error: AUTH_ACCOUNT_NOT_ACTIVATED_RESET_MESSAGE },
@@ -65,9 +89,18 @@ export async function POST(request: Request) {
     });
 
     if (updateError) {
+      logResetPasswordStageSafe({
+        stage: "update_password",
+        hasUser: true,
+        activationPassed: true,
+        errorCode: updateError.code ?? null,
+        errorStatus: updateError.status ?? null,
+        errorMessage: updateError.message ?? null,
+      });
       return jsonResponse(
-        { ok: false, error: AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE },
-        400
+        { ok: false, error: mapRecoveryPasswordUpdateError(updateError) },
+        400,
+        cookieHolder
       );
     }
 
@@ -75,11 +108,15 @@ export async function POST(request: Request) {
 
     return jsonResponse({ ok: true }, 200, cookieHolder);
   } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      const message = error instanceof Error ? error.message : "reset-password failed";
-      console.error("[api/auth/reset-password]", message);
-    }
+    logResetPasswordStageSafe({
+      stage: "update_password",
+      errorMessage: error instanceof Error ? error.message : "reset-password failed",
+    });
 
-    return jsonResponse({ ok: false, error: AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE }, 500);
+    return jsonResponse(
+      { ok: false, error: AUTH_PASSWORD_RESET_UPDATE_FAILURE_MESSAGE },
+      500,
+      cookieHolder
+    );
   }
 }
