@@ -3,6 +3,7 @@ import { formatMoney } from "@/lib/utils/format-money";
 
 export type CollectionWhatsAppMessageInput = {
   clientName: string | null;
+  businessName: string | null;
   invoiceNumber: string | null;
   outstanding: number;
   currency: string | null;
@@ -12,6 +13,7 @@ export type CollectionWhatsAppMessageInput = {
 
 export function buildCollectionWhatsAppMessage(input: CollectionWhatsAppMessageInput): string {
   const clientName = input.clientName?.trim() || "there";
+  const businessName = input.businessName?.trim() || "Your company";
   const invoiceNumber = input.invoiceNumber?.trim() || "your invoice";
   const currency = input.currency?.trim() || "USD";
   const outstandingFormatted = formatMoney(input.outstanding, currency);
@@ -20,7 +22,7 @@ export function buildCollectionWhatsAppMessage(input: CollectionWhatsAppMessageI
   const lines = [
     `Hi ${clientName},`,
     "",
-    `This is a payment reminder for invoice ${invoiceNumber}.`,
+    `This is a payment reminder from ${businessName} regarding invoice ${invoiceNumber}.`,
     `Outstanding: ${outstandingFormatted}`,
     `Due date: ${dueDate}`,
   ];
@@ -29,7 +31,14 @@ export function buildCollectionWhatsAppMessage(input: CollectionWhatsAppMessageI
     lines.push(`This invoice is ${input.daysOverdue} days overdue.`);
   }
 
-  lines.push("", "Please let us know once payment has been arranged.", "", "Thank you.");
+  lines.push(
+    "",
+    "Please let us know once payment has been arranged.",
+    "",
+    "Thank you,",
+    businessName,
+    "Powered by Arrexia"
+  );
 
   return lines.join("\n");
 }

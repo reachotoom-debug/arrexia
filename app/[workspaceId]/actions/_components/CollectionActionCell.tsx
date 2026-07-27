@@ -11,6 +11,8 @@ type CollectionActionCellProps = {
   invoiceNumber: string | null;
   clientName: string | null;
   clientPhone: string | null;
+  clientCountry: string | null;
+  businessName: string;
   outstanding: number;
   currency: string | null;
   dueDate: string | null;
@@ -24,6 +26,8 @@ export function CollectionActionCell({
   invoiceNumber,
   clientName,
   clientPhone,
+  clientCountry,
+  businessName,
   outstanding,
   currency,
   dueDate,
@@ -42,7 +46,9 @@ export function CollectionActionCell({
   const whatsAppLink = (
     <WhatsAppCollectionLink
       phone={clientPhone}
+      clientCountry={clientCountry}
       clientName={clientName}
+      businessName={businessName}
       invoiceNumber={invoiceNumber}
       outstanding={outstanding}
       currency={currency}

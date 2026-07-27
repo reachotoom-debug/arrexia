@@ -1,4 +1,5 @@
 import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
+import { resolveCustomerFacingBusinessName } from "@/lib/branding/resolveCustomerFacingBusinessName";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
 import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
@@ -40,6 +41,7 @@ function mapInvoiceRow(
     clientName: raw.client_name ?? null,
     clientEmail: contact?.email ?? null,
     clientPhone: resolveClientWhatsAppPhone(contact?.whatsappPhone, contact?.whatsapp),
+    clientCountry: contact?.country ?? null,
     dueDate: raw.due_date ?? null,
     outstanding: Number(raw.outstanding ?? 0),
     currency: raw.currency ?? null,
@@ -121,6 +123,7 @@ type ClientContactRow = {
   email: string | null;
   whatsappPhone: string | null;
   whatsapp: string | null;
+  country: string | null;
 };
 
 async function loadClientContactsById(
@@ -133,7 +136,7 @@ async function loadClientContactsById(
 
   const { data, error } = await supabase
     .from("clients")
-    .select("id, email, whatsapp_phone, whatsapp")
+    .select("id, email, whatsapp_phone, whatsapp, country")
     .eq("workspace_id", workspaceId)
     .in("id", clientIds);
 
@@ -147,6 +150,7 @@ async function loadClientContactsById(
       email: row.email ?? null,
       whatsappPhone: row.whatsapp_phone ?? null,
       whatsapp: row.whatsapp ?? null,
+      country: row.country ?? null,
     });
   }
 
@@ -158,7 +162,7 @@ export async function getDailyActionCenterData(
 ): Promise<DailyActionCenterData> {
   const supabase = await supabaseServer();
 
-  const [eligibleReminders, invoicesResult, settingsResult, sentInvoiceCountResult] =
+  const [eligibleReminders, invoicesResult, settingsResult, sentInvoiceCountResult, workspaceResult] =
     await Promise.all([
     getEligibleReminders(workspaceId),
     supabase
@@ -187,7 +191,9 @@ export async function getDailyActionCenterData(
       .is("archived_at", null),
     supabase
       .from("settings")
-      .select("timezone, default_currency")
+      .select(
+        "timezone, default_currency, branding_business_legal_name, business_name, workspace_display_name"
+      )
       .eq("workspace_id", workspaceId)
       .maybeSingle(),
     supabase
@@ -196,6 +202,7 @@ export async function getDailyActionCenterData(
       .eq("workspace_id", workspaceId)
       .eq("base_status", "sent")
       .is("archived_at", null),
+    supabase.from("workspaces").select("name").eq("id", workspaceId).maybeSingle(),
   ]);
 
   if (invoicesResult.error) {
@@ -205,6 +212,12 @@ export async function getDailyActionCenterData(
 
   const workspaceTimeZone = settingsResult.data?.timezone ?? "UTC";
   const defaultCurrency = settingsResult.data?.default_currency ?? "USD";
+  const businessName = resolveCustomerFacingBusinessName({
+    brandingBusinessLegalName: settingsResult.data?.branding_business_legal_name,
+    businessName: settingsResult.data?.business_name,
+    workspaceDisplayName: settingsResult.data?.workspace_display_name,
+    workspaceName: workspaceResult.data?.name,
+  });
   const sentInvoiceCount = sentInvoiceCountResult.count ?? 0;
   const rawInvoices = invoicesResult.data ?? [];
   const clientIds = [
@@ -266,8 +279,9 @@ export async function getDailyActionCenterData(
     collectionActions: collectionActionsWithExecution,
     reminderActionsByInvoiceId,
     eligibleReminders,
+    businessName,
   };
 }
 
 /** Reported DB round trips for R3C loader. */
-export const DAILY_ACTION_CENTER_DB_ROUND_TRIPS = 8 as const;
+export const DAILY_ACTION_CENTER_DB_ROUND_TRIPS = 9 as const;

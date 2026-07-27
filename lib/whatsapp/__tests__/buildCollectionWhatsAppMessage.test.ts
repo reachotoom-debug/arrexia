@@ -4,9 +4,10 @@ import { describe, it } from "node:test";
 import { buildCollectionWhatsAppMessage } from "@/lib/whatsapp/buildCollectionWhatsAppMessage";
 
 describe("buildCollectionWhatsAppMessage", () => {
-  it("G — overdue invoice includes days overdue line", () => {
+  it("includes businessName in opening line and signature", () => {
     const message = buildCollectionWhatsAppMessage({
       clientName: "Acme Corp",
+      businessName: "FlowCollect LLC",
       invoiceNumber: "INV-100",
       outstanding: 500,
       currency: "USD",
@@ -15,17 +16,32 @@ describe("buildCollectionWhatsAppMessage", () => {
     });
 
     assert.match(message, /Hi Acme Corp,/);
-    assert.match(message, /invoice INV-100/);
-    assert.match(message, /Outstanding: \$500\.00/);
-    assert.match(message, /Due date: Jul 1, 2026/);
-    assert.match(message, /This invoice is 12 days overdue\./);
-    assert.match(message, /Please let us know once payment has been arranged\./);
-    assert.match(message, /Thank you\./);
+    assert.match(
+      message,
+      /This is a payment reminder from FlowCollect LLC regarding invoice INV-100\./
+    );
+    assert.match(message, /Thank you,\nFlowCollect LLC/);
   });
 
-  it("H — partially paid invoice uses outstanding balance in message", () => {
+  it("includes Powered by Arrexia footer once", () => {
+    const message = buildCollectionWhatsAppMessage({
+      clientName: "Acme Corp",
+      businessName: "FlowCollect LLC",
+      invoiceNumber: "INV-100",
+      outstanding: 500,
+      currency: "USD",
+      dueDate: "2026-07-01",
+      daysOverdue: 0,
+    });
+
+    assert.match(message, /Powered by Arrexia$/);
+    assert.equal((message.match(/Powered by Arrexia/g) ?? []).length, 1);
+  });
+
+  it("partially paid invoice uses outstanding balance in message", () => {
     const message = buildCollectionWhatsAppMessage({
       clientName: "Beta LLC",
+      businessName: "FlowCollect LLC",
       invoiceNumber: "INV-200",
       outstanding: 250.5,
       currency: "USD",
@@ -34,12 +50,13 @@ describe("buildCollectionWhatsAppMessage", () => {
     });
 
     assert.match(message, /Outstanding: \$250\.50/);
-    assert.doesNotMatch(message, /\$1,000/);
+    assert.match(message, /This invoice is 5 days overdue\./);
   });
 
-  it("I — non-overdue invoice does not mention days overdue", () => {
+  it("non-overdue invoice does not mention days overdue", () => {
     const message = buildCollectionWhatsAppMessage({
       clientName: "Gamma Inc",
+      businessName: "FlowCollect LLC",
       invoiceNumber: "INV-300",
       outstanding: 100,
       currency: "USD",
@@ -50,9 +67,10 @@ describe("buildCollectionWhatsAppMessage", () => {
     assert.doesNotMatch(message, /days overdue/i);
   });
 
-  it("J — missing optional values handled safely", () => {
+  it("missing optional values handled safely", () => {
     const message = buildCollectionWhatsAppMessage({
       clientName: null,
+      businessName: null,
       invoiceNumber: null,
       outstanding: 0,
       currency: null,
@@ -61,9 +79,9 @@ describe("buildCollectionWhatsAppMessage", () => {
     });
 
     assert.match(message, /Hi there,/);
-    assert.match(message, /invoice your invoice/);
+    assert.match(message, /from Your company regarding invoice your invoice/);
     assert.match(message, /Outstanding: \$0\.00/);
     assert.match(message, /Due date: —/);
-    assert.doesNotMatch(message, /days overdue/i);
+    assert.match(message, /Thank you,\nYour company/);
   });
 });

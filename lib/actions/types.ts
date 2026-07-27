@@ -14,6 +14,7 @@ export type ChaseableInvoiceRow = {
   clientName: string | null;
   clientEmail: string | null;
   clientPhone: string | null;
+  clientCountry: string | null;
   dueDate: string | null;
   outstanding: number;
   currency: string | null;
@@ -33,6 +34,7 @@ export type CollectionActionItem = {
   clientName: string | null;
   clientEmail: string | null;
   clientPhone: string | null;
+  clientCountry: string | null;
   dueDate: string | null;
   outstanding: number;
   currency: string | null;
@@ -68,4 +70,5 @@ export type DailyActionCenterData = {
   collectionActions: CollectionActionItem[];
   reminderActionsByInvoiceId: Record<string, ReminderActionContext>;
   eligibleReminders: EligibleReminderCandidate[];
+  businessName: string;
 };

@@ -138,7 +138,11 @@ export function CollectionsModeTab({ workspaceId, data }: CollectionsModeTabProp
       </div>
 
       {/* Collections Table */}
-      <CollectionsTable invoices={tableData} workspaceId={workspaceId} />
+      <CollectionsTable
+        invoices={tableData}
+        workspaceId={workspaceId}
+        businessName={data.businessName}
+      />
     </div>
   );
 }

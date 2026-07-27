@@ -3,6 +3,7 @@
  */
 
 import { supabaseServer } from "@/lib/supabase/server";
+import { resolveCustomerFacingBusinessName } from "@/lib/branding/resolveCustomerFacingBusinessName";
 import { formatCurrency } from "@/lib/format/currency";
 import type {
   DashboardData,
@@ -93,13 +94,24 @@ export async function getDashboardData(
 ): Promise<DashboardData> {
   const supabase = await supabaseServer();
 
-  // Fetch workspace settings for default currency (used for display/formatting only)
-  const { data: settingsRow } = await supabase
-    .from("settings")
-    .select("default_currency")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
+  // Fetch workspace settings for default currency and customer-facing business name
+  const [{ data: settingsRow }, { data: workspaceRow }] = await Promise.all([
+    supabase
+      .from("settings")
+      .select(
+        "default_currency, branding_business_legal_name, business_name, workspace_display_name"
+      )
+      .eq("workspace_id", workspaceId)
+      .maybeSingle(),
+    supabase.from("workspaces").select("name").eq("id", workspaceId).maybeSingle(),
+  ]);
   const workspaceCurrency = (settingsRow as { default_currency?: string } | null)?.default_currency || "USD";
+  const businessName = resolveCustomerFacingBusinessName({
+    brandingBusinessLegalName: settingsRow?.branding_business_legal_name,
+    businessName: settingsRow?.business_name,
+    workspaceDisplayName: settingsRow?.workspace_display_name,
+    workspaceName: workspaceRow?.name,
+  });
 
   // Dashboard data powers the tab content and “Smart Risk Overview” section.
   // Top “Premium KPI” cards are powered by getDashboardSummary().
@@ -950,6 +962,7 @@ export async function getDashboardData(
     collectionsMode,
     insight,
     reminderEffectiveness,
+    businessName,
   };
 }
 

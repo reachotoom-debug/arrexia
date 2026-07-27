@@ -33,6 +33,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
 import { ExportCsvButton } from "../_components/ExportCsvButton";
 import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
+import { loadCustomerFacingBusinessName } from "@/lib/branding/loadCustomerFacingBusinessName";
 import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
 import { primaryCtaClass } from "@/components/ui/cta-styles";
 
@@ -162,7 +163,7 @@ async function getCollectionsData(
   if (clientIds.length > 0) {
     const { data: clients, error: clientsError } = await supabase
       .from("clients")
-      .select("id, name, company, email, whatsapp, whatsapp_phone")
+      .select("id, name, company, email, whatsapp, whatsapp_phone, country")
       .in("id", clientIds)
       .eq("workspace_id", workspaceId)
       .eq("is_active", true)
@@ -255,8 +256,13 @@ export default async function CollectionsPage({
   const pageSize = COLLECTIONS_PAGE_SIZE;
 
   let collectionsData;
+  let businessName = "Your company";
   try {
-    collectionsData = await getCollectionsData(workspaceId, risk, page, pageSize);
+    const supabase = await supabaseServer();
+    [collectionsData, businessName] = await Promise.all([
+      getCollectionsData(workspaceId, risk, page, pageSize),
+      loadCustomerFacingBusinessName(supabase, workspaceId),
+    ]);
   } catch (error) {
     return (
       <div className="w-full min-w-0">
@@ -495,7 +501,7 @@ export default async function CollectionsPage({
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {invoices.map((inv) => {
-                  const client = (inv as { client?: { email?: string | null; whatsapp?: string | null; whatsapp_phone?: string | null } }).client;
+                  const client = (inv as { client?: { email?: string | null; whatsapp?: string | null; whatsapp_phone?: string | null; country?: string | null } }).client;
                   return (
                   <tr key={inv.id} className={TABLE_ROW}>
                     <td className={`hidden lg:table-cell ${TABLE_TD} text-sm`}>
@@ -590,7 +596,9 @@ export default async function CollectionsPage({
                           client?.whatsapp_phone,
                           client?.whatsapp
                         )}
+                        clientCountry={client?.country ?? null}
                         clientName={inv.client_name ?? null}
+                        businessName={businessName}
                         invoiceNumber={inv.invoice_number ?? null}
                         outstanding={Number(inv.outstanding || 0)}
                         currency={inv.currency ?? "USD"}

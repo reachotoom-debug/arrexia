@@ -30,6 +30,7 @@ interface Client {
   email: string | null;
   whatsapp: string | null;
   whatsapp_phone: string | null;
+  country?: string | null;
 }
 
 interface EnrichedInvoice {
@@ -48,6 +49,7 @@ interface EnrichedInvoice {
 interface CollectionsTableProps {
   invoices: EnrichedInvoice[];
   workspaceId: string;
+  businessName?: string;
 }
 
 /** Overdue-day heat: 0-7 neutral, 8-30 amber, 31-60 orange, 61-90 red, 90+ max. Returns badge classes for readability. */
@@ -167,6 +169,7 @@ function CollectionsNotesModal({
 export function CollectionsTable({
   invoices,
   workspaceId,
+  businessName = "Your company",
 }: CollectionsTableProps) {
   const [editingInvoice, setEditingInvoice] = useState<EnrichedInvoice | null>(
     null
@@ -271,7 +274,9 @@ export function CollectionsTable({
                           client?.whatsapp_phone,
                           client?.whatsapp
                         )}
+                        clientCountry={client?.country ?? null}
                         clientName={client?.name ?? null}
+                        businessName={businessName}
                         invoiceNumber={inv.invoice_number ?? null}
                         outstanding={Math.abs(inv.outstanding)}
                         currency={currency}

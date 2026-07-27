@@ -143,4 +143,5 @@ export interface DashboardData {
   collectionsMode: CollectionsModeData;
   insight: DashboardInsight;
   reminderEffectiveness: ReminderEffectivenessData[];
+  businessName: string;
 }

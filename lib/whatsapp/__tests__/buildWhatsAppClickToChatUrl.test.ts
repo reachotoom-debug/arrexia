@@ -35,7 +35,7 @@ describe("buildWhatsAppClickToChatUrl", () => {
     assert.equal(buildWhatsAppClickToChatUrl({ phone: null, message }), null);
   });
 
-  it("E — rejects invalid or local-only phone values", () => {
+  it("E — rejects local-only phone without client country", () => {
     assert.equal(resolveInternationalWhatsAppDigits("779610078"), null);
     assert.equal(resolveInternationalWhatsAppDigits("0779610078"), null);
     assert.equal(resolveInternationalWhatsAppDigits("+123"), null);
@@ -51,5 +51,39 @@ describe("buildWhatsAppClickToChatUrl", () => {
       encoded,
       "https://wa.me/962779610078?text=Hi%20there%2C%0ALine%202%20%26%20special%3F"
     );
+  });
+
+  it("G — Jordan local 0779610078 with client country Jordan", () => {
+    assert.equal(
+      resolveInternationalWhatsAppDigits("0779610078", "Jordan"),
+      "962779610078"
+    );
+    assert.equal(
+      buildWhatsAppClickToChatUrl({
+        phone: "0779610078",
+        clientCountry: "Jordan",
+        message,
+      }),
+      "https://wa.me/962779610078?text=Hello%20from%20Arrexia"
+    );
+  });
+
+  it("H — formatted Jordan local number with country", () => {
+    assert.equal(
+      resolveInternationalWhatsAppDigits("077 961-0078", "Jordan"),
+      "962779610078"
+    );
+  });
+
+  it("I — US local number with United States country", () => {
+    assert.equal(
+      resolveInternationalWhatsAppDigits("(555) 123-4567", "United States"),
+      "15551234567"
+    );
+  });
+
+  it("J — international number unchanged with or without country context", () => {
+    assert.equal(resolveInternationalWhatsAppDigits("+962779610078", "Jordan"), "962779610078");
+    assert.equal(resolveInternationalWhatsAppDigits("+962779610078", null), "962779610078");
   });
 });

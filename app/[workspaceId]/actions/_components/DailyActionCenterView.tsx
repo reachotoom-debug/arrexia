@@ -71,7 +71,7 @@ function SummaryCard({
 }
 
 export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterViewProps) {
-  const { summary, collectionActions } = data;
+  const { summary, collectionActions, businessName } = data;
 
   if (summary.actionsTodayCount === 0) {
     const onboardingSignals = {
@@ -243,6 +243,8 @@ export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterVi
                             invoiceNumber={item.invoiceNumber}
                             clientName={item.clientName}
                             clientPhone={item.clientPhone}
+                            clientCountry={item.clientCountry}
+                            businessName={businessName}
                             outstanding={item.outstanding}
                             currency={item.currency}
                             dueDate={item.dueDate}

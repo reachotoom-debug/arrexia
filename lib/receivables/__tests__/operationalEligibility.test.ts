@@ -18,6 +18,7 @@ const baseChaseableRow = {
   clientName: "Acme",
   clientEmail: null,
   clientPhone: null,
+  clientCountry: null,
   dueDate: "2026-07-01",
   outstanding: 100,
   currency: "USD",
