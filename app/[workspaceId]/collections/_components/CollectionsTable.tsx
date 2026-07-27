@@ -20,6 +20,8 @@ import {
   TABLE_TH_RIGHT,
 } from "@/components/table/tableShell";
 import { EmptyState } from "@/components/ui/state";
+import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
+import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
 
 interface Client {
   id: string;
@@ -263,12 +265,27 @@ export function CollectionsTable({
                     )}
                   </td>
                   <td className={`${TABLE_TD} whitespace-nowrap`}>
-                    <Link
-                      href={`/${workspaceId}/invoices/${inv.id}`}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <WhatsAppCollectionLink
+                        phone={resolveClientWhatsAppPhone(
+                          client?.whatsapp_phone,
+                          client?.whatsapp
+                        )}
+                        clientName={client?.name ?? null}
+                        invoiceNumber={inv.invoice_number ?? null}
+                        outstanding={Math.abs(inv.outstanding)}
+                        currency={currency}
+                        dueDate={inv.due_date ?? null}
+                        daysOverdue={inv.daysOverdue ?? 0}
+                        variant="button"
+                      />
+                      <Link
+                        href={`/${workspaceId}/invoices/${inv.id}`}
                         className="inline-flex items-center whitespace-nowrap rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
-                    >
-                      View invoice
-                    </Link>
+                      >
+                        View invoice
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               );

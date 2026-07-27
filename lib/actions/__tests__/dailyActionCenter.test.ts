@@ -19,6 +19,7 @@ function invoice(overrides: Partial<ChaseableInvoiceRow> = {}): ChaseableInvoice
     clientId: overrides.clientId ?? "client-1",
     clientName: overrides.clientName ?? "Acme Corp",
     clientEmail: overrides.clientEmail ?? "client@example.com",
+    clientPhone: overrides.clientPhone ?? null,
     dueDate: overrides.dueDate ?? DUE,
     outstanding: overrides.outstanding ?? 1000,
     currency: overrides.currency ?? "USD",
@@ -72,6 +73,21 @@ describe("buildDailyActionCategories (R3B)", () => {
 
     assert.equal(result.collectionActions.length, 1);
     assert.ok(result.collectionActions[0]?.reasons.some((r) => r.type === "reminder_due"));
+    assert.equal(result.collectionActions[0]?.clientPhone, null);
+  });
+
+  it("passes clientPhone through to collection actions", () => {
+    const result = build({
+      invoices: [
+        invoice({
+          id: "inv-phone",
+          clientPhone: "+962779610078",
+          overdueDays: 3,
+        }),
+      ],
+    });
+
+    assert.equal(result.collectionActions[0]?.clientPhone, "+962779610078");
   });
 
   it("B — newly overdue day 1 → action", () => {

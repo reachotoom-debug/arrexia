@@ -242,6 +242,11 @@ export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterVi
                             invoiceId={item.id}
                             invoiceNumber={item.invoiceNumber}
                             clientName={item.clientName}
+                            clientPhone={item.clientPhone}
+                            outstanding={item.outstanding}
+                            currency={item.currency}
+                            dueDate={item.dueDate}
+                            daysOverdue={item.overdueDays}
                             execution={item.execution}
                           />
                         ) : null}

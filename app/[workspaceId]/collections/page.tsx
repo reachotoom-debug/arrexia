@@ -32,6 +32,8 @@ import { CommandBarFilters } from "@/components/layout/CommandBarFilters";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
 import { ExportCsvButton } from "../_components/ExportCsvButton";
+import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
+import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
 import { primaryCtaClass } from "@/components/ui/cta-styles";
 
 const COLLECTIONS_PAGE_SIZE = 10;
@@ -583,6 +585,19 @@ export default async function CollectionsPage({
 
                   <td className={`${TABLE_TD_RIGHT} text-sm leading-5`}>
                     <div className={TABLE_ACTIONS_ROW}>
+                      <WhatsAppCollectionLink
+                        phone={resolveClientWhatsAppPhone(
+                          client?.whatsapp_phone,
+                          client?.whatsapp
+                        )}
+                        clientName={inv.client_name ?? null}
+                        invoiceNumber={inv.invoice_number ?? null}
+                        outstanding={Number(inv.outstanding || 0)}
+                        currency={inv.currency ?? "USD"}
+                        dueDate={inv.due_date ?? null}
+                        daysOverdue={Number(inv.overdue_days ?? 0)}
+                        variant="button"
+                      />
                       <Link
                         href={`/${workspaceId}/invoices/${inv.id}`}
                         className="inline-flex items-center whitespace-nowrap rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"

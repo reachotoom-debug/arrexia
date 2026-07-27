@@ -94,6 +94,7 @@ describe("fully-paid cross-module behavior contracts", () => {
         clientId: "client-1",
         clientName: "Acme",
         clientEmail: null,
+        clientPhone: null,
         dueDate: "2026-01-01",
         outstanding: 0,
         currency: "USD",

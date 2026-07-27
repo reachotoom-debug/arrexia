@@ -13,6 +13,7 @@ export type ChaseableInvoiceRow = {
   clientId: string | null;
   clientName: string | null;
   clientEmail: string | null;
+  clientPhone: string | null;
   dueDate: string | null;
   outstanding: number;
   currency: string | null;
@@ -31,6 +32,7 @@ export type CollectionActionItem = {
   invoiceNumber: string | null;
   clientName: string | null;
   clientEmail: string | null;
+  clientPhone: string | null;
   dueDate: string | null;
   outstanding: number;
   currency: string | null;

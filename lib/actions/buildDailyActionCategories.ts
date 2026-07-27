@@ -51,6 +51,7 @@ function toCollectionActionItem(
     invoiceNumber: row.invoiceNumber,
     clientName: row.clientName,
     clientEmail: row.clientEmail,
+    clientPhone: row.clientPhone,
     dueDate: row.dueDate,
     outstanding: row.outstanding,
     currency: row.currency,

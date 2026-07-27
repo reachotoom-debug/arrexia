@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
 import { SendReminderButton } from "../../reminders/_components/send-reminder-button";
 import type { CollectionActionExecution } from "@/lib/actions/resolveCollectionActionExecution";
 
@@ -9,6 +10,11 @@ type CollectionActionCellProps = {
   invoiceId: string;
   invoiceNumber: string | null;
   clientName: string | null;
+  clientPhone: string | null;
+  outstanding: number;
+  currency: string | null;
+  dueDate: string | null;
+  daysOverdue: number;
   execution: CollectionActionExecution;
 };
 
@@ -17,6 +23,11 @@ export function CollectionActionCell({
   invoiceId,
   invoiceNumber,
   clientName,
+  clientPhone,
+  outstanding,
+  currency,
+  dueDate,
+  daysOverdue,
   execution,
 }: CollectionActionCellProps) {
   const viewLink = (
@@ -28,14 +39,30 @@ export function CollectionActionCell({
     </Link>
   );
 
+  const whatsAppLink = (
+    <WhatsAppCollectionLink
+      phone={clientPhone}
+      clientName={clientName}
+      invoiceNumber={invoiceNumber}
+      outstanding={outstanding}
+      currency={currency}
+      dueDate={dueDate}
+      daysOverdue={daysOverdue}
+      variant="link"
+    />
+  );
+
   if (execution.mode === "view_only") {
     return (
-      <Link
-        href={`/${workspaceId}/invoices/${invoiceId}`}
-        className="text-sm font-medium text-blue-600 hover:underline"
-      >
-        View invoice
-      </Link>
+      <div className="flex flex-wrap items-center gap-3">
+        {whatsAppLink}
+        <Link
+          href={`/${workspaceId}/invoices/${invoiceId}`}
+          className="text-sm font-medium text-blue-600 hover:underline"
+        >
+          View invoice
+        </Link>
+      </div>
     );
   }
 
@@ -65,6 +92,7 @@ export function CollectionActionCell({
         />
         <span className="text-sm font-medium text-slate-800">Send reminder</span>
       </div>
+      {whatsAppLink}
       {viewLink}
     </div>
   );

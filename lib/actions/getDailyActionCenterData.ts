@@ -1,6 +1,7 @@
 import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
+import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
 import { buildDailyActionCategories } from "./buildDailyActionCategories";
 import { resolveCollectionActionExecution } from "./resolveCollectionActionExecution";
 import type {
@@ -28,15 +29,17 @@ function mapInvoiceRow(
     client_archived_at: string | null;
     archived_at: string | null;
   },
-  clientEmailByClientId: Map<string, string | null>
+  clientContactByClientId: Map<string, ClientContactRow>
 ): ChaseableInvoiceRow {
   const clientId = raw.client_id ?? null;
+  const contact = clientId ? clientContactByClientId.get(clientId) : undefined;
   return {
     id: raw.id,
     invoiceNumber: raw.invoice_number ?? null,
     clientId,
     clientName: raw.client_name ?? null,
-    clientEmail: clientId ? clientEmailByClientId.get(clientId) ?? null : null,
+    clientEmail: contact?.email ?? null,
+    clientPhone: resolveClientWhatsAppPhone(contact?.whatsappPhone, contact?.whatsapp),
     dueDate: raw.due_date ?? null,
     outstanding: Number(raw.outstanding ?? 0),
     currency: raw.currency ?? null,
@@ -114,27 +117,37 @@ function attachExecutionMetadata(
   });
 }
 
-async function loadClientEmailsById(
+type ClientContactRow = {
+  email: string | null;
+  whatsappPhone: string | null;
+  whatsapp: string | null;
+};
+
+async function loadClientContactsById(
   supabase: Awaited<ReturnType<typeof supabaseServer>>,
   workspaceId: string,
   clientIds: string[]
-): Promise<Map<string, string | null>> {
-  const map = new Map<string, string | null>();
+): Promise<Map<string, ClientContactRow>> {
+  const map = new Map<string, ClientContactRow>();
   if (clientIds.length === 0) return map;
 
   const { data, error } = await supabase
     .from("clients")
-    .select("id, email")
+    .select("id, email, whatsapp_phone, whatsapp")
     .eq("workspace_id", workspaceId)
     .in("id", clientIds);
 
   if (error) {
-    console.error("[getDailyActionCenterData] clients email load error", error);
-    throw new Error("Failed to load client email data");
+    console.error("[getDailyActionCenterData] clients contact load error", error);
+    throw new Error("Failed to load client contact data");
   }
 
   for (const row of data ?? []) {
-    map.set(row.id, row.email ?? null);
+    map.set(row.id, {
+      email: row.email ?? null,
+      whatsappPhone: row.whatsapp_phone ?? null,
+      whatsapp: row.whatsapp ?? null,
+    });
   }
 
   return map;
@@ -202,8 +215,8 @@ export async function getDailyActionCenterData(
     ),
   ];
 
-  const clientEmailByClientId = await loadClientEmailsById(supabase, workspaceId, clientIds);
-  const invoices = rawInvoices.map((row) => mapInvoiceRow(row, clientEmailByClientId));
+  const clientContactByClientId = await loadClientContactsById(supabase, workspaceId, clientIds);
+  const invoices = rawInvoices.map((row) => mapInvoiceRow(row, clientContactByClientId));
   const invoiceIds = invoices.map((invoice) => invoice.id);
 
   let sentReminderDatesByInvoiceId = new Map<string, string[]>();
