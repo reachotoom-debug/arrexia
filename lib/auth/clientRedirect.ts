@@ -3,7 +3,10 @@ import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.
 import {
   AUTH_SESSION_COULD_NOT_BE_ESTABLISHED_MESSAGE,
 } from "@/lib/auth/authErrors";
-import { resolveAuthenticatedBootstrapFailureRedirect } from "@/lib/auth/postLoginRecovery";
+import {
+  resolveAuthenticatedBootstrapFailureRedirect,
+  type WorkspaceRecoveryOptions,
+} from "@/lib/auth/postLoginRecovery";
 
 const SENSITIVE_AUTH_PARAMS = ["password", "passwd", "pwd"] as const;
 const POST_LOGIN_MAX_ATTEMPTS = 4;
@@ -68,11 +71,15 @@ function delay(ms: number) {
 }
 
 export async function resolvePostLoginPath(
-  nextUrl?: string | null
+  nextUrl?: string | null,
+  recoveryOptions?: WorkspaceRecoveryOptions
 ): Promise<{ redirectTo: string; error?: string }> {
   const params = new URLSearchParams();
   if (nextUrl) {
     params.set("next", nextUrl);
+  }
+  if (recoveryOptions?.initialTrialPlan) {
+    params.set("plan", recoveryOptions.initialTrialPlan);
   }
 
   const query = params.toString();
@@ -137,7 +144,10 @@ export async function resolvePostLoginPath(
     });
   }
 
-  const recoveryRedirect = resolveAuthenticatedBootstrapFailureRedirect(lastError);
+  const recoveryRedirect = resolveAuthenticatedBootstrapFailureRedirect(lastError, {
+    initialTrialPlan: recoveryOptions?.initialTrialPlan,
+    nextPath: recoveryOptions?.nextPath ?? nextUrl,
+  });
   if (recoveryRedirect) {
     return { redirectTo: recoveryRedirect };
   }

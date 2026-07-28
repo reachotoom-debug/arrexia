@@ -135,6 +135,8 @@ export async function GET(request: Request) {
       returnTo,
       errorMessage: WORKSPACE_SETUP_FAILED_MESSAGE,
       sessionEstablished: true,
+      initialTrialPlan: parsePublicSignupTrialPlan(searchParams.get("plan")),
+      nextPath: next,
     });
     const recoveryRedirect = NextResponse.redirect(recoveryUrl);
     copyCookies(cookieHolder, recoveryRedirect);

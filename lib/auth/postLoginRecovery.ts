@@ -1,8 +1,33 @@
 import { AUTH_WORKSPACE_SETUP_FAILED_MESSAGE } from "@/lib/auth/authErrors";
-import { resolveHonoredNextPath } from "@/lib/auth/safeNextPath";
+import { resolveHonoredNextPath, sanitizeNextPath } from "@/lib/auth/safeNextPath";
+import type { PublicSignupTrialPlan } from "@/lib/billing/publicTrialPlan";
 
 /** Authenticated workspace bootstrap recovery entry point. */
 export const AUTH_WORKSPACE_RECOVERY_PATH = "/start" as const;
+
+export type WorkspaceRecoveryOptions = {
+  initialTrialPlan?: PublicSignupTrialPlan | null;
+  nextPath?: string | null;
+};
+
+/** Builds /start recovery URL preserving allowlisted trial intent and safe next path. */
+export function buildWorkspaceRecoveryPath(
+  options?: WorkspaceRecoveryOptions
+): string {
+  const params = new URLSearchParams();
+
+  if (options?.initialTrialPlan) {
+    params.set("plan", options.initialTrialPlan);
+  }
+
+  const nextPath = sanitizeNextPath(options?.nextPath);
+  if (nextPath) {
+    params.set("next", nextPath);
+  }
+
+  const query = params.toString();
+  return query ? `${AUTH_WORKSPACE_RECOVERY_PATH}?${query}` : AUTH_WORKSPACE_RECOVERY_PATH;
+}
 
 export function isWorkspaceSetupFailureMessage(message: string | null | undefined): boolean {
   if (!message) return false;
@@ -23,9 +48,14 @@ export function buildPostLoginDestinationPath(
 }
 
 export function resolveAuthenticatedBootstrapFailureRedirect(
-  errorMessage: string
-): typeof AUTH_WORKSPACE_RECOVERY_PATH | null {
-  return isWorkspaceSetupFailureMessage(errorMessage) ? AUTH_WORKSPACE_RECOVERY_PATH : null;
+  errorMessage: string,
+  recoveryOptions?: WorkspaceRecoveryOptions
+): string | null {
+  if (!isWorkspaceSetupFailureMessage(errorMessage)) {
+    return null;
+  }
+
+  return buildWorkspaceRecoveryPath(recoveryOptions);
 }
 
 export function resolveAuthCallbackFailureRedirect(options: {
@@ -33,9 +63,14 @@ export function resolveAuthCallbackFailureRedirect(options: {
   returnTo: "/login" | "/register";
   errorMessage: string;
   sessionEstablished: boolean;
+  initialTrialPlan?: PublicSignupTrialPlan | null;
+  nextPath?: string | null;
 }): string {
   if (options.sessionEstablished) {
-    const recoveryPath = resolveAuthenticatedBootstrapFailureRedirect(options.errorMessage);
+    const recoveryPath = resolveAuthenticatedBootstrapFailureRedirect(options.errorMessage, {
+      initialTrialPlan: options.initialTrialPlan,
+      nextPath: options.nextPath,
+    });
     if (recoveryPath) {
       return `${options.origin}${recoveryPath}`;
     }

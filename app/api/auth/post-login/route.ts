@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolvePostLoginDestination } from "@/lib/auth/resolvePostLoginDestination";
+import { parsePublicSignupTrialPlan } from "@/lib/billing/publicTrialPlan";
 import { supabaseRouteHandler } from "@/lib/supabase/route-handler";
 
 function jsonResponse(
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const next = searchParams.get("next");
+    const initialTrialPlan = parsePublicSignupTrialPlan(searchParams.get("plan"));
 
     const successResponse = jsonResponse({ ok: true, redirectTo: "" }, 200);
     const supabase = await supabaseRouteHandler(successResponse);
@@ -37,7 +39,7 @@ export async function GET(request: Request) {
       return jsonResponse({ ok: false, error: "Not authenticated" }, 401);
     }
 
-    const result = await resolvePostLoginDestination(user.id, next);
+    const result = await resolvePostLoginDestination(user.id, next, { initialTrialPlan });
 
     if ("error" in result) {
       return jsonResponse({ ok: false, error: result.error }, 500);

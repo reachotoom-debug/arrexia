@@ -7,6 +7,7 @@ import {
 } from "@/lib/billing/publicTrialPlan";
 import { createPublicTrialSubscription } from "@/lib/billing/createPublicTrialSubscription";
 import { revertWorkspacePlanToFree } from "@/lib/billing/revertWorkspacePlanToFree";
+import { loadWorkspaceSubscription } from "@/lib/billing/workspaceSubscription";
 import {
   provisionDefaultReminderSetupSafe,
 } from "@/lib/reminders/provisionDefaultSetup";
@@ -246,6 +247,54 @@ export async function ensureDefaultWorkspacePlan(
   return { planCreated: true, plan };
 }
 
+/**
+ * Applies preserved signup trial intent on bootstrap retry when a partial failure
+ * left the workspace on Free without subscription metadata.
+ */
+export async function maybePromoteFreePlanToPublicTrial(
+  admin: WorkspaceBootstrapAdmin,
+  workspaceId: string,
+  userId: string,
+  options: {
+    initialTrialPlan?: PublicSignupTrialPlan | null;
+    planCreated: boolean;
+    currentPlan: WorkspacePlan;
+  }
+): Promise<WorkspacePlan> {
+  const intendedTrial = options.initialTrialPlan;
+  if (!intendedTrial || options.planCreated || options.currentPlan !== "free") {
+    return options.currentPlan;
+  }
+
+  const subscription = await loadWorkspaceSubscription(workspaceId, admin);
+  if (subscription) {
+    return options.currentPlan;
+  }
+
+  const limits = getPlanStorageLimits(intendedTrial);
+  const { error: updateError } = await admin
+    .from("workspace_plans")
+    .update({
+      plan: intendedTrial,
+      invoice_limit_monthly: limits.invoice_limit_monthly,
+      client_limit: limits.client_limit,
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("plan", "free");
+
+  if (updateError) {
+    throwBootstrapError("create_default_plan", userId, updateError.code, updateError.message);
+  }
+
+  const subscriptionResult = await createPublicTrialSubscription(workspaceId, intendedTrial, admin);
+  if (!subscriptionResult.ok) {
+    await revertWorkspacePlanToFree(admin, workspaceId);
+    return "free";
+  }
+
+  return intendedTrial;
+}
+
 export async function ensureOwnerMembership(
   admin: WorkspaceBootstrapAdmin,
   userId: string,
@@ -303,6 +352,12 @@ async function finalizeWorkspaceBootstrap(
       await revertWorkspacePlanToFree(admin, workspaceId);
       plan = "free";
     }
+  } else {
+    plan = await maybePromoteFreePlanToPublicTrial(admin, workspaceId, userId, {
+      initialTrialPlan: options?.initialTrialPlan,
+      planCreated,
+      currentPlan: plan,
+    });
   }
 
   const { data: planRow, error: planLookupError } = await admin
@@ -341,7 +396,7 @@ export async function bootstrapWorkspaceForUser(
       userId,
       workspaceId: existingWorkspaceId,
     });
-    return finalizeWorkspaceBootstrap(admin, userId, existingWorkspaceId);
+    return finalizeWorkspaceBootstrap(admin, userId, existingWorkspaceId, options);
   }
 
   const { data: authUser, error: authUserError } = await admin.auth.admin.getUserById(userId);

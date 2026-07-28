@@ -10,6 +10,7 @@ import {
   ensureOwnerMembership,
   ensureWorkspaceSettings,
   loadExistingWorkspaceForUser,
+  maybePromoteFreePlanToPublicTrial,
   type WorkspaceBootstrapAdmin,
 } from "../ensureWorkspaceForUser";
 
@@ -738,5 +739,189 @@ describe("ensureDefaultWorkspacePlan trial intent (R5 P2)", () => {
     assert.equal(state.plans.length, 1);
     assert.equal(state.plans[0]?.plan, "starter");
     assert.equal(state.insertCounts.organizations, 1);
+  });
+
+  it("promotes free workspace to starter trial on bootstrap retry with preserved intent", async () => {
+    const userId = "user-starter-recovery";
+    const workspaceId = "ws-starter-recovery-0000-0000-000000000001";
+    const state = createEmptyState(userId, "recovery@example.com");
+    state.memberships.push({
+      workspace_id: workspaceId,
+      user_id: userId,
+      role: "owner",
+      created_at: new Date().toISOString(),
+    });
+    state.workspaces.push({
+      id: workspaceId,
+      name: "My Workspace",
+      organization_id: "org-recovery",
+      created_at: new Date().toISOString(),
+    });
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      invoice_limit_monthly: 5,
+      client_limit: 5,
+    });
+    const admin = createMockAdmin(state);
+
+    await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "starter" });
+
+    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.insertCounts.subscriptions, 1);
+    assert.equal(state.subscriptions[0]?.status, "trial");
+  });
+
+  it("promotes free workspace to pro trial on bootstrap retry with preserved intent", async () => {
+    const userId = "user-pro-recovery";
+    const workspaceId = "ws-pro-recovery-0000-0000-000000000001";
+    const state = createEmptyState(userId, "pro-recovery@example.com");
+    state.memberships.push({
+      workspace_id: workspaceId,
+      user_id: userId,
+      role: "owner",
+      created_at: new Date().toISOString(),
+    });
+    state.workspaces.push({
+      id: workspaceId,
+      name: "My Workspace",
+      organization_id: "org-pro-recovery",
+      created_at: new Date().toISOString(),
+    });
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      invoice_limit_monthly: 5,
+      client_limit: 5,
+    });
+    const admin = createMockAdmin(state);
+
+    await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "pro" });
+
+    assert.equal(state.plans[0]?.plan, "pro");
+    assert.equal(state.subscriptions[0]?.plan, "pro");
+  });
+
+  it("does not duplicate an existing active trial subscription on retry", async () => {
+    const userId = "user-existing-trial";
+    const workspaceId = "ws-existing-trial-0000-0000-000000000001";
+    const state = createEmptyState(userId, "trial@example.com");
+    state.memberships.push({
+      workspace_id: workspaceId,
+      user_id: userId,
+      role: "owner",
+      created_at: new Date().toISOString(),
+    });
+    state.workspaces.push({
+      id: workspaceId,
+      name: "My Workspace",
+      organization_id: "org-existing-trial",
+      created_at: new Date().toISOString(),
+    });
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "starter",
+      invoice_limit_monthly: 50,
+      client_limit: 25,
+    });
+    state.subscriptions.push({
+      workspace_id: workspaceId,
+      plan: "starter",
+      status: "trial",
+      trial_starts_at: "2026-07-01T00:00:00.000Z",
+      trial_ends_at: "2026-08-01T00:00:00.000Z",
+    });
+    const admin = createMockAdmin(state);
+
+    await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "pro" });
+
+    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.subscriptions.length, 1);
+    assert.equal(state.insertCounts.subscriptions, 0);
+  });
+
+  it("does not overwrite an existing paid subscription on retry", async () => {
+    const userId = "user-paid";
+    const workspaceId = "ws-paid-0000-0000-000000000001";
+    const state = createEmptyState(userId, "paid@example.com");
+    state.memberships.push({
+      workspace_id: workspaceId,
+      user_id: userId,
+      role: "owner",
+      created_at: new Date().toISOString(),
+    });
+    state.workspaces.push({
+      id: workspaceId,
+      name: "My Workspace",
+      organization_id: "org-paid",
+      created_at: new Date().toISOString(),
+    });
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      invoice_limit_monthly: 5,
+      client_limit: 5,
+    });
+    state.subscriptions.push({
+      workspace_id: workspaceId,
+      plan: "pro",
+      status: "active",
+      trial_starts_at: null,
+      trial_ends_at: null,
+    });
+    const admin = createMockAdmin(state);
+
+    await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "starter" });
+
+    assert.equal(state.plans[0]?.plan, "free");
+    assert.equal(state.subscriptions[0]?.status, "active");
+    assert.equal(state.insertCounts.subscriptions, 0);
+  });
+});
+
+describe("maybePromoteFreePlanToPublicTrial", () => {
+  it("returns current plan when no trial intent is provided", async () => {
+    const userId = "user-no-intent";
+    const workspaceId = "ws-no-intent-0000-0000-000000000001";
+    const state = createEmptyState(userId, "no-intent@example.com");
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      invoice_limit_monthly: 5,
+      client_limit: 5,
+    });
+    const admin = createMockAdmin(state);
+
+    const result = await maybePromoteFreePlanToPublicTrial(admin, workspaceId, userId, {
+      initialTrialPlan: null,
+      planCreated: false,
+      currentPlan: "free",
+    });
+
+    assert.equal(result, "free");
+    assert.equal(state.insertCounts.subscriptions, 0);
+  });
+
+  it("promotes an existing free plan row to starter with subscription metadata", async () => {
+    const userId = "user-promote-starter";
+    const workspaceId = "ws-promote-starter-0000-0000-000000000001";
+    const state = createEmptyState(userId, "promote@example.com");
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      invoice_limit_monthly: 5,
+      client_limit: 5,
+    });
+    const admin = createMockAdmin(state);
+
+    const result = await maybePromoteFreePlanToPublicTrial(admin, workspaceId, userId, {
+      initialTrialPlan: "starter",
+      planCreated: false,
+      currentPlan: "free",
+    });
+
+    assert.equal(result, "starter");
+    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.insertCounts.subscriptions, 1);
   });
 });

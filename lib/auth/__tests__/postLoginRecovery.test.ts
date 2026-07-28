@@ -6,6 +6,7 @@ import { isPasswordRecoveryCallback } from "../passwordRecovery";
 import {
   AUTH_WORKSPACE_RECOVERY_PATH,
   buildPostLoginDestinationPath,
+  buildWorkspaceRecoveryPath,
   resolveAuthCallbackFailureRedirect,
   resolveAuthenticatedBootstrapFailureRedirect,
 } from "../postLoginRecovery";
@@ -24,11 +25,64 @@ describe("buildPostLoginDestinationPath", () => {
   });
 });
 
+describe("buildWorkspaceRecoveryPath", () => {
+  it("preserves allowlisted starter trial intent", () => {
+    assert.equal(
+      buildWorkspaceRecoveryPath({ initialTrialPlan: "starter" }),
+      "/start?plan=starter"
+    );
+  });
+
+  it("preserves allowlisted pro trial intent", () => {
+    assert.equal(buildWorkspaceRecoveryPath({ initialTrialPlan: "pro" }), "/start?plan=pro");
+  });
+
+  it("preserves safe next path with trial intent", () => {
+    const path = buildWorkspaceRecoveryPath({
+      initialTrialPlan: "starter",
+      nextPath: `/${WORKSPACE_ID}/dashboard`,
+    });
+    assert.equal(path, `/start?plan=starter&next=%2F${WORKSPACE_ID}%2Fdashboard`);
+  });
+
+  it("rejects unsafe next paths", () => {
+    assert.equal(
+      buildWorkspaceRecoveryPath({
+        initialTrialPlan: "pro",
+        nextPath: "https://evil.example/phish",
+      }),
+      "/start?plan=pro"
+    );
+  });
+
+  it("generic recovery remains /start without plan", () => {
+    assert.equal(buildWorkspaceRecoveryPath(), AUTH_WORKSPACE_RECOVERY_PATH);
+  });
+});
+
 describe("resolveAuthenticatedBootstrapFailureRedirect", () => {
   it("Test 5 — bootstrap failure routes to /start recovery", () => {
     assert.equal(
       resolveAuthenticatedBootstrapFailureRedirect(AUTH_WORKSPACE_SETUP_FAILED_MESSAGE),
       AUTH_WORKSPACE_RECOVERY_PATH
+    );
+  });
+
+  it("preserves starter trial intent on bootstrap recovery", () => {
+    assert.equal(
+      resolveAuthenticatedBootstrapFailureRedirect(AUTH_WORKSPACE_SETUP_FAILED_MESSAGE, {
+        initialTrialPlan: "starter",
+      }),
+      "/start?plan=starter"
+    );
+  });
+
+  it("preserves pro trial intent on bootstrap recovery", () => {
+    assert.equal(
+      resolveAuthenticatedBootstrapFailureRedirect(AUTH_WORKSPACE_SETUP_FAILED_MESSAGE, {
+        initialTrialPlan: "pro",
+      }),
+      "/start?plan=pro"
     );
   });
 
@@ -73,6 +127,34 @@ describe("resolveAuthCallbackFailureRedirect", () => {
 
     assert.equal(recoveryUrl, "https://arrexia.app/start");
     assert.doesNotMatch(recoveryUrl, /\/login\?error=/);
+  });
+
+  it("starter bootstrap failure recovery URL preserves plan=starter", () => {
+    const recoveryUrl = resolveAuthCallbackFailureRedirect({
+      origin: "https://arrexia.app",
+      returnTo: "/login",
+      errorMessage: AUTH_WORKSPACE_SETUP_FAILED_MESSAGE,
+      sessionEstablished: true,
+      initialTrialPlan: "starter",
+    });
+
+    assert.equal(recoveryUrl, "https://arrexia.app/start?plan=starter");
+  });
+
+  it("pro bootstrap failure recovery URL preserves plan=pro", () => {
+    const recoveryUrl = resolveAuthCallbackFailureRedirect({
+      origin: "https://arrexia.app",
+      returnTo: "/register",
+      errorMessage: AUTH_WORKSPACE_SETUP_FAILED_MESSAGE,
+      sessionEstablished: true,
+      initialTrialPlan: "pro",
+      nextPath: `/${WORKSPACE_ID}/dashboard`,
+    });
+
+    assert.equal(
+      recoveryUrl,
+      `https://arrexia.app/start?plan=pro&next=%2F${WORKSPACE_ID}%2Fdashboard`
+    );
   });
 });
 

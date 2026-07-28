@@ -146,8 +146,17 @@ describe("AUTH-SEC-3A wiring contracts", () => {
     assert.doesNotMatch(template, /\{\{ \.ConfirmationURL \}\}/);
   });
 
-  it("callback route no longer activates email_signup", () => {
-    const activationSrc = readFileSync("lib/auth/callbackActivation.ts", "utf8");
-    assert.doesNotMatch(activationSrc, /email_signup/);
+  it("confirm route forwards trial plan into bootstrap failure recovery redirect", () => {
+    const src = readFileSync("app/auth/confirm/route.ts", "utf8");
+    assert.match(src, /initialTrialPlan,/);
+    assert.match(src, /nextPath,/);
+    assert.match(src, /resolveAuthCallbackFailureRedirect\([\s\S]*initialTrialPlan/);
+  });
+
+  it("start page preserves trial plan on retry link", () => {
+    const src = readFileSync("app/start/page.tsx", "utf8");
+    assert.match(src, /buildWorkspaceRecoveryPath/);
+    assert.match(src, /parsePublicSignupTrialPlan/);
+    assert.match(src, /retryHref/);
   });
 });

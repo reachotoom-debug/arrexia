@@ -42,4 +42,25 @@ describe("resolvePostLoginPath workspace recovery", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("preserves starter trial intent when post-login bootstrap fails", async () => {
+    const originalFetch = globalThis.fetch;
+    let requestedUrl = "";
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify({ ok: false, error: AUTH_WORKSPACE_SETUP_FAILED_MESSAGE }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await resolvePostLoginPath(null, { initialTrialPlan: "starter" });
+      assert.equal(result.redirectTo, "/start?plan=starter");
+      assert.match(requestedUrl, /plan=starter/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AUTH_WORKSPACE_SETUP_FAILED_MESSAGE } from "@/lib/auth/authErrors";
 import { AUTH_ACCOUNT_NOT_ACTIVATED_MESSAGE } from "@/lib/auth/authErrors";
+import { buildWorkspaceRecoveryPath } from "@/lib/auth/postLoginRecovery";
+import { sanitizeNextPath } from "@/lib/auth/safeNextPath";
 import {
   parsePublicSignupTrialPlan,
   type PublicSignupTrialPlan,
@@ -17,6 +19,24 @@ function parseTrialPlan(
   const raw = searchParams?.plan;
   const planValue = Array.isArray(raw) ? raw[0] : raw;
   return parsePublicSignupTrialPlan(planValue);
+}
+
+function parseNextPath(
+  searchParams: Record<string, string | string[] | undefined> | undefined
+): string | null {
+  const raw = searchParams?.next;
+  const nextValue = Array.isArray(raw) ? raw[0] : raw;
+  return sanitizeNextPath(nextValue);
+}
+
+function buildStartRetryHref(options: {
+  initialTrialPlan: PublicSignupTrialPlan | null;
+  nextPath: string | null;
+}): string {
+  return buildWorkspaceRecoveryPath({
+    initialTrialPlan: options.initialTrialPlan,
+    nextPath: options.nextPath,
+  });
 }
 
 function AccountNotActivatedPanel() {
@@ -36,14 +56,18 @@ function AccountNotActivatedPanel() {
   );
 }
 
-function WorkspaceSetupFailedPanel() {
+function WorkspaceSetupFailedPanel({
+  retryHref,
+}: {
+  retryHref: string;
+}) {
   return (
     <main className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
       <h1 className="text-xl font-semibold text-slate-900">Workspace setup failed</h1>
       <p className="text-sm text-slate-600">{AUTH_WORKSPACE_SETUP_FAILED_MESSAGE}</p>
       <div className="flex w-full flex-col gap-3">
         <Link
-          href="/start"
+          href={retryHref}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           Try again
@@ -66,6 +90,8 @@ export default async function StartPage({
 }) {
   const resolvedSearch = searchParams ? await searchParams : undefined;
   const initialTrialPlan = parseTrialPlan(resolvedSearch);
+  const nextPath = parseNextPath(resolvedSearch);
+  const retryHref = buildStartRetryHref({ initialTrialPlan, nextPath });
 
   const supabase = await supabaseServer();
   const {
@@ -92,6 +118,6 @@ export default async function StartPage({
       console.error("[start/workspace-bootstrap]", { userId: user.id, error: message });
     }
 
-    return <WorkspaceSetupFailedPanel />;
+    return <WorkspaceSetupFailedPanel retryHref={retryHref} />;
   }
 }

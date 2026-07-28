@@ -78,6 +78,8 @@ export async function GET(request: Request) {
       returnTo: "/login",
       errorMessage: destination.error,
       sessionEstablished: true,
+      initialTrialPlan,
+      nextPath,
     });
     const recoveryRedirect = NextResponse.redirect(recoveryUrl);
     copyCookies(cookieHolder, recoveryRedirect);
