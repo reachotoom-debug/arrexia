@@ -21,6 +21,7 @@ import {
 } from "@/components/table/tableShell";
 import { EmptyState } from "@/components/ui/state";
 import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
+import { AiCollectionAssistDialog } from "@/components/collections/AiCollectionAssistDialog";
 import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
 
 interface Client {
@@ -282,6 +283,16 @@ export function CollectionsTable({
                         currency={currency}
                         dueDate={inv.due_date ?? null}
                         daysOverdue={inv.daysOverdue ?? 0}
+                        variant="button"
+                      />
+                      <AiCollectionAssistDialog
+                        workspaceId={workspaceId}
+                        invoiceId={inv.id}
+                        clientPhone={resolveClientWhatsAppPhone(
+                          client?.whatsapp_phone,
+                          client?.whatsapp
+                        )}
+                        clientCountry={client?.country ?? null}
                         variant="button"
                       />
                       <Link

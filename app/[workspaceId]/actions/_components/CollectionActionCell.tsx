@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
+import { AiCollectionAssistDialog } from "@/components/collections/AiCollectionAssistDialog";
 import { SendReminderButton } from "../../reminders/_components/send-reminder-button";
 import type { CollectionActionExecution } from "@/lib/actions/resolveCollectionActionExecution";
 
@@ -58,10 +59,21 @@ export function CollectionActionCell({
     />
   );
 
+  const aiAssist = (
+    <AiCollectionAssistDialog
+      workspaceId={workspaceId}
+      invoiceId={invoiceId}
+      clientPhone={clientPhone}
+      clientCountry={clientCountry}
+      variant="link"
+    />
+  );
+
   if (execution.mode === "view_only") {
     return (
       <div className="flex flex-wrap items-center gap-3">
         {whatsAppLink}
+        {aiAssist}
         <Link
           href={`/${workspaceId}/invoices/${invoiceId}`}
           className="text-sm font-medium text-blue-600 hover:underline"
@@ -99,6 +111,7 @@ export function CollectionActionCell({
         <span className="text-sm font-medium text-slate-800">Send reminder</span>
       </div>
       {whatsAppLink}
+      {aiAssist}
       {viewLink}
     </div>
   );

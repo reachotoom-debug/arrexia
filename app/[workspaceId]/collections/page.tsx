@@ -33,6 +33,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
 import { ExportCsvButton } from "../_components/ExportCsvButton";
 import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
+import { AiCollectionAssistDialog } from "@/components/collections/AiCollectionAssistDialog";
 import { loadCustomerFacingBusinessName } from "@/lib/branding/loadCustomerFacingBusinessName";
 import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
 import { primaryCtaClass } from "@/components/ui/cta-styles";
@@ -604,6 +605,16 @@ export default async function CollectionsPage({
                         currency={inv.currency ?? "USD"}
                         dueDate={inv.due_date ?? null}
                         daysOverdue={Number(inv.overdue_days ?? 0)}
+                        variant="button"
+                      />
+                      <AiCollectionAssistDialog
+                        workspaceId={workspaceId}
+                        invoiceId={inv.id}
+                        clientPhone={resolveClientWhatsAppPhone(
+                          client?.whatsapp_phone,
+                          client?.whatsapp
+                        )}
+                        clientCountry={client?.country ?? null}
                         variant="button"
                       />
                       <Link
