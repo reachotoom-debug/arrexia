@@ -30,6 +30,7 @@ export type ChaseableInvoiceRow = {
 
 export type CollectionActionItem = {
   id: string;
+  clientId: string | null;
   invoiceNumber: string | null;
   clientName: string | null;
   clientEmail: string | null;
@@ -43,6 +44,12 @@ export type CollectionActionItem = {
   isHighRisk: boolean;
   reasons: ActionReason[];
   execution?: CollectionActionExecution;
+  recommendedAction?: string;
+};
+
+export type CurrencyExposureTotal = {
+  currency: string;
+  amount: number;
 };
 
 export type DailyActionSummary = {
@@ -50,7 +57,9 @@ export type DailyActionSummary = {
   requiringAttentionAmount: number | null;
   requiringAttentionCurrency: string;
   requiringAttentionMixedCurrency: boolean;
+  requiringAttentionByCurrency: CurrencyExposureTotal[];
   remindersDueCount: number;
+  highRiskCustomerCount: number;
   newlyOverdueCount: number;
   sentInvoiceCount: number;
 };
@@ -71,4 +80,5 @@ export type DailyActionCenterData = {
   reminderActionsByInvoiceId: Record<string, ReminderActionContext>;
   eligibleReminders: EligibleReminderCandidate[];
   businessName: string;
+  workspaceTimeZone: string;
 };

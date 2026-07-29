@@ -241,9 +241,81 @@ describe("buildDailyActionCategories (R3B)", () => {
       reminderEligible: new Set(["inv-p"]),
     });
 
+    assert.equal(result.summary.actionsTodayCount, 1);
     assert.equal(result.collectionActions.length, 1);
     assert.ok(result.collectionActions[0]?.reasons.some((r) => r.type === "reminder_due"));
     assert.ok(result.collectionActions[0]?.reasons.some((r) => r.type === "newly_overdue"));
+  });
+
+  it("summary — cash requiring attention does not double-count multi-reason invoice", () => {
+    const result = build({
+      invoices: [invoice({ id: "inv-multi", overdueDays: 4, outstanding: 750 })],
+      reminderEligible: new Set(["inv-multi"]),
+    });
+
+    assert.equal(result.collectionActions.length, 1);
+    assert.equal(result.summary.actionsTodayCount, 1);
+    assert.deepEqual(result.summary.requiringAttentionByCurrency, [
+      { currency: "USD", amount: 750 },
+    ]);
+    assert.equal(result.summary.requiringAttentionAmount, 750);
+  });
+
+  it("summary — partially paid invoice uses outstanding only", () => {
+    const result = build({
+      invoices: [invoice({ id: "inv-partial", overdueDays: 7, outstanding: 250 })],
+    });
+
+    assert.equal(result.summary.requiringAttentionAmount, 250);
+    assert.equal(result.collectionActions[0]?.outstanding, 250);
+  });
+
+  it("summary — high-risk customers counts unique clients not invoices", () => {
+    const result = build({
+      invoices: [
+        invoice({
+          id: "inv-1",
+          clientId: "client-a",
+          overdueDays: 10,
+          riskLevel: "high",
+        }),
+        invoice({
+          id: "inv-2",
+          clientId: "client-a",
+          overdueDays: 12,
+          riskLevel: "high",
+        }),
+        invoice({
+          id: "inv-3",
+          clientId: "client-b",
+          overdueDays: 8,
+          riskLevel: "high",
+        }),
+        invoice({
+          id: "inv-4",
+          clientId: "client-c",
+          overdueDays: 5,
+          riskLevel: "low",
+        }),
+      ],
+    });
+
+    assert.equal(result.summary.highRiskCustomerCount, 2);
+    assert.equal(result.summary.actionsTodayCount, 4);
+  });
+
+  it("summary — reminders ready counts unique invoices with reminder_due", () => {
+    const result = build({
+      invoices: [
+        invoice({ id: "inv-rem-1", isOverdue: false, overdueDays: 0, riskLevel: null }),
+        invoice({ id: "inv-rem-2", isOverdue: false, overdueDays: 0, riskLevel: null }),
+        invoice({ id: "inv-mile", overdueDays: 15 }),
+      ],
+      reminderEligible: new Set(["inv-rem-1", "inv-rem-2"]),
+    });
+
+    assert.equal(result.summary.remindersDueCount, 2);
+    assert.equal(result.summary.actionsTodayCount, 3);
   });
 
   it("Q — high-risk modifier affects ordering but not eligibility", () => {
@@ -294,6 +366,10 @@ describe("buildDailyActionCategories (R3B)", () => {
     assert.equal(result.summary.requiringAttentionMixedCurrency, true);
     assert.equal(result.summary.requiringAttentionAmount, 1000);
     assert.equal(result.summary.requiringAttentionCurrency, "USD");
+    assert.deepEqual(result.summary.requiringAttentionByCurrency, [
+      { currency: "EUR", amount: 2000 },
+      { currency: "USD", amount: 1000 },
+    ]);
   });
 });
 
@@ -308,6 +384,150 @@ describe("computeRequiringAttentionTotal", () => {
     });
 
     assert.deepEqual(total, { amount: 300, currency: "USD", isMixedCurrency: false });
+  });
+});
+
+describe("computeOutstandingByCurrency", () => {
+  it("returns per-currency totals without cross-currency summing", async () => {
+    const { computeOutstandingByCurrency } = await import("@/lib/actions/collectionActivity");
+
+    const totals = computeOutstandingByCurrency({
+      outstandingAmounts: [
+        { outstanding: 1000, currency: "USD" },
+        { outstanding: 500, currency: "USD" },
+        { outstanding: 2000, currency: "EUR" },
+      ],
+      defaultCurrency: "USD",
+    });
+
+    assert.deepEqual(totals, [
+      { currency: "EUR", amount: 2000 },
+      { currency: "USD", amount: 1500 },
+    ]);
+  });
+});
+
+describe("resolveRecommendedAction (Task 2)", () => {
+  it("maps reminder_due to scheduled reminder wording", async () => {
+    const { resolveRecommendedAction } = await import("@/lib/actions/resolveRecommendedAction");
+
+    assert.equal(
+      resolveRecommendedAction({
+        reasons: [{ type: "reminder_due" }],
+        execution: { mode: "rule_bound", ruleId: "r1", templateId: null, scheduledDate: "2026-07-01", clientEmail: "a@b.com" },
+        isHighRisk: false,
+      }),
+      "Send scheduled reminder"
+    );
+  });
+
+  it("strengthens wording for high-risk reminder_due rows", async () => {
+    const { resolveRecommendedAction } = await import("@/lib/actions/resolveRecommendedAction");
+
+    assert.equal(
+      resolveRecommendedAction({
+        reasons: [{ type: "reminder_due" }, { type: "newly_overdue" }],
+        execution: { mode: "rule_bound", ruleId: "r1", templateId: null, scheduledDate: "2026-07-01", clientEmail: "a@b.com" },
+        isHighRisk: true,
+      }),
+      "Prioritize scheduled reminder"
+    );
+  });
+
+  it("maps newly_overdue to first follow-up", async () => {
+    const { resolveRecommendedAction } = await import("@/lib/actions/resolveRecommendedAction");
+
+    assert.equal(
+      resolveRecommendedAction({
+        reasons: [{ type: "newly_overdue" }],
+        execution: { mode: "manual", clientEmail: "a@b.com" },
+        isHighRisk: false,
+      }),
+      "Send first follow-up"
+    );
+  });
+
+  it("maps aging_milestone to follow-up now", async () => {
+    const { resolveRecommendedAction } = await import("@/lib/actions/resolveRecommendedAction");
+
+    assert.equal(
+      resolveRecommendedAction({
+        reasons: [{ type: "aging_milestone", milestoneDays: 15 }],
+        execution: { mode: "manual", clientEmail: "a@b.com" },
+        isHighRisk: false,
+      }),
+      "Follow up now"
+    );
+  });
+
+  it("maps view_only execution to review invoice", async () => {
+    const { resolveRecommendedAction } = await import("@/lib/actions/resolveRecommendedAction");
+
+    assert.equal(
+      resolveRecommendedAction({
+        reasons: [{ type: "newly_overdue" }],
+        execution: { mode: "view_only" },
+        isHighRisk: false,
+      }),
+      "Review invoice"
+    );
+  });
+});
+
+describe("buildActionCenterGreeting (Task 2)", () => {
+  it("uses first name when available", async () => {
+    const { buildActionCenterGreeting } = await import("@/lib/actions/morningGreeting");
+
+    const greeting = buildActionCenterGreeting({
+      fullName: "Mohammed Al-Rashid",
+      workspaceTimeZone: "UTC",
+      now: new Date("2026-07-29T09:00:00.000Z"),
+    });
+
+    assert.match(greeting, /Mohammed/);
+  });
+
+  it("falls back without exposing email-like names", async () => {
+    const { buildActionCenterGreeting, extractFirstName } = await import(
+      "@/lib/actions/morningGreeting"
+    );
+
+    assert.equal(extractFirstName("user@example.com"), null);
+    assert.equal(
+      buildActionCenterGreeting({
+        fullName: "user@example.com",
+        workspaceTimeZone: "UTC",
+        now: new Date("2026-07-29T09:00:00.000Z"),
+      }),
+      "Good morning"
+    );
+  });
+});
+
+describe("Action Center UI contracts (Task 2)", () => {
+  it("CollectionActionCell preserves Send Reminder, WhatsApp, AI Assist, and View wiring", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(
+      "app/[workspaceId]/actions/_components/CollectionActionCell.tsx",
+      "utf8"
+    );
+
+    assert.match(src, /SendReminderButton/);
+    assert.match(src, /WhatsAppCollectionLink/);
+    assert.match(src, /AiCollectionAssistDialog/);
+    assert.match(src, /View/);
+  });
+
+  it("DailyActionCenterView keeps caught-up empty state copy", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(
+      "app/[workspaceId]/actions/_components/DailyActionCenterView.tsx",
+      "utf8"
+    );
+
+    assert.match(src, /CAUGHT_UP_ACTIONS_EMPTY/);
+    assert.match(src, /FIRST_RUN_ACTIONS_EMPTY/);
+    assert.match(src, /recommendedAction/);
   });
 });
 

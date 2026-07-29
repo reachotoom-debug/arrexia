@@ -1,5 +1,6 @@
 import { isOperationalReceivableInvoice } from "@/lib/receivables/operationalEligibility";
 import {
+  computeOutstandingByCurrency,
   computeRequiringAttentionTotal,
   shouldShowAgingMilestoneAction,
   shouldShowEarlyOverdueAction,
@@ -48,6 +49,7 @@ function toCollectionActionItem(
 ): CollectionActionItem {
   return {
     id: row.id,
+    clientId: row.clientId,
     invoiceNumber: row.invoiceNumber,
     clientName: row.clientName,
     clientEmail: row.clientEmail,
@@ -143,9 +145,23 @@ export function buildDailyActionCategories(params: {
     defaultCurrency,
   });
 
+  const requiringAttentionByCurrency = computeOutstandingByCurrency({
+    outstandingAmounts: collectionActions.map((action) => ({
+      outstanding: action.outstanding,
+      currency: action.currency,
+    })),
+    defaultCurrency,
+  });
+
   const remindersDueCount = collectionActions.filter((action) =>
     action.reasons.some((reason) => reason.type === "reminder_due")
   ).length;
+
+  const highRiskCustomerCount = new Set(
+    collectionActions
+      .filter((action) => action.isHighRisk && action.clientId)
+      .map((action) => action.clientId as string)
+  ).size;
 
   const newlyOverdueCount = collectionActions.filter((action) =>
     action.reasons.some((reason) => reason.type === "newly_overdue")
@@ -157,7 +173,9 @@ export function buildDailyActionCategories(params: {
       requiringAttentionAmount: requiringAttention.amount,
       requiringAttentionCurrency: requiringAttention.currency,
       requiringAttentionMixedCurrency: requiringAttention.isMixedCurrency,
+      requiringAttentionByCurrency,
       remindersDueCount,
+      highRiskCustomerCount,
       newlyOverdueCount,
       sentInvoiceCount,
     },

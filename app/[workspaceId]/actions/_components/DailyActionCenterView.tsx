@@ -17,6 +17,7 @@ import {
   TABLE_ROW,
   TABLE_TD,
   TABLE_TD_RIGHT,
+  TABLE_TH,
   TABLE_TH_RIGHT,
 } from "@/components/table/tableShell";
 import { INVOICE_NUMBER_COL_CLASS } from "@/components/tables/invoiceTableColumns";
@@ -26,6 +27,7 @@ import type { ActionReason, DailyActionCenterData } from "@/lib/actions/types";
 type DailyActionCenterViewProps = {
   workspaceId: string;
   data: DailyActionCenterData;
+  greeting: string;
 };
 
 function reasonLabel(reason: ActionReason): string {
@@ -52,7 +54,7 @@ function reasonBadgeClass(reason: ActionReason): string {
   }
 }
 
-function SummaryCard({
+function SummaryMetric({
   label,
   value,
   detail,
@@ -62,15 +64,41 @@ function SummaryCard({
   detail?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{value}</p>
-      {detail ? <p className="mt-1 text-xs text-slate-500">{detail}</p> : null}
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900 sm:text-2xl">{value}</p>
+      {detail ? <p className="mt-1 text-xs leading-snug text-slate-500">{detail}</p> : null}
     </div>
   );
 }
 
-export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterViewProps) {
+function formatCashRequiringAttention(
+  summary: DailyActionCenterData["summary"]
+): { value: string; detail?: string } {
+  const { requiringAttentionByCurrency } = summary;
+
+  if (requiringAttentionByCurrency.length === 0) {
+    return { value: formatMoney(0, summary.requiringAttentionCurrency) };
+  }
+
+  if (requiringAttentionByCurrency.length === 1) {
+    const only = requiringAttentionByCurrency[0]!;
+    return { value: formatMoney(only.amount, only.currency) };
+  }
+
+  return {
+    value: requiringAttentionByCurrency
+      .map((row) => formatMoney(row.amount, row.currency))
+      .join(" · "),
+    detail: "Totals shown separately by currency.",
+  };
+}
+
+export function DailyActionCenterView({
+  workspaceId,
+  data,
+  greeting,
+}: DailyActionCenterViewProps) {
   const { summary, collectionActions, businessName } = data;
 
   if (summary.actionsTodayCount === 0) {
@@ -83,60 +111,90 @@ export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterVi
       : CAUGHT_UP_ACTIONS_EMPTY;
 
     return (
-      <EmptyState
-        title={emptyCopy.title}
-        message={emptyCopy.message}
-        actionLabel={
-          hasNeverEnteredCollectionsWorkflow(onboardingSignals) ? "Create invoice" : undefined
-        }
-        actionHref={
-          hasNeverEnteredCollectionsWorkflow(onboardingSignals)
-            ? `/${workspaceId}/invoices/new`
-            : undefined
-        }
-      />
+      <div className="space-y-6">
+        <header className="space-y-1">
+          <p className="text-sm font-medium text-slate-600">{greeting}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Today&apos;s Collections
+          </h1>
+          <p className="text-sm text-slate-500">
+            Here&apos;s what needs your attention today.
+          </p>
+        </header>
+        <EmptyState
+          title={emptyCopy.title}
+          message={emptyCopy.message}
+          actionLabel={
+            hasNeverEnteredCollectionsWorkflow(onboardingSignals) ? "Create invoice" : undefined
+          }
+          actionHref={
+            hasNeverEnteredCollectionsWorkflow(onboardingSignals)
+              ? `/${workspaceId}/invoices/new`
+              : undefined
+          }
+        />
+      </div>
     );
   }
 
-  const attentionAmountLabel =
-    summary.requiringAttentionAmount != null
-      ? formatMoney(
-          summary.requiringAttentionAmount,
-          summary.requiringAttentionCurrency
-        )
-      : "—";
-
-  const attentionDetail = summary.requiringAttentionMixedCurrency
-    ? `Total shown in ${summary.requiringAttentionCurrency} only (multiple currencies in queue).`
-    : undefined;
+  const cashAttention = formatCashRequiringAttention(summary);
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard
-          label="Actions today"
-          value={String(summary.actionsTodayCount)}
-        />
-        <SummaryCard
-          label="Requiring attention"
-          value={attentionAmountLabel}
-          detail={attentionDetail}
-        />
-        <SummaryCard
-          label="Reminders due"
-          value={String(summary.remindersDueCount)}
-        />
-        <SummaryCard
-          label="Newly overdue"
-          value={String(summary.newlyOverdueCount)}
-        />
-      </div>
+      <header className="space-y-1">
+        <p className="text-sm font-medium text-slate-600">{greeting}</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Today&apos;s Collections
+        </h1>
+        <p className="text-sm text-slate-500">
+          Here&apos;s what needs your attention today.
+        </p>
+      </header>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <section aria-label="Today's collection summary" className="space-y-3">
+        <h2 className="sr-only">Collection summary</h2>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <SummaryMetric
+            label="Actions today"
+            value={String(summary.actionsTodayCount)}
+            detail={
+              summary.actionsTodayCount === 1
+                ? "Invoice requires action"
+                : "Invoices require action"
+            }
+          />
+          <SummaryMetric
+            label="Reminders ready"
+            value={String(summary.remindersDueCount)}
+            detail={
+              summary.remindersDueCount === 1
+                ? "Scheduled reminder due"
+                : "Scheduled reminders due"
+            }
+          />
+          <SummaryMetric
+            label="High-risk customers"
+            value={String(summary.highRiskCustomerCount)}
+            detail={
+              summary.highRiskCustomerCount === 1 ? "Client to prioritize" : "Clients to prioritize"
+            }
+          />
+          <SummaryMetric
+            label="Cash requiring attention"
+            value={cashAttention.value}
+            detail={cashAttention.detail}
+          />
+        </div>
+      </section>
+
+      <section
+        aria-label="Prioritized collection work queue"
+        className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+      >
         <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Today&apos;s Collection Actions</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Prioritized work queue</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Prioritized collection work requiring attention now.
+            Who owes us, why today, and how to follow up.
           </p>
         </div>
         <HorizontalScrollArea
@@ -146,115 +204,115 @@ export function DailyActionCenterView({ workspaceId, data }: DailyActionCenterVi
           <div className={TABLE_MIN_WIDTH_INNER}>
             <table className={TABLE_BASE}>
               <thead>
-                <tr className="border-b border-slate-100 text-xs font-medium text-slate-500">
-                  <th className="px-3 py-3 text-left whitespace-nowrap">Priority</th>
-                  <th
-                    className={clsx(
-                      "px-3 py-3 text-left uppercase tracking-wider",
-                      INVOICE_NUMBER_COL_CLASS
-                    )}
-                  >
-                    Invoice
+                <tr className="border-b border-slate-100 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className={`${TABLE_TH} whitespace-nowrap`}>Priority</th>
+                  <th className={`min-w-[10rem] ${TABLE_TH} text-left`}>Client / Invoice</th>
+                  <th className={`${TABLE_TH} whitespace-nowrap text-left`}>Why now</th>
+                  <th className={`hidden md:table-cell ${TABLE_TH} whitespace-nowrap text-left`}>
+                    Due / Aging
                   </th>
-                  <th className="min-w-0 px-3 py-3 text-left">Client</th>
-                  <th className="hidden md:table-cell px-3 py-3 text-left whitespace-nowrap">
-                    Due / Days
-                  </th>
-                  <th className={clsx("px-3 py-3 text-right whitespace-nowrap", TABLE_TH_RIGHT)}>
+                  <th className={clsx(TABLE_TH, TABLE_TH_RIGHT, "whitespace-nowrap")}>
                     Outstanding
                   </th>
-                  <th className="px-3 py-3 text-left whitespace-nowrap">Why now</th>
-                  <th className="px-3 py-3 text-left whitespace-nowrap">Action</th>
+                  <th className={`hidden lg:table-cell ${TABLE_TH} text-left`}>
+                    Recommended
+                  </th>
+                  <th className={`${TABLE_TH} whitespace-nowrap text-left`}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {collectionActions.map((item, index) => (
-                    <tr key={item.id} className={TABLE_ROW}>
-                      <td className="px-3 py-3 text-sm whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium text-slate-700">#{index + 1}</span>
-                          {item.isHighRisk ? (
-                            <span className="inline-flex w-fit rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-inset ring-red-200">
-                              High risk
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td
-                        className={clsx(
-                          "px-3 py-3 text-sm whitespace-nowrap",
-                          INVOICE_NUMBER_COL_CLASS
-                        )}
-                      >
-                        <Link
-                          href={`/${workspaceId}/invoices/${item.id}`}
-                          className="font-medium text-blue-600 hover:underline"
-                        >
-                          {item.invoiceNumber ?? item.id.slice(0, 8)}
-                        </Link>
-                      </td>
-                      <td
-                        className={clsx(
-                          "min-w-0 px-3 py-3 text-sm text-slate-800",
-                          TABLE_CELL_TEXT_COL
-                        )}
-                        title={item.clientName ?? undefined}
-                      >
-                        {item.clientName ?? "—"}
-                      </td>
-                      <td className="hidden md:table-cell px-3 py-3 text-sm text-slate-700 whitespace-nowrap">
-                        <div>{formatDateOnlyField(item.dueDate)}</div>
-                        <div className="text-xs text-red-600">
-                          {item.overdueDays > 0
-                            ? `${item.overdueDays} day${item.overdueDays === 1 ? "" : "s"} overdue`
-                            : "Not overdue"}
-                        </div>
-                      </td>
-                      <td
-                        className={clsx(
-                          "px-3 py-3 text-sm text-right font-medium tabular-nums",
-                          TABLE_TD_RIGHT
-                        )}
-                      >
-                        {formatMoney(item.outstanding, item.currency ?? "USD")}
-                      </td>
-                      <td className={clsx("px-3 py-3", TABLE_TD)}>
-                        <div className="flex flex-wrap gap-1">
-                          {item.reasons.map((reason) => (
-                            <span
-                              key={`${reason.type}-${
-                                reason.type === "aging_milestone" ? reason.milestoneDays : "base"
-                              }`}
-                              className={clsx(
-                                "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset",
-                                reasonBadgeClass(reason)
-                              )}
-                            >
-                              {reasonLabel(reason)}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className={clsx("px-3 py-3 text-sm whitespace-nowrap", TABLE_TD)}>
-                        {item.execution ? (
-                          <CollectionActionCell
-                            workspaceId={workspaceId}
-                            invoiceId={item.id}
-                            invoiceNumber={item.invoiceNumber}
-                            clientName={item.clientName}
-                            clientPhone={item.clientPhone}
-                            clientCountry={item.clientCountry}
-                            businessName={businessName}
-                            outstanding={item.outstanding}
-                            currency={item.currency}
-                            dueDate={item.dueDate}
-                            daysOverdue={item.overdueDays}
-                            execution={item.execution}
-                          />
+                  <tr key={item.id} className={TABLE_ROW}>
+                    <td className={`${TABLE_TD} text-sm whitespace-nowrap`}>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-slate-700">#{index + 1}</span>
+                        {item.isHighRisk ? (
+                          <span className="inline-flex w-fit rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-inset ring-red-200">
+                            High risk
+                          </span>
                         ) : null}
-                      </td>
-                    </tr>
-                  ))}
+                      </div>
+                    </td>
+                    <td className={clsx(TABLE_TD, TABLE_CELL_TEXT_COL, "text-sm")}>
+                      <div className="font-medium text-slate-900 break-words">
+                        {item.clientName ?? "—"}
+                      </div>
+                      <Link
+                        href={`/${workspaceId}/invoices/${item.id}`}
+                        className="mt-0.5 inline-block text-sm font-medium text-blue-600 hover:underline"
+                      >
+                        {item.invoiceNumber ?? item.id.slice(0, 8)}
+                      </Link>
+                    </td>
+                    <td className={TABLE_TD}>
+                      <div className="flex flex-wrap gap-1">
+                        {item.reasons.map((reason) => (
+                          <span
+                            key={`${reason.type}-${
+                              reason.type === "aging_milestone" ? reason.milestoneDays : "base"
+                            }`}
+                            className={clsx(
+                              "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset",
+                              reasonBadgeClass(reason)
+                            )}
+                          >
+                            {reasonLabel(reason)}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td
+                      className={clsx(
+                        "hidden md:table-cell",
+                        TABLE_TD,
+                        "text-sm text-slate-700 whitespace-nowrap"
+                      )}
+                    >
+                      <div>{formatDateOnlyField(item.dueDate)}</div>
+                      <div className="text-xs text-red-600">
+                        {item.overdueDays > 0
+                          ? `${item.overdueDays} day${item.overdueDays === 1 ? "" : "s"} overdue`
+                          : "Not overdue"}
+                      </div>
+                    </td>
+                    <td
+                      className={clsx(
+                        TABLE_TD,
+                        TABLE_TD_RIGHT,
+                        "text-sm font-semibold tabular-nums text-slate-900"
+                      )}
+                    >
+                      {formatMoney(item.outstanding, item.currency ?? "USD")}
+                    </td>
+                    <td
+                      className={clsx(
+                        "hidden lg:table-cell",
+                        TABLE_TD,
+                        "text-sm font-medium text-slate-800"
+                      )}
+                    >
+                      {item.recommendedAction ?? "—"}
+                    </td>
+                    <td className={clsx(TABLE_TD, "text-sm whitespace-nowrap")}>
+                      {item.execution ? (
+                        <CollectionActionCell
+                          workspaceId={workspaceId}
+                          invoiceId={item.id}
+                          invoiceNumber={item.invoiceNumber}
+                          clientName={item.clientName}
+                          clientPhone={item.clientPhone}
+                          clientCountry={item.clientCountry}
+                          businessName={businessName}
+                          outstanding={item.outstanding}
+                          currency={item.currency}
+                          dueDate={item.dueDate}
+                          daysOverdue={item.overdueDays}
+                          execution={item.execution}
+                        />
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

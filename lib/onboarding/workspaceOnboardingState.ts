@@ -37,8 +37,9 @@ export const FIRST_RUN_COLLECTIONS_EMPTY = {
 };
 
 export const CAUGHT_UP_ACTIONS_EMPTY = {
-  title: "Nothing needs immediate attention today.",
-  message: "Your collections queue is up to date.",
+  title: "You're caught up for today.",
+  message:
+    "Arrexia will surface invoices here when they need collection action.",
 };
 
 export const CAUGHT_UP_COLLECTIONS_EMPTY = {

@@ -1,6 +1,7 @@
 import { requireWorkspace } from "@/lib/auth/server";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { getDailyActionCenterData } from "@/lib/actions/getDailyActionCenterData";
+import { buildActionCenterGreeting } from "@/lib/actions/morningGreeting";
+import { getCurrentProfile } from "@/lib/profile/server";
 import { DailyActionCenterView } from "./_components/DailyActionCenterView";
 
 type ActionsPageProps = {
@@ -11,15 +12,19 @@ export default async function ActionsPage({ params }: ActionsPageProps) {
   const { workspaceId } = await params;
   await requireWorkspace(workspaceId);
 
-  const data = await getDailyActionCenterData(workspaceId);
+  const [data, profileResult] = await Promise.all([
+    getDailyActionCenterData(workspaceId),
+    getCurrentProfile(),
+  ]);
+
+  const greeting = buildActionCenterGreeting({
+    fullName: profileResult.profile?.full_name ?? null,
+    workspaceTimeZone: data.workspaceTimeZone,
+  });
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Daily Action Center"
-        description="What needs collection attention today."
-      />
-      <DailyActionCenterView workspaceId={workspaceId} data={data} />
+    <div className="w-full min-w-0">
+      <DailyActionCenterView workspaceId={workspaceId} data={data} greeting={greeting} />
     </div>
   );
 }

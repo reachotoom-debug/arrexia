@@ -94,6 +94,29 @@ export type RequiringAttentionTotal = {
   isMixedCurrency: boolean;
 };
 
+export type CurrencyOutstandingTotal = {
+  currency: string;
+  amount: number;
+};
+
+/** Sum outstanding per currency for unique actionable invoices (one row per invoice). */
+export function computeOutstandingByCurrency(params: {
+  outstandingAmounts: Array<{ outstanding: number; currency: string | null }>;
+  defaultCurrency: string;
+}): CurrencyOutstandingTotal[] {
+  const { outstandingAmounts, defaultCurrency } = params;
+  const totals = new Map<string, number>();
+
+  for (const row of outstandingAmounts) {
+    const currency = row.currency?.trim().toUpperCase() || defaultCurrency.toUpperCase();
+    totals.set(currency, (totals.get(currency) ?? 0) + row.outstanding);
+  }
+
+  return Array.from(totals.entries())
+    .map(([currency, amount]) => ({ currency, amount }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
 export function computeRequiringAttentionTotal(params: {
   outstandingAmounts: Array<{ outstanding: number; currency: string | null }>;
   defaultCurrency: string;

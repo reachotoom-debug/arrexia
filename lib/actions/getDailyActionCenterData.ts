@@ -5,6 +5,7 @@ import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
 import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
 import { buildDailyActionCategories } from "./buildDailyActionCategories";
 import { resolveCollectionActionExecution } from "./resolveCollectionActionExecution";
+import { resolveRecommendedAction } from "./resolveRecommendedAction";
 import type {
   ChaseableInvoiceRow,
   CollectionActionItem,
@@ -107,13 +108,20 @@ function attachExecutionMetadata(
     const reminderAction = reminderActionsByInvoiceId[action.id];
     const clientEmail = reminderAction?.clientEmail ?? action.clientEmail;
 
+    const execution = resolveCollectionActionExecution({
+      hasReminderDue,
+      reminderAction,
+      clientEmail,
+    });
+
     return {
       ...action,
       clientEmail,
-      execution: resolveCollectionActionExecution({
-        hasReminderDue,
-        reminderAction,
-        clientEmail,
+      execution,
+      recommendedAction: resolveRecommendedAction({
+        reasons: action.reasons,
+        execution,
+        isHighRisk: action.isHighRisk,
       }),
     };
   });
@@ -280,6 +288,7 @@ export async function getDailyActionCenterData(
     reminderActionsByInvoiceId,
     eligibleReminders,
     businessName,
+    workspaceTimeZone,
   };
 }
 
