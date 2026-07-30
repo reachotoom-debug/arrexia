@@ -21,15 +21,15 @@ export function resolveRecommendedAction(params: {
   const hasNewlyOverdue = reasons.some((reason) => reason.type === "newly_overdue");
 
   if (hasReminderDue) {
-    return isHighRisk ? "Prioritize scheduled reminder" : "Send scheduled reminder";
+    return isHighRisk ? "Prioritize follow-up" : "Send scheduled email";
   }
 
   if (hasMilestone) {
-    return isHighRisk ? "Prioritize follow-up now" : "Follow up now";
+    return isHighRisk ? "Prioritize follow-up" : "Follow up today";
   }
 
   if (hasNewlyOverdue) {
-    return isHighRisk ? "Prioritize first follow-up" : "Send first follow-up";
+    return isHighRisk ? "Prioritize follow-up" : "Send first follow-up";
   }
 
   if (execution.mode === "manual" || execution.mode === "rule_bound") {

@@ -7,14 +7,13 @@ import {
 } from "@/lib/onboarding/workspaceOnboardingState";
 import { formatMoney } from "@/lib/utils/format-money";
 import Link from "next/link";
+import { clsx } from "clsx";
 import { ErrorState, EmptyState } from "@/components/ui/state";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PaginationBar } from "@/components/PaginationBar";
 import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
 import { DataTableShell } from "@/components/layout/DataTableShell";
 import {
   TABLE_BASE,
-  TABLE_ACTIONS_ROW,
   TABLE_CELL_TEXT_COL,
   TABLE_MIN_WIDTH_INNER,
   TABLE_ROW,
@@ -23,7 +22,6 @@ import {
   TABLE_TH,
   TABLE_TH_RIGHT,
 } from "@/components/table/tableShell";
-import { FileText, DollarSign, Shield, ShieldAlert, ShieldCheck, Layers } from "lucide-react";
 import {
   CommandBar,
   CommandBarControls,
@@ -32,28 +30,25 @@ import { CommandBarFilters } from "@/components/layout/CommandBarFilters";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ResetFiltersButton } from "@/components/shared/reset-filters-button";
 import { ExportCsvButton } from "../_components/ExportCsvButton";
-import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
-import { AiCollectionAssistDialog } from "@/components/collections/AiCollectionAssistDialog";
+import { CollectionsPortfolioActionCell } from "./_components/CollectionsPortfolioActionCell";
 import { loadCustomerFacingBusinessName } from "@/lib/branding/loadCustomerFacingBusinessName";
 import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
 import { primaryCtaClass } from "@/components/ui/cta-styles";
+import {
+  COLLECTIONS_ESCALATION_MIN_OVERDUE_DAYS,
+  COLLECTIONS_ESCALATION_MIN_OUTSTANDING,
+  computePortfolioExposureByCurrency,
+  formatPortfolioExposureLabel,
+  getOverdueHeatClasses,
+  getRiskBadgeClasses,
+  getRiskLabel,
+  shouldRecommendEscalation,
+} from "@/lib/collections/portfolioSummary";
+import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 
 const COLLECTIONS_PAGE_SIZE = 10;
 
-/** Escalation rule: recommend escalate when both thresholds are met. Amount is compared in default currency; no conversion applied. */
-const ESCALATION_MIN_OVERDUE_DAYS = 30;
-const ESCALATION_MIN_OUTSTANDING = 5000;
-
 type RiskFilter = "high" | "medium" | "low" | "all";
-
-/** Overdue-day heat: 0-7 neutral gray, 8-30 amber, 31-60 orange, 61-90 rose, 90+ red. */
-function getOverdueHeatClasses(days: number): string {
-  if (days <= 7) return "bg-slate-100 text-slate-700 ring-slate-200";
-  if (days <= 30) return "bg-amber-100 text-amber-900 ring-amber-300";
-  if (days <= 60) return "bg-orange-200 text-orange-900 ring-orange-400";
-  if (days <= 90) return "bg-rose-200 text-rose-900 ring-rose-400";
-  return "bg-red-300 text-red-900 ring-red-500";
-}
 
 type CollectionsPageProps = {
   params: Promise<{ workspaceId: string }>;
@@ -61,7 +56,7 @@ type CollectionsPageProps = {
 };
 
 // Load collections data from invoices_view (single source of truth)
-// 
+//
 // COLLECTIONS BEHAVIOR:
 // - Excludes: archived invoices, void invoices, draft invoices, invoices with outstanding <= 0
 // - Excludes invoices for inactive or archived clients (matches Reminders eligibility rules)
@@ -74,15 +69,22 @@ async function getCollectionsData(
 ) {
   const supabase = await supabaseServer();
 
-  const { count: sentInvoiceCount } = await supabase
-    .from("invoices_view")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId)
-    .eq("base_status", "sent")
-    .is("archived_at", null);
+  const [{ count: sentInvoiceCount }, settingsResult] = await Promise.all([
+    supabase
+      .from("invoices_view")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("base_status", "sent")
+      .is("archived_at", null),
+    supabase
+      .from("settings")
+      .select("default_currency")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle(),
+  ]);
 
-  // Build base query for paginated invoices
-  // CONSISTENCY: Match invoices list smart views exactly - risk_level, is_overdue, outstanding > 0
+  const defaultCurrency = settingsResult.data?.default_currency ?? "USD";
+
   let baseQuery = supabase
     .from("invoices_view")
     .select(
@@ -108,45 +110,34 @@ async function getCollectionsData(
       { count: "exact" }
     )
     .eq("workspace_id", workspaceId)
-    // CONSISTENCY: Same filters as invoices smart views
     .eq("is_overdue", true)
     .is("archived_at", null)
     .gt("outstanding", 0)
-    // Collections eligibility: only for active, non-archived clients
     .eq("client_is_active", true)
     .is("client_archived_at", null);
 
-  // Apply risk filter (consistent with smart views)
   if (risk !== "all") {
     baseQuery = baseQuery.eq("risk_level", risk);
   }
 
-  // Calculate pagination range (using COLLECTIONS_PAGE_SIZE constant = 10)
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  // Apply ordering:
-  // - Default (all): newest-first by issue_date
-  // - Risk-specific views: keep existing risk prioritization
   if (risk === "all") {
     baseQuery = baseQuery
       .order("issue_date", { ascending: false, nullsFirst: false })
       .order("due_date", { ascending: false, nullsFirst: false });
   } else if (risk === "high") {
-    // High risk: outstanding DESC, overdue_days DESC (matches smart-high-risk)
     baseQuery = baseQuery
       .order("outstanding", { ascending: false, nullsFirst: false })
       .order("overdue_days", { ascending: false, nullsFirst: false });
   } else {
-    // Medium, Low, All: overdue_days DESC, outstanding DESC (matches smart-medium-risk, smart-low-risk)
     baseQuery = baseQuery
       .order("overdue_days", { ascending: false, nullsFirst: false })
       .order("outstanding", { ascending: false, nullsFirst: false });
   }
-  // Add stable secondary sort by id to avoid row jitter
   baseQuery = baseQuery.order("id", { ascending: true });
 
-  // Get paginated invoices with total count
   const { data: invoiceData, error, count } = await baseQuery.range(from, to);
 
   if (error) {
@@ -157,10 +148,20 @@ async function getCollectionsData(
   const invoices = invoiceData ?? [];
   const totalCount = count ?? 0;
 
-  // Fetch client data for current page invoices (for display in Contact column)
-  const clientIds = [...new Set(invoices.map((inv: any) => inv.client_id).filter(Boolean))];
-  const clientsMap = new Map();
-  
+  const clientIds = [...new Set(invoices.map((inv) => inv.client_id).filter(Boolean))];
+  const clientsMap = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      company: string | null;
+      email: string | null;
+      whatsapp: string | null;
+      whatsapp_phone: string | null;
+      country: string | null;
+    }
+  >();
+
   if (clientIds.length > 0) {
     const { data: clients, error: clientsError } = await supabase
       .from("clients")
@@ -172,35 +173,29 @@ async function getCollectionsData(
 
     if (clientsError) {
       console.error("[Collections] failed to load clients", { workspaceId, clientsError });
-      // Continue without client data - invoices will still show with client_name from invoices_view
     } else {
-      clients.forEach((c) => clientsMap.set(c.id, c));
+      for (const client of clients ?? []) {
+        clientsMap.set(client.id, client);
+      }
     }
   }
 
-  // Enrich invoices with client data (for Contact column display)
-  // Client may be null if client not found or query failed, but invoice still appears
-  const enrichedInvoices = invoices.map((inv: any) => ({
+  const enrichedInvoices = invoices.map((inv) => ({
     ...inv,
-    client: clientsMap.get(inv.client_id) || null,
+    client: inv.client_id ? clientsMap.get(inv.client_id) ?? null : null,
   }));
 
-  // Calculate total pages (using totalCount from DB query and COLLECTIONS_PAGE_SIZE = 10)
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-  // Calculate total outstanding for all matching invoices (not just current page)
-  // Uses same filters as base query (risk, is_overdue, outstanding > 0)
-  let totalOutstanding = 0;
+  let outstandingByCurrency: Array<{ currency: string; amount: number }> = [];
   try {
     let metricsQuery = supabase
       .from("invoices_view")
-      .select("outstanding")
+      .select("outstanding, currency")
       .eq("workspace_id", workspaceId)
-      // CONSISTENCY: Same filters as base query (matches smart views exactly)
       .eq("is_overdue", true)
       .is("archived_at", null)
       .gt("outstanding", 0)
-      // Collections eligibility: only for active, non-archived clients
       .eq("client_is_active", true)
       .is("client_archived_at", null);
 
@@ -208,12 +203,19 @@ async function getCollectionsData(
       metricsQuery = metricsQuery.eq("risk_level", risk);
     }
 
-    const { data: allOutstanding } = await metricsQuery;
-    totalOutstanding = (allOutstanding ?? []).reduce((sum, inv) => sum + Number(inv.outstanding ?? 0), 0);
+    const { data: exposureRows } = await metricsQuery;
+    outstandingByCurrency = computePortfolioExposureByCurrency(
+      (exposureRows ?? []).map((row) => ({
+        outstanding: Number(row.outstanding ?? 0),
+        currency: row.currency,
+      })),
+      defaultCurrency
+    );
   } catch (metricsError) {
     console.error("[Collections] failed to calculate outstanding total", { workspaceId, metricsError });
-    // Continue with totalOutstanding = 0 if metrics query fails
   }
+
+  const exposureLabel = formatPortfolioExposureLabel(outstandingByCurrency);
 
   return {
     rows: enrichedInvoices,
@@ -222,14 +224,32 @@ async function getCollectionsData(
     pageSize,
     totalPages,
     summary: {
-      // Total count of all invoices matching the risk filter (from main query)
       invoicesInView: totalCount,
-      // Sum of outstanding amounts for all matching invoices (from metrics query)
-      outstandingInView: totalOutstanding,
-      mode: risk === "all" ? "All Risks" : risk === "high" ? "High Risk" : risk === "medium" ? "Medium Risk" : "Low Risk",
+      outstandingByCurrency,
+      outstandingLabel: exposureLabel.value,
+      outstandingDetail: exposureLabel.detail,
+      mode: risk === "all" ? "All risks" : risk === "high" ? "High risk" : risk === "medium" ? "Medium risk" : "Low risk",
       sentInvoiceCount: sentInvoiceCount ?? 0,
     },
   };
+}
+
+function SummaryMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900 sm:text-2xl">{value}</p>
+      {detail ? <p className="mt-1 text-xs leading-snug text-slate-500">{detail}</p> : null}
+    </div>
+  );
 }
 
 export default async function CollectionsPage({
@@ -249,7 +269,6 @@ export default async function CollectionsPage({
     ? (riskFilter as RiskFilter)
     : "all";
 
-  // Parse page param (default 1, clamp min 1)
   const pageParam = (Array.isArray(resolvedSearchParams.page)
     ? resolvedSearchParams.page[0]
     : resolvedSearchParams.page) ?? "1";
@@ -264,7 +283,7 @@ export default async function CollectionsPage({
       getCollectionsData(workspaceId, risk, page, pageSize),
       loadCustomerFacingBusinessName(supabase, workspaceId),
     ]);
-  } catch (error) {
+  } catch {
     return (
       <div className="w-full min-w-0">
         <div className="p-6">
@@ -286,21 +305,10 @@ export default async function CollectionsPage({
     { id: "all", label: "All risks" },
   ];
 
-  // Helper to build URLs with risk filter (resets page to 1)
   const buildRiskUrl = (riskId: string) => {
     const params = new URLSearchParams();
     params.set("risk", riskId);
     params.set("page", "1");
-    return `/${workspaceId}/collections?${params.toString()}`;
-  };
-
-  // Helper to build URLs for pagination (preserves risk filter)
-  const buildPageUrl = (newPage: number) => {
-    const params = new URLSearchParams();
-    params.set("risk", risk);
-    if (newPage > 1) {
-      params.set("page", newPage.toString());
-    }
     return `/${workspaceId}/collections?${params.toString()}`;
   };
 
@@ -315,13 +323,13 @@ export default async function CollectionsPage({
       <CommandBar>
         <PageHeader
           title="Collections"
-          description="Overdue invoices with outstanding balances for follow-up."
+          description="Monitor overdue exposure and prioritize the accounts that need attention."
           secondaryActions={
             <Link
               href={`/${workspaceId}/actions`}
-              className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+              className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
             >
-              Today&apos;s actions →
+              Open Today&apos;s Action Center →
             </Link>
           }
           primaryAction={
@@ -367,58 +375,28 @@ export default async function CollectionsPage({
         />
       </CommandBar>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-slate-100 p-2">
-              <FileText className="h-5 w-5 text-slate-600" />
-            </div>
-            <div className="flex-1">
-              <div className="text-xs text-slate-500">Invoices in view</div>
-              <div className="text-2xl font-semibold mt-1">{summary.invoicesInView}</div>
-            </div>
-          </div>
-        </div>
+      <section aria-label="Portfolio summary" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SummaryMetric
+          label="Overdue invoices"
+          value={String(summary.invoicesInView)}
+          detail={
+            summary.invoicesInView === 1
+              ? "Invoice in this portfolio view"
+              : "Invoices in this portfolio view"
+          }
+        />
+        <SummaryMetric
+          label="Overdue exposure"
+          value={summary.outstandingLabel}
+          detail={summary.outstandingDetail}
+        />
+        <SummaryMetric
+          label="Risk segment"
+          value={summary.mode}
+          detail={risk !== "all" ? "Filtered portfolio segment" : "All overdue risk levels"}
+        />
+      </section>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-slate-100 p-2">
-              <DollarSign className="h-5 w-5 text-slate-600" />
-            </div>
-            <div className="flex-1">
-              <div className="text-xs text-slate-500">Outstanding in view</div>
-              <div className="text-2xl font-semibold mt-1">
-                {formatMoney(summary.outstandingInView, "USD")}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-slate-100 p-2">
-              {risk === "high" ? (
-                <ShieldAlert className="h-5 w-5 text-red-600" />
-              ) : risk === "medium" ? (
-                <Shield className="h-5 w-5 text-amber-600" />
-              ) : risk === "low" ? (
-                <ShieldCheck className="h-5 w-5 text-emerald-600" />
-              ) : (
-                <Layers className="h-5 w-5 text-slate-600" />
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="text-xs text-slate-500">Mode</div>
-              <div className="text-2xl font-semibold mt-1 capitalize">
-                {summary.mode}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* TABLE */}
       {count === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
           {(() => {
@@ -478,171 +456,160 @@ export default async function CollectionsPage({
       ) : (
         <>
           <DataTableShell disableInnerScroll>
-          <HorizontalScrollArea
-            className="relative w-full min-w-0"
-            viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent"
-          >
-            <div className={TABLE_MIN_WIDTH_INNER}>
-            <table className={TABLE_BASE}>
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className={`hidden lg:table-cell ${TABLE_TH}`}>Risk</th>
-                  <th className={TABLE_TH}>Invoice #</th>
-                  <th className={`${TABLE_CELL_TEXT_COL} ${TABLE_TH}`}>Client</th>
-                  <th className={`hidden lg:table-cell ${TABLE_TH}`}>Due date</th>
-                  <th className={`hidden lg:table-cell ${TABLE_TH}`}>Overdue days</th>
-                  <th className={TABLE_TH_RIGHT}>Outstanding</th>
-                  <th className={`hidden lg:table-cell ${TABLE_TH}`}>Escalation</th>
-                  <th className={TABLE_TH}>Status</th>
-                  <th className={`hidden md:table-cell ${TABLE_CELL_TEXT_COL} ${TABLE_TH}`}>
-                    Contact
-                  </th>
-                  <th className={TABLE_TH_RIGHT}>Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {invoices.map((inv) => {
-                  const client = (inv as { client?: { email?: string | null; whatsapp?: string | null; whatsapp_phone?: string | null; country?: string | null } }).client;
-                  return (
-                  <tr key={inv.id} className={TABLE_ROW}>
-                    <td className={`hidden lg:table-cell ${TABLE_TD} text-sm`}>
-                      <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold
-                        ${
-                          inv.risk_level === "high"
-                            ? "bg-red-100 text-red-700 border border-red-200"
-                            : inv.risk_level === "medium"
-                            ? "bg-amber-100 text-amber-700 border border-amber-200"
-                            : "bg-blue-100 text-blue-700 border border-blue-200"
-                        }`}
-                      >
-                        {inv.risk_level?.toUpperCase().charAt(0) || "—"}
-                      </span>
-                    </td>
+            <HorizontalScrollArea
+              className="relative w-full min-w-0"
+              viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent"
+            >
+              <div className={TABLE_MIN_WIDTH_INNER}>
+                <table className={TABLE_BASE}>
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className={`hidden lg:table-cell ${TABLE_TH}`}>Risk</th>
+                      <th className={`min-w-[11rem] ${TABLE_TH} text-left`}>Client / Invoice</th>
+                      <th className={clsx(TABLE_TH, TABLE_TH_RIGHT, "whitespace-nowrap")}>
+                        Outstanding
+                      </th>
+                      <th className={`hidden md:table-cell ${TABLE_TH} whitespace-nowrap`}>
+                        Due / Aging
+                      </th>
+                      <th className={`hidden xl:table-cell ${TABLE_TH}`}>Escalation</th>
+                      <th className={clsx(TABLE_TH, TABLE_TH_RIGHT, "whitespace-nowrap")}>
+                        Portfolio action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {invoices.map((inv) => {
+                      const client = inv.client;
+                      const overdueDays = Number(inv.overdue_days ?? 0);
+                      const outstanding = Number(inv.outstanding ?? 0);
+                      const currency = inv.currency ?? "USD";
+                      const escalate = shouldRecommendEscalation(overdueDays, outstanding);
 
-                    <td className={`${TABLE_TD} text-sm whitespace-nowrap`}>
-                      <Link
-                        href={`/${workspaceId}/invoices/${inv.id}`}
-                        className="text-blue-600 font-medium hover:underline"
-                      >
-                        {inv.invoice_number || `INV-${String(inv.id).slice(0, 8)}`}
-                      </Link>
-                    </td>
+                      return (
+                        <tr key={inv.id} className={TABLE_ROW}>
+                          <td className={`hidden lg:table-cell ${TABLE_TD} text-sm`}>
+                            <span
+                              className={clsx(
+                                "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
+                                getRiskBadgeClasses(inv.risk_level)
+                              )}
+                            >
+                              {getRiskLabel(inv.risk_level)}
+                            </span>
+                          </td>
 
-                    <td className={`${TABLE_CELL_TEXT_COL} ${TABLE_TD} text-sm text-slate-900`}>
-                      <div className="font-medium break-words">{inv.client_name || "—"}</div>
-                      {client?.email?.trim() ? (
-                        <div className="mt-0.5 hidden break-words text-sm text-slate-500 md:block">
-                          {client.email.trim()}
-                        </div>
-                      ) : null}
-                    </td>
+                          <td className={clsx(TABLE_TD, TABLE_CELL_TEXT_COL, "text-sm")}>
+                            <div className="flex items-start gap-2">
+                              <span
+                                className={clsx(
+                                  "mt-0.5 inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset lg:hidden",
+                                  getRiskBadgeClasses(inv.risk_level)
+                                )}
+                              >
+                                {getRiskLabel(inv.risk_level)}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-medium text-slate-900 break-words">
+                                  {inv.client_name || "—"}
+                                </div>
+                                <Link
+                                  href={`/${workspaceId}/invoices/${inv.id}`}
+                                  className="mt-0.5 inline-block text-sm font-medium text-blue-600 hover:underline"
+                                >
+                                  {inv.invoice_number || `INV-${String(inv.id).slice(0, 8)}`}
+                                </Link>
+                                {client?.email?.trim() ? (
+                                  <div className="mt-0.5 hidden break-words text-xs text-slate-500 md:block">
+                                    {client.email.trim()}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </td>
 
-                    <td className={`hidden lg:table-cell ${TABLE_TD} text-sm text-slate-700`}>
-                      {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "—"}
-                    </td>
-
-                    <td className={`hidden lg:table-cell ${TABLE_TD} text-sm text-slate-700`}>
-                      {inv.overdue_days != null && inv.overdue_days > 0 ? (
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset tabular-nums ${getOverdueHeatClasses(Number(inv.overdue_days))}`}
-                        >
-                          {inv.overdue_days}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-
-                    <td className={`${TABLE_TD_RIGHT} text-sm font-semibold text-slate-900`}>
-                      {formatMoney(Number(inv.outstanding || 0), "USD")}
-                    </td>
-
-                    <td className={`hidden lg:table-cell ${TABLE_TD} text-sm`}>
-                      {(() => {
-                        const overdueDays = Number(inv.overdue_days ?? 0);
-                        const outstanding = Number(inv.outstanding ?? 0);
-                        const escalate =
-                          overdueDays >= ESCALATION_MIN_OVERDUE_DAYS &&
-                          outstanding >= ESCALATION_MIN_OUTSTANDING;
-                        return escalate ? (
-                          <span
-                            title={`Escalate if overdue_days >= ${ESCALATION_MIN_OVERDUE_DAYS} AND outstanding >= ${ESCALATION_MIN_OUTSTANDING}`}
-                            className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200"
+                          <td
+                            className={clsx(
+                              TABLE_TD,
+                              TABLE_TD_RIGHT,
+                              "text-sm font-semibold tabular-nums text-slate-900 whitespace-nowrap"
+                            )}
                           >
-                            Escalate
-                          </span>
-                        ) : null;
-                      })()}
-                    </td>
+                            {formatMoney(outstanding, currency)}
+                          </td>
 
-                    <td className={`${TABLE_TD} text-sm whitespace-nowrap`}>
-                      <StatusBadge type="invoice" status={inv.display_status || "overdue"} />
-                    </td>
+                          <td
+                            className={clsx(
+                              "hidden md:table-cell",
+                              TABLE_TD,
+                              "text-sm text-slate-700 whitespace-nowrap"
+                            )}
+                          >
+                            <div>{formatDateOnlyField(inv.due_date)}</div>
+                            {overdueDays > 0 ? (
+                              <span
+                                className={clsx(
+                                  "mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset tabular-nums",
+                                  getOverdueHeatClasses(overdueDays)
+                                )}
+                              >
+                                {overdueDays} day{overdueDays === 1 ? "" : "s"}
+                              </span>
+                            ) : (
+                              <div className="mt-1 text-xs text-slate-400">—</div>
+                            )}
+                          </td>
 
-                    <td className={`hidden md:table-cell ${TABLE_CELL_TEXT_COL} ${TABLE_TD} text-sm`}>
-                      {(() => {
-                        const phone = client?.whatsapp_phone?.trim() || client?.whatsapp?.trim() || null;
-                        if (!phone) {
-                          return <span className="text-slate-400 text-sm">—</span>;
-                        }
-                        return <div className="break-words text-slate-600">{phone}</div>;
-                      })()}
-                    </td>
+                          <td className={`hidden xl:table-cell ${TABLE_TD} text-sm`}>
+                            {escalate ? (
+                              <span
+                                title={`Escalate when overdue ≥ ${COLLECTIONS_ESCALATION_MIN_OVERDUE_DAYS} days and outstanding ≥ ${COLLECTIONS_ESCALATION_MIN_OUTSTANDING}`}
+                                className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200"
+                              >
+                                Escalate
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
 
-                  <td className={`${TABLE_TD_RIGHT} text-sm leading-5`}>
-                    <div className={TABLE_ACTIONS_ROW}>
-                      <WhatsAppCollectionLink
-                        phone={resolveClientWhatsAppPhone(
-                          client?.whatsapp_phone,
-                          client?.whatsapp
-                        )}
-                        clientCountry={client?.country ?? null}
-                        clientName={inv.client_name ?? null}
-                        businessName={businessName}
-                        invoiceNumber={inv.invoice_number ?? null}
-                        outstanding={Number(inv.outstanding || 0)}
-                        currency={inv.currency ?? "USD"}
-                        dueDate={inv.due_date ?? null}
-                        daysOverdue={Number(inv.overdue_days ?? 0)}
-                        variant="button"
-                      />
-                      <AiCollectionAssistDialog
-                        workspaceId={workspaceId}
-                        invoiceId={inv.id}
-                        clientPhone={resolveClientWhatsAppPhone(
-                          client?.whatsapp_phone,
-                          client?.whatsapp
-                        )}
-                        clientCountry={client?.country ?? null}
-                        variant="button"
-                      />
-                      <Link
-                        href={`/${workspaceId}/invoices/${inv.id}`}
-                        className="inline-flex items-center whitespace-nowrap rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
-                      >
-                        View invoice
-                      </Link>
-                    </div>
-                  </td>
-                  </tr>
-                );
-                })}
-              </tbody>
-            </table>
-            </div>
+                          <td className={clsx(TABLE_TD, TABLE_TD_RIGHT, "py-2.5 text-sm min-w-0")}>
+                            <CollectionsPortfolioActionCell
+                              workspaceId={workspaceId}
+                              invoiceId={inv.id}
+                              invoiceNumber={inv.invoice_number ?? null}
+                              clientName={inv.client_name ?? null}
+                              clientPhone={resolveClientWhatsAppPhone(
+                                client?.whatsapp_phone,
+                                client?.whatsapp
+                              )}
+                              clientCountry={client?.country ?? null}
+                              businessName={businessName}
+                              outstanding={outstanding}
+                              currency={currency}
+                              dueDate={inv.due_date ?? null}
+                              daysOverdue={overdueDays}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </HorizontalScrollArea>
-            </DataTableShell>
+          </DataTableShell>
 
-          {/* Pagination */}
-          <PaginationBar
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={count}
-            itemLabel={`invoice${count !== 1 ? "s" : ""}`}
-            basePath={`/${workspaceId}/collections`}
-            queryParams={{ ...resolvedSearchParams, risk }}
-          />
+          <div className="border-t border-slate-100 px-4 pt-3 pb-1 sm:px-5">
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={count}
+              itemLabel={`invoice${count !== 1 ? "s" : ""}`}
+              basePath={`/${workspaceId}/collections`}
+              queryParams={{ ...resolvedSearchParams, risk }}
+            />
+          </div>
         </>
       )}
     </div>

@@ -108,7 +108,7 @@ export function CollectionActionCell({
           clientEmail={execution.clientEmail}
           {...sendProps}
         />
-        <span className="text-sm font-medium text-slate-800">Send reminder</span>
+        <span className="text-sm font-medium text-slate-800">Email</span>
       </div>
       {whatsAppLink}
       {aiAssist}

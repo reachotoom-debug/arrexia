@@ -28,7 +28,18 @@ type RuleRow = {
   workspace_id: string;
   template_id: string;
   is_enabled: boolean | null;
+  trigger_type: string;
+  offset_days: number;
+  for_status: string;
 };
+
+function reminderRuleScheduleKey(rule: {
+  trigger_type: string;
+  offset_days: number;
+  for_status: string;
+}): string {
+  return `${rule.trigger_type}:${rule.offset_days}:${rule.for_status}`;
+}
 
 export async function provisionDefaultReminderSetup(params: {
   workspaceId: string;
@@ -117,7 +128,7 @@ export async function provisionDefaultReminderSetup(params: {
 
   const { data: existingRules, error: rulesError } = await admin
     .from("reminder_rules")
-    .select("id, workspace_id, template_id, is_enabled")
+    .select("id, workspace_id, template_id, is_enabled, trigger_type, offset_days, for_status")
     .eq("workspace_id", workspaceId);
 
   if (rulesError) {
@@ -125,10 +136,12 @@ export async function provisionDefaultReminderSetup(params: {
   }
 
   const rulesByTemplateId = new Map<string, RuleRow>();
+  const existingScheduleKeys = new Set<string>();
   for (const row of (existingRules ?? []) as RuleRow[]) {
     if (!rulesByTemplateId.has(row.template_id)) {
       rulesByTemplateId.set(row.template_id, row);
     }
+    existingScheduleKeys.add(reminderRuleScheduleKey(row));
   }
 
   for (const stage of CANONICAL_REMINDER_STAGES) {
@@ -137,9 +150,21 @@ export async function provisionDefaultReminderSetup(params: {
       throw new Error(`Canonical template missing after provision: ${stage.code}`);
     }
 
+    const scheduleKey = reminderRuleScheduleKey({
+      trigger_type: stage.triggerType,
+      offset_days: stage.offsetDays,
+      for_status: stage.forStatus,
+    });
+
+    if (existingScheduleKeys.has(scheduleKey)) {
+      rulesExisting += 1;
+      continue;
+    }
+
     const existingRule = rulesByTemplateId.get(template.id);
     if (existingRule) {
       rulesExisting += 1;
+      existingScheduleKeys.add(scheduleKey);
       continue;
     }
 
@@ -155,8 +180,32 @@ export async function provisionDefaultReminderSetup(params: {
         is_enabled: getDefaultEnabledForPlan(plan, stage.code),
         sort_order: stage.sortOrder,
       })
-      .select("id, workspace_id, template_id, is_enabled")
+      .select("id, workspace_id, template_id, is_enabled, trigger_type, offset_days, for_status")
       .maybeSingle();
+
+    if (ruleInsertError?.code === "23505") {
+      const { data: racedRule, error: racedError } = await admin
+        .from("reminder_rules")
+        .select("id, workspace_id, template_id, is_enabled, trigger_type, offset_days, for_status")
+        .eq("workspace_id", workspaceId)
+        .eq("trigger_type", stage.triggerType)
+        .eq("offset_days", stage.offsetDays)
+        .eq("for_status", stage.forStatus)
+        .maybeSingle();
+
+      if (racedError) {
+        throw new Error(
+          `Failed to resolve reminder rule race for ${stage.code}: ${racedError.message}`
+        );
+      }
+
+      if (racedRule) {
+        rulesByTemplateId.set(template.id, racedRule as RuleRow);
+        existingScheduleKeys.add(scheduleKey);
+        rulesExisting += 1;
+        continue;
+      }
+    }
 
     if (ruleInsertError) {
       throw new Error(
@@ -169,6 +218,7 @@ export async function provisionDefaultReminderSetup(params: {
     }
 
     rulesByTemplateId.set(template.id, insertedRule as RuleRow);
+    existingScheduleKeys.add(scheduleKey);
     rulesCreated += 1;
   }
 

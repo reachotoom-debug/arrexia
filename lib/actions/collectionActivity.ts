@@ -55,21 +55,26 @@ export function shouldShowAgingMilestoneAction(params: {
   overdueDays: number;
   dueDate: string | null;
   sentCalendarDates: readonly string[];
+  /** Workspace-local calendar date (YYYY-MM-DD) for today's evaluation. */
+  evaluationDate: string;
 }): AgingMilestoneDays | null {
-  const { isOverdue, overdueDays, dueDate, sentCalendarDates } = params;
+  const { isOverdue, dueDate, sentCalendarDates, evaluationDate } = params;
   if (!isOverdue || !dueDate) return null;
 
-  const milestone = resolveLatestMilestone(overdueDays);
-  if (!milestone) return null;
+  for (const milestone of AGING_MILESTONE_DAYS) {
+    const crossDate = computeMilestoneCrossDate(dueDate, milestone);
+    if (!crossDate || crossDate !== evaluationDate) {
+      continue;
+    }
 
-  const crossDate = computeMilestoneCrossDate(dueDate, milestone);
-  if (!crossDate) return null;
+    if (hasSuccessfulReminderOnOrAfter(sentCalendarDates, crossDate)) {
+      return null;
+    }
 
-  if (hasSuccessfulReminderOnOrAfter(sentCalendarDates, crossDate)) {
-    return null;
+    return milestone;
   }
 
-  return milestone;
+  return null;
 }
 
 export function milestoneReasonLabel(milestoneDays: AgingMilestoneDays): string {

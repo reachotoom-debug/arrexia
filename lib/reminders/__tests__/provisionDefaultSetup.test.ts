@@ -8,6 +8,7 @@ import {
 } from "../canonicalDefaults";
 import {
   provisionDefaultReminderSetup,
+  provisionDefaultReminderSetupSafe,
   summarizeCanonicalRuleBindings,
   type ProvisionAdmin,
 } from "../provisionDefaultSetup";
@@ -177,6 +178,20 @@ class MockQueryBuilder {
       }
 
       if (this.table === "reminder_rules") {
+        const duplicateSchedule = this.state.rules.find(
+          (row) =>
+            row.workspace_id === payload.workspace_id &&
+            row.trigger_type === payload.trigger_type &&
+            row.offset_days === Number(payload.offset_days) &&
+            row.for_status === payload.for_status
+        );
+        if (duplicateSchedule) {
+          return {
+            data: null,
+            error: { code: "23505", message: "reminder_rules_unique_schedule" },
+          };
+        }
+
         const row: RuleRow = {
           id: newRuleId(this.state),
           workspace_id: String(payload.workspace_id),
@@ -547,6 +562,83 @@ describe("provisionDefaultReminderSetup — R2E.1 non-destructive invariant", ()
       const template = state.templates.find((t) => t.id === rule.template_id);
       assert.equal(template?.workspace_id, WORKSPACE_A);
     }
+  });
+
+  it("schedule slot occupied by custom rule — second provision is idempotent", async () => {
+    const state = createState();
+    const admin = createMockAdmin(state);
+    const customTemplateId = newTemplateId(state);
+
+    state.templates.push({
+      id: customTemplateId,
+      workspace_id: WORKSPACE_A,
+      code: "custom_legacy",
+      name: "Legacy custom",
+      subject: "Custom",
+      body: "Custom body",
+      is_enabled: true,
+      sort_order: 99,
+      channel: "email",
+    });
+
+    const preDueStage = CANONICAL_REMINDER_STAGES.find((s) => s.code === "pre_due")!;
+    state.rules.push({
+      id: newRuleId(state),
+      workspace_id: WORKSPACE_A,
+      template_id: customTemplateId,
+      name: "Legacy pre-due slot",
+      trigger_type: preDueStage.triggerType,
+      offset_days: preDueStage.offsetDays,
+      for_status: preDueStage.forStatus,
+      is_enabled: false,
+      sort_order: 99,
+    });
+
+    const first = await provisionDefaultReminderSetup({
+      workspaceId: WORKSPACE_A,
+      plan: "pro",
+      admin,
+    });
+
+    assert.equal(first.rulesCreated, CANONICAL_REMINDER_STAGES.length - 1);
+    assert.equal(
+      state.rules.filter((r) => r.workspace_id === WORKSPACE_A).length,
+      CANONICAL_REMINDER_STAGES.length
+    );
+
+    const legacyRule = state.rules.find((r) => r.template_id === customTemplateId);
+    assert.ok(legacyRule);
+    assert.equal(legacyRule?.is_enabled, false);
+
+    const second = await provisionDefaultReminderSetup({
+      workspaceId: WORKSPACE_A,
+      plan: "pro",
+      admin,
+    });
+
+    assert.equal(second.rulesCreated, 0);
+    assert.equal(
+      state.rules.filter((r) => r.workspace_id === WORKSPACE_A).length,
+      CANONICAL_REMINDER_STAGES.length
+    );
+    assert.equal(legacyRule?.is_enabled, false);
+    assert.equal(legacyRule?.name, "Legacy pre-due slot");
+  });
+
+  it("genuine provisioning errors are not swallowed by safe wrapper", async () => {
+    const admin: ProvisionAdmin = {
+      from() {
+        throw new Error("database unavailable");
+      },
+    };
+
+    const result = await provisionDefaultReminderSetupSafe({
+      workspaceId: WORKSPACE_A,
+      plan: "pro",
+      admin,
+    });
+
+    assert.equal(result, null);
   });
 
   it("canonical rules bind to reminder_templates ids", async () => {

@@ -6,6 +6,8 @@ import { resolveCustomerFacingBusinessName } from "@/lib/branding/resolveCustome
 
 const DAILY_ACTION_CELL = "app/[workspaceId]/actions/_components/CollectionActionCell.tsx";
 const COLLECTIONS_PAGE = "app/[workspaceId]/collections/page.tsx";
+const COLLECTIONS_PORTFOLIO_CELL =
+  "app/[workspaceId]/collections/_components/CollectionsPortfolioActionCell.tsx";
 const COLLECTIONS_TABLE = "app/[workspaceId]/collections/_components/CollectionsTable.tsx";
 const DASHBOARD_COLLECTIONS_TAB =
   "app/[workspaceId]/dashboard/_components/CollectionsModeTab.tsx";
@@ -65,15 +67,16 @@ describe("WhatsApp integration contract", () => {
   });
 
   it("Collections uses shared WhatsAppCollectionLink with business name", () => {
-    const pageSrc = readFileSync(COLLECTIONS_PAGE, "utf8");
+    const portfolioCellSrc = readFileSync(COLLECTIONS_PORTFOLIO_CELL, "utf8");
     const tableSrc = readFileSync(COLLECTIONS_TABLE, "utf8");
 
-    assert.match(pageSrc, /WhatsAppCollectionLink/);
-    assert.match(pageSrc, /loadCustomerFacingBusinessName/);
-    assert.match(pageSrc, /clientCountry/);
+    assert.match(portfolioCellSrc, /WhatsAppCollectionLink/);
+    assert.match(readFileSync(COLLECTIONS_PAGE, "utf8"), /loadCustomerFacingBusinessName/);
+    assert.match(portfolioCellSrc, /clientCountry/);
+    assert.match(portfolioCellSrc, /businessName/);
     assert.match(tableSrc, /WhatsAppCollectionLink/);
     assert.match(tableSrc, /businessName/);
-    assert.doesNotMatch(pageSrc, /wa\.me/);
+    assert.doesNotMatch(portfolioCellSrc, /wa\.me/);
     assert.doesNotMatch(tableSrc, /wa\.me/);
   });
 

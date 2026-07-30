@@ -9,6 +9,7 @@ import {
   hasNeverEnteredCollectionsWorkflow,
 } from "@/lib/onboarding/workspaceOnboardingState";
 import { EmptyState } from "@/components/ui/state";
+import { PaginationBar } from "@/components/PaginationBar";
 import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
 import {
   TABLE_BASE,
@@ -20,14 +21,19 @@ import {
   TABLE_TH,
   TABLE_TH_RIGHT,
 } from "@/components/table/tableShell";
-import { INVOICE_NUMBER_COL_CLASS } from "@/components/tables/invoiceTableColumns";
 import { CollectionActionCell } from "./CollectionActionCell";
-import type { ActionReason, DailyActionCenterData } from "@/lib/actions/types";
+import type {
+  ActionReason,
+  DailyActionCenterData,
+  DailyActionCenterPagination,
+} from "@/lib/actions/types";
 
 type DailyActionCenterViewProps = {
   workspaceId: string;
   data: DailyActionCenterData;
   greeting: string;
+  pagination: DailyActionCenterPagination;
+  queryParams?: Record<string, string | string[] | undefined>;
 };
 
 function reasonLabel(reason: ActionReason): string {
@@ -98,8 +104,11 @@ export function DailyActionCenterView({
   workspaceId,
   data,
   greeting,
+  pagination,
+  queryParams,
 }: DailyActionCenterViewProps) {
   const { summary, collectionActions, businessName } = data;
+  const priorityOffset = (pagination.currentPage - 1) * pagination.pageSize;
 
   if (summary.actionsTodayCount === 0) {
     const onboardingSignals = {
@@ -191,49 +200,53 @@ export function DailyActionCenterView({
         aria-label="Prioritized collection work queue"
         className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
       >
-        <div className="border-b border-slate-200 px-4 py-3">
+        <div className="border-b border-slate-200 px-4 py-2.5 sm:px-5">
           <h2 className="text-sm font-semibold text-slate-900">Prioritized work queue</h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Who owes us, why today, and how to follow up.
           </p>
         </div>
         <HorizontalScrollArea
-          className="w-full"
+          className="w-full min-w-0"
           viewportClassName="overflow-x-auto scrollbar-thin scrollbar-transparent"
         >
           <div className={TABLE_MIN_WIDTH_INNER}>
             <table className={TABLE_BASE}>
-              <thead>
-                <tr className="border-b border-slate-100 text-xs font-medium uppercase tracking-wide text-slate-500">
-                  <th className={`${TABLE_TH} whitespace-nowrap`}>Priority</th>
-                  <th className={`min-w-[10rem] ${TABLE_TH} text-left`}>Client / Invoice</th>
-                  <th className={`${TABLE_TH} whitespace-nowrap text-left`}>Why now</th>
-                  <th className={`hidden md:table-cell ${TABLE_TH} whitespace-nowrap text-left`}>
+              <thead className="bg-slate-50/80">
+                <tr className="border-b border-slate-100 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <th className={`${TABLE_TH} py-2 whitespace-nowrap`}>Priority</th>
+                  <th className={`min-w-[10rem] ${TABLE_TH} py-2 text-left`}>Client / Invoice</th>
+                  <th className={`${TABLE_TH} py-2 whitespace-nowrap text-left`}>Why now</th>
+                  <th className={`hidden md:table-cell ${TABLE_TH} py-2 whitespace-nowrap text-left`}>
                     Due / Aging
                   </th>
-                  <th className={clsx(TABLE_TH, TABLE_TH_RIGHT, "whitespace-nowrap")}>
+                  <th className={clsx(TABLE_TH, TABLE_TH_RIGHT, "py-2 whitespace-nowrap")}>
                     Outstanding
                   </th>
-                  <th className={`hidden lg:table-cell ${TABLE_TH} text-left`}>
+                  <th className={`hidden lg:table-cell ${TABLE_TH} py-2 text-left`}>
                     Recommended
                   </th>
-                  <th className={`${TABLE_TH} whitespace-nowrap text-left`}>Actions</th>
+                  <th className={`${TABLE_TH} py-2 whitespace-nowrap text-left min-w-[11rem]`}>
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {collectionActions.map((item, index) => (
-                  <tr key={item.id} className={TABLE_ROW}>
-                    <td className={`${TABLE_TD} text-sm whitespace-nowrap`}>
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-slate-700">#{index + 1}</span>
+                  <tr key={item.id} className={clsx(TABLE_ROW, "align-top")}>
+                    <td className={`${TABLE_TD} py-2.5 text-sm whitespace-nowrap`}>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium tabular-nums text-slate-700">
+                          #{priorityOffset + index + 1}
+                        </span>
                         {item.isHighRisk ? (
-                          <span className="inline-flex w-fit rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-inset ring-red-200">
+                          <span className="inline-flex w-fit rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-inset ring-red-200">
                             High risk
                           </span>
                         ) : null}
                       </div>
                     </td>
-                    <td className={clsx(TABLE_TD, TABLE_CELL_TEXT_COL, "text-sm")}>
+                    <td className={clsx(TABLE_TD, TABLE_CELL_TEXT_COL, "py-2.5 text-sm")}>
                       <div className="font-medium text-slate-900 break-words">
                         {item.clientName ?? "—"}
                       </div>
@@ -244,8 +257,8 @@ export function DailyActionCenterView({
                         {item.invoiceNumber ?? item.id.slice(0, 8)}
                       </Link>
                     </td>
-                    <td className={TABLE_TD}>
-                      <div className="flex flex-wrap gap-1">
+                    <td className={`${TABLE_TD} py-2.5`}>
+                      <div className="flex flex-wrap gap-1 max-w-[14rem]">
                         {item.reasons.map((reason) => (
                           <span
                             key={`${reason.type}-${
@@ -265,7 +278,7 @@ export function DailyActionCenterView({
                       className={clsx(
                         "hidden md:table-cell",
                         TABLE_TD,
-                        "text-sm text-slate-700 whitespace-nowrap"
+                        "py-2.5 text-sm text-slate-700 whitespace-nowrap"
                       )}
                     >
                       <div>{formatDateOnlyField(item.dueDate)}</div>
@@ -279,7 +292,7 @@ export function DailyActionCenterView({
                       className={clsx(
                         TABLE_TD,
                         TABLE_TD_RIGHT,
-                        "text-sm font-semibold tabular-nums text-slate-900"
+                        "py-2.5 text-sm font-semibold tabular-nums text-slate-900 whitespace-nowrap"
                       )}
                     >
                       {formatMoney(item.outstanding, item.currency ?? "USD")}
@@ -288,12 +301,12 @@ export function DailyActionCenterView({
                       className={clsx(
                         "hidden lg:table-cell",
                         TABLE_TD,
-                        "text-sm font-medium text-slate-800"
+                        "py-2.5 text-sm font-medium text-slate-800 max-w-[10rem]"
                       )}
                     >
                       {item.recommendedAction ?? "—"}
                     </td>
-                    <td className={clsx(TABLE_TD, "text-sm whitespace-nowrap")}>
+                    <td className={clsx(TABLE_TD, "py-2.5 text-sm whitespace-nowrap")}>
                       {item.execution ? (
                         <CollectionActionCell
                           workspaceId={workspaceId}
@@ -317,6 +330,18 @@ export function DailyActionCenterView({
             </table>
           </div>
         </HorizontalScrollArea>
+        {pagination.totalPages > 1 ? (
+          <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
+            <PaginationBar
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.totalItems}
+              itemLabel={`action${pagination.totalItems !== 1 ? "s" : ""}`}
+              basePath={`/${workspaceId}/actions`}
+              queryParams={queryParams}
+            />
+          </div>
+        ) : null}
       </section>
 
       <p className="text-sm text-slate-500">

@@ -69,8 +69,9 @@ function buildActionReasons(params: {
   row: ChaseableInvoiceRow;
   reminderEligible: boolean;
   sentCalendarDates: readonly string[];
+  evaluationDate: string;
 }): ActionReason[] {
-  const { row, reminderEligible, sentCalendarDates } = params;
+  const { row, reminderEligible, sentCalendarDates, evaluationDate } = params;
   const reasons: ActionReason[] = [];
 
   if (reminderEligible) {
@@ -82,6 +83,7 @@ function buildActionReasons(params: {
     overdueDays: row.overdueDays,
     dueDate: row.dueDate,
     sentCalendarDates,
+    evaluationDate,
   });
   if (milestone) {
     reasons.push({ type: "aging_milestone", milestoneDays: milestone });
@@ -107,6 +109,7 @@ export function buildDailyActionCategories(params: {
   sentReminderDatesByInvoiceId: Map<string, string[]>;
   defaultCurrency: string;
   sentInvoiceCount: number;
+  evaluationDate: string;
 }): Pick<DailyActionCenterData, "summary" | "collectionActions"> {
   const {
     invoices,
@@ -114,6 +117,7 @@ export function buildDailyActionCategories(params: {
     sentReminderDatesByInvoiceId,
     defaultCurrency,
     sentInvoiceCount,
+    evaluationDate,
   } = params;
 
   const collectionActionsById = new Map<string, CollectionActionItem>();
@@ -126,6 +130,7 @@ export function buildDailyActionCategories(params: {
       row,
       reminderEligible: reminderEligibleInvoiceIds.has(row.id),
       sentCalendarDates,
+      evaluationDate,
     });
 
     if (reasons.length === 0) continue;

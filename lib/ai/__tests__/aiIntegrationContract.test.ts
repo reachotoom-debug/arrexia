@@ -9,6 +9,8 @@ const OPENAI_PROVIDER = "lib/ai/providers/openai.ts";
 const AI_DIALOG = "components/collections/AiCollectionAssistDialog.tsx";
 const ACTION_CELL = "app/[workspaceId]/actions/_components/CollectionActionCell.tsx";
 const COLLECTIONS_PAGE = "app/[workspaceId]/collections/page.tsx";
+const COLLECTIONS_PORTFOLIO_CELL =
+  "app/[workspaceId]/collections/_components/CollectionsPortfolioActionCell.tsx";
 const COLLECTIONS_TABLE = "app/[workspaceId]/collections/_components/CollectionsTable.tsx";
 const LOAD_CONTEXT = "lib/ai/loadAuthoritativeCollectionContext.ts";
 
@@ -69,10 +71,11 @@ describe("AI integration contracts", () => {
   });
 
   it("V — Collections exposes same shared component", () => {
-    const pageSrc = readFileSync(COLLECTIONS_PAGE, "utf8");
+    const portfolioCellSrc = readFileSync(COLLECTIONS_PORTFOLIO_CELL, "utf8");
     const tableSrc = readFileSync(COLLECTIONS_TABLE, "utf8");
-    assert.match(pageSrc, /AiCollectionAssistDialog/);
+    assert.match(portfolioCellSrc, /AiCollectionAssistDialog/);
     assert.match(tableSrc, /AiCollectionAssistDialog/);
+    assert.match(readFileSync(COLLECTIONS_PAGE, "utf8"), /CollectionsPortfolioActionCell/);
   });
 
   it("E — authoritative loader does not select notes for AI context", () => {

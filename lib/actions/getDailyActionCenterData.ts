@@ -1,4 +1,5 @@
 import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
+import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
 import { resolveCustomerFacingBusinessName } from "@/lib/branding/resolveCustomerFacingBusinessName";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
@@ -269,12 +270,15 @@ export async function getDailyActionCenterData(
   );
   const reminderActionsByInvoiceId = buildReminderActionsByInvoiceId(eligibleReminders);
 
+  const evaluationDate = resolveWorkspaceEvaluationDate(new Date(), workspaceTimeZone);
+
   const { summary, collectionActions } = buildDailyActionCategories({
     invoices,
     reminderEligibleInvoiceIds,
     sentReminderDatesByInvoiceId,
     defaultCurrency,
     sentInvoiceCount,
+    evaluationDate,
   });
 
   const collectionActionsWithExecution = attachExecutionMetadata(
@@ -289,6 +293,7 @@ export async function getDailyActionCenterData(
     eligibleReminders,
     businessName,
     workspaceTimeZone,
+    evaluationDate,
   };
 }
 

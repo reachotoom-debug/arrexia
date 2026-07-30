@@ -7,7 +7,9 @@ import {
   computeMilestoneCrossDate,
   computeRequiringAttentionTotal,
   resolveLatestMilestone,
+  shouldShowAgingMilestoneAction,
 } from "@/lib/actions/collectionActivity";
+import { addCalendarDays } from "@/lib/reminders/ruleTrigger";
 import type { ChaseableInvoiceRow } from "@/lib/actions/types";
 
 const DUE = "2026-07-01";
@@ -40,13 +42,22 @@ function build(params: {
   reminderEligible?: Set<string>;
   sentByInvoice?: Map<string, string[]>;
   defaultCurrency?: string;
+  evaluationDate?: string;
 }) {
+  const primary = params.invoices[0];
+  const evaluationDate =
+    params.evaluationDate ??
+    (primary?.dueDate && primary.isOverdue && primary.overdueDays > 0
+      ? addCalendarDays(primary.dueDate, primary.overdueDays)!
+      : computeMilestoneCrossDate(DUE, 7)!);
+
   return buildDailyActionCategories({
     invoices: params.invoices,
     reminderEligibleInvoiceIds: params.reminderEligible ?? new Set(),
     sentReminderDatesByInvoiceId: params.sentByInvoice ?? new Map(),
     defaultCurrency: params.defaultCurrency ?? "USD",
     sentInvoiceCount: 1,
+    evaluationDate,
   });
 }
 
@@ -141,21 +152,19 @@ describe("buildDailyActionCategories (R3B)", () => {
     assert.equal(milestone.milestoneDays, 7);
   });
 
-  it("G — day 14 with no post-day-7 reminder → 7-day action still present", () => {
+  it("G — day 14 is not a milestone action day (7-day milestone does not linger)", () => {
     const result = build({
       invoices: [invoice({ id: "inv-g", overdueDays: 14 })],
+      evaluationDate: addCalendarDays(DUE, 14)!,
     });
 
-    const milestone = result.collectionActions[0]?.reasons.find(
-      (r) => r.type === "aging_milestone"
-    );
-    assert.ok(milestone && milestone.type === "aging_milestone");
-    assert.equal(milestone.milestoneDays, 7);
+    assert.equal(result.collectionActions.length, 0);
   });
 
-  it("H — day 15 → 15-day milestone", () => {
+  it("H — day 15 → 15-day milestone on milestone cross date", () => {
     const result = build({
       invoices: [invoice({ id: "inv-h", overdueDays: 15 })],
+      evaluationDate: computeMilestoneCrossDate(DUE, 15)!,
     });
 
     const milestone = result.collectionActions[0]?.reasons.find(
@@ -165,52 +174,53 @@ describe("buildDailyActionCategories (R3B)", () => {
     assert.equal(milestone.milestoneDays, 15);
   });
 
-  it("I — day 32 with no post-day-30 activity → 30-day escalation still present", () => {
+  it("I — day 32 is not a milestone action day without a due-today trigger", () => {
     const result = build({
       invoices: [invoice({ id: "inv-i", overdueDays: 32 })],
-    });
-
-    const milestone = result.collectionActions[0]?.reasons.find(
-      (r) => r.type === "aging_milestone"
-    );
-    assert.ok(milestone && milestone.type === "aging_milestone");
-    assert.equal(milestone.milestoneDays, 30);
-  });
-
-  it("J — successful reminder day 31 suppresses day-32 30-day milestone", () => {
-    const sentDay31 = computeMilestoneCrossDate(DUE, 31)!;
-    const result = build({
-      invoices: [invoice({ id: "inv-j", overdueDays: 32 })],
-      sentByInvoice: sentMap("inv-j", [sentDay31]),
+      evaluationDate: addCalendarDays(DUE, 32)!,
     });
 
     assert.equal(result.collectionActions.length, 0);
   });
 
-  it("K — failed reminder after milestone does not suppress (sent map excludes failed)", () => {
+  it("J — successful reminder on milestone cross date suppresses that milestone", () => {
+    const cross30 = computeMilestoneCrossDate(DUE, 30)!;
+    const result = build({
+      invoices: [invoice({ id: "inv-j", overdueDays: 30 })],
+      evaluationDate: cross30,
+      sentByInvoice: sentMap("inv-j", [cross30]),
+    });
+
+    assert.equal(result.collectionActions.length, 0);
+  });
+
+  it("K — day 32 without reminder is not actionable from aging alone", () => {
     const result = build({
       invoices: [invoice({ id: "inv-k", overdueDays: 32 })],
+      evaluationDate: addCalendarDays(DUE, 32)!,
       sentByInvoice: new Map(),
     });
 
-    assert.equal(result.collectionActions.length, 1);
+    assert.equal(result.collectionActions.length, 0);
   });
 
-  it("L — skipped reminder does not suppress", () => {
+  it("L — skipped reminder does not create perpetual aging action", () => {
     const result = build({
       invoices: [invoice({ id: "inv-l", overdueDays: 32 })],
+      evaluationDate: addCalendarDays(DUE, 32)!,
       sentByInvoice: new Map(),
     });
 
-    assert.equal(result.collectionActions.length, 1);
+    assert.equal(result.collectionActions.length, 0);
   });
 
-  it("M — partial payment / outstanding still > 0 does not suppress milestone", () => {
+  it("M — partial payment does not create aging action off milestone day", () => {
     const result = build({
       invoices: [invoice({ id: "inv-m", overdueDays: 32, outstanding: 500 })],
+      evaluationDate: addCalendarDays(DUE, 32)!,
     });
 
-    assert.equal(result.collectionActions.length, 1);
+    assert.equal(result.collectionActions.length, 0);
   });
 
   it("N — outstanding = 0 excluded", () => {
@@ -221,10 +231,12 @@ describe("buildDailyActionCategories (R3B)", () => {
     assert.equal(result.collectionActions.length, 0);
   });
 
-  it("O — day 65 with reminder sent at day 35 → 60-day escalation appears", () => {
+  it("O — day 60 milestone appears on cross date even after earlier reminder", () => {
     const sentDay35 = computeMilestoneCrossDate(DUE, 35)!;
+    const cross60 = computeMilestoneCrossDate(DUE, 60)!;
     const result = build({
-      invoices: [invoice({ id: "inv-o", overdueDays: 65 })],
+      invoices: [invoice({ id: "inv-o", overdueDays: 60 })],
+      evaluationDate: cross60,
       sentByInvoice: sentMap("inv-o", [sentDay35]),
     });
 
@@ -271,33 +283,35 @@ describe("buildDailyActionCategories (R3B)", () => {
   });
 
   it("summary — high-risk customers counts unique clients not invoices", () => {
+    const evalDay = addCalendarDays(DUE, 3)!;
     const result = build({
       invoices: [
         invoice({
           id: "inv-1",
           clientId: "client-a",
-          overdueDays: 10,
+          overdueDays: 3,
           riskLevel: "high",
         }),
         invoice({
           id: "inv-2",
           clientId: "client-a",
-          overdueDays: 12,
+          overdueDays: 3,
           riskLevel: "high",
         }),
         invoice({
           id: "inv-3",
           clientId: "client-b",
-          overdueDays: 8,
+          overdueDays: 3,
           riskLevel: "high",
         }),
         invoice({
           id: "inv-4",
           clientId: "client-c",
-          overdueDays: 5,
+          overdueDays: 3,
           riskLevel: "low",
         }),
       ],
+      evaluationDate: evalDay,
     });
 
     assert.equal(result.summary.highRiskCustomerCount, 2);
@@ -305,6 +319,7 @@ describe("buildDailyActionCategories (R3B)", () => {
   });
 
   it("summary — reminders ready counts unique invoices with reminder_due", () => {
+    const evaluationDate = computeMilestoneCrossDate(DUE, 15)!;
     const result = build({
       invoices: [
         invoice({ id: "inv-rem-1", isOverdue: false, overdueDays: 0, riskLevel: null }),
@@ -312,6 +327,7 @@ describe("buildDailyActionCategories (R3B)", () => {
         invoice({ id: "inv-mile", overdueDays: 15 }),
       ],
       reminderEligible: new Set(["inv-rem-1", "inv-rem-2"]),
+      evaluationDate,
     });
 
     assert.equal(result.summary.remindersDueCount, 2);
@@ -408,7 +424,7 @@ describe("computeOutstandingByCurrency", () => {
 });
 
 describe("resolveRecommendedAction (Task 2)", () => {
-  it("maps reminder_due to scheduled reminder wording", async () => {
+  it("maps reminder_due to scheduled email wording", async () => {
     const { resolveRecommendedAction } = await import("@/lib/actions/resolveRecommendedAction");
 
     assert.equal(
@@ -417,11 +433,11 @@ describe("resolveRecommendedAction (Task 2)", () => {
         execution: { mode: "rule_bound", ruleId: "r1", templateId: null, scheduledDate: "2026-07-01", clientEmail: "a@b.com" },
         isHighRisk: false,
       }),
-      "Send scheduled reminder"
+      "Send scheduled email"
     );
   });
 
-  it("strengthens wording for high-risk reminder_due rows", async () => {
+  it("uses channel-neutral prioritize follow-up for high-risk reminder_due rows", async () => {
     const { resolveRecommendedAction } = await import("@/lib/actions/resolveRecommendedAction");
 
     assert.equal(
@@ -430,7 +446,7 @@ describe("resolveRecommendedAction (Task 2)", () => {
         execution: { mode: "rule_bound", ruleId: "r1", templateId: null, scheduledDate: "2026-07-01", clientEmail: "a@b.com" },
         isHighRisk: true,
       }),
-      "Prioritize scheduled reminder"
+      "Prioritize follow-up"
     );
   });
 
@@ -447,7 +463,7 @@ describe("resolveRecommendedAction (Task 2)", () => {
     );
   });
 
-  it("maps aging_milestone to follow-up now", async () => {
+  it("maps aging_milestone to follow up today", async () => {
     const { resolveRecommendedAction } = await import("@/lib/actions/resolveRecommendedAction");
 
     assert.equal(
@@ -456,7 +472,7 @@ describe("resolveRecommendedAction (Task 2)", () => {
         execution: { mode: "manual", clientEmail: "a@b.com" },
         isHighRisk: false,
       }),
-      "Follow up now"
+      "Follow up today"
     );
   });
 
@@ -505,7 +521,7 @@ describe("buildActionCenterGreeting (Task 2)", () => {
 });
 
 describe("Action Center UI contracts (Task 2)", () => {
-  it("CollectionActionCell preserves Send Reminder, WhatsApp, AI Assist, and View wiring", async () => {
+  it("CollectionActionCell preserves Email, WhatsApp, AI Assist, and View wiring", async () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync(
       "app/[workspaceId]/actions/_components/CollectionActionCell.tsx",
@@ -513,6 +529,7 @@ describe("Action Center UI contracts (Task 2)", () => {
     );
 
     assert.match(src, /SendReminderButton/);
+    assert.match(src, />\s*Email\s*</);
     assert.match(src, /WhatsAppCollectionLink/);
     assert.match(src, /AiCollectionAssistDialog/);
     assert.match(src, /View/);
@@ -533,10 +550,11 @@ describe("Action Center UI contracts (Task 2)", () => {
 
 describe("collection action sort priority (R3B)", () => {
   it("orders reminder due before milestone before newly overdue", () => {
+    const evaluationDate = computeMilestoneCrossDate(DUE, 15)!;
     const result = build({
       invoices: [
-        invoice({ id: "new-only", overdueDays: 3 }),
-        invoice({ id: "mile-only", overdueDays: 15 }),
+        invoice({ id: "new-only", dueDate: "2026-07-13", overdueDays: 3 }),
+        invoice({ id: "mile-only", dueDate: DUE, overdueDays: 15 }),
         invoice({
           id: "reminder-only",
           isOverdue: false,
@@ -546,6 +564,7 @@ describe("collection action sort priority (R3B)", () => {
         }),
       ],
       reminderEligible: new Set(["reminder-only"]),
+      evaluationDate,
     });
 
     assert.deepEqual(result.collectionActions.map((action) => action.id), [
@@ -666,5 +685,144 @@ describe("resolveCollectionActionExecution (R3C)", () => {
     assert.equal(execution.mode, "manual");
     assert.equal("ruleId" in execution, false);
     assert.equal("scheduledDate" in execution, false);
+  });
+});
+
+describe("Task 2/3 acceptance — Actions vs Collections eligibility (Part H)", () => {
+  const evaluationDate = addCalendarDays(DUE, 200)!;
+
+  it("200-day overdue invoice is NOT permanently actionable from 60-day milestone alone", () => {
+    const milestone = shouldShowAgingMilestoneAction({
+      isOverdue: true,
+      overdueDays: 200,
+      dueDate: DUE,
+      sentCalendarDates: [],
+      evaluationDate,
+    });
+
+    assert.equal(milestone, null);
+
+    const result = build({
+      invoices: [invoice({ id: "inv-old", overdueDays: 200 })],
+      evaluationDate,
+    });
+
+    assert.equal(result.collectionActions.length, 0);
+  });
+
+  it("exact aging milestone still appears on cross date", () => {
+    const cross60 = computeMilestoneCrossDate(DUE, 60)!;
+    const milestone = shouldShowAgingMilestoneAction({
+      isOverdue: true,
+      overdueDays: 60,
+      dueDate: DUE,
+      sentCalendarDates: [],
+      evaluationDate: cross60,
+    });
+
+    assert.equal(milestone, 60);
+  });
+
+  it("reminder-due invoice still appears in Actions", () => {
+    const result = build({
+      invoices: [
+        invoice({
+          id: "inv-rem",
+          isOverdue: false,
+          overdueDays: 0,
+          riskLevel: null,
+          displayStatus: "sent",
+        }),
+      ],
+      reminderEligible: new Set(["inv-rem"]),
+      evaluationDate,
+    });
+
+    assert.equal(result.collectionActions.length, 1);
+    assert.ok(result.collectionActions[0]?.reasons.some((r) => r.type === "reminder_due"));
+  });
+
+  it("newly overdue invoice still appears in Actions", () => {
+    const evalNew = addCalendarDays(DUE, 2)!;
+    const result = build({
+      invoices: [invoice({ id: "inv-new", overdueDays: 2 })],
+      evaluationDate: evalNew,
+    });
+
+    assert.equal(result.collectionActions.length, 1);
+    assert.ok(result.collectionActions[0]?.reasons.some((r) => r.type === "newly_overdue"));
+  });
+
+  it("Actions and Collections are not equivalent — old overdue without today trigger", () => {
+    const portfolioOverdue = [
+      invoice({ id: "inv-a", overdueDays: 200 }),
+      invoice({ id: "inv-b", overdueDays: 100 }),
+      invoice({ id: "inv-c", overdueDays: 60 }),
+    ];
+
+    const actionsResult = build({
+      invoices: portfolioOverdue,
+      evaluationDate,
+    });
+
+    const collectibleOverdue = portfolioOverdue.filter(
+      (row) => row.isOverdue && row.outstanding > 0 && isChaseableInvoice(row)
+    );
+
+    assert.equal(collectibleOverdue.length, 3);
+    assert.equal(actionsResult.collectionActions.length, 0);
+    assert.notEqual(actionsResult.summary.actionsTodayCount, collectibleOverdue.length);
+  });
+
+  it("pagination slices 10 rows per page while summary uses full actionable set", async () => {
+    const { DAILY_ACTION_CENTER_PAGE_SIZE } = await import("@/lib/actions/types");
+    const evalDay = addCalendarDays(DUE, 3)!;
+    const invoices = Array.from({ length: 25 }, (_, index) =>
+      invoice({ id: `inv-page-${index}`, overdueDays: 3 })
+    );
+
+    const full = build({ invoices, evaluationDate: evalDay });
+    assert.equal(full.summary.actionsTodayCount, 25);
+    assert.equal(DAILY_ACTION_CENTER_PAGE_SIZE, 10);
+
+    const page1 = full.collectionActions.slice(0, 10);
+    const page2 = full.collectionActions.slice(10, 20);
+    const page3 = full.collectionActions.slice(20, 30);
+
+    assert.equal(page1.length, 10);
+    assert.equal(page2.length, 10);
+    assert.equal(page3.length, 5);
+    assert.equal(full.summary.remindersDueCount, full.collectionActions.filter((row) =>
+      row.reasons.some((r) => r.type === "reminder_due")
+    ).length);
+    assert.equal(
+      full.summary.highRiskCustomerCount,
+      new Set(
+        full.collectionActions.filter((row) => row.isHighRisk).map((row) => row.clientId)
+      ).size
+    );
+  });
+
+  it("priority ordering preserved after eligibility correction", () => {
+    const evaluationDate = computeMilestoneCrossDate(DUE, 15)!;
+    const result = build({
+      invoices: [
+        invoice({ id: "low", dueDate: "2026-07-13", overdueDays: 3, riskLevel: "low", outstanding: 100 }),
+        invoice({ id: "high", dueDate: "2026-07-13", overdueDays: 3, riskLevel: "high", outstanding: 100 }),
+        invoice({ id: "mile", dueDate: DUE, overdueDays: 15, riskLevel: "low", outstanding: 500 }),
+        invoice({
+          id: "rem",
+          isOverdue: false,
+          overdueDays: 0,
+          riskLevel: null,
+          displayStatus: "sent",
+          outstanding: 200,
+        }),
+      ],
+      reminderEligible: new Set(["rem"]),
+      evaluationDate,
+    });
+
+    assert.deepEqual(result.collectionActions.map((row) => row.id), ["rem", "mile", "high", "low"]);
   });
 });

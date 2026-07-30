@@ -81,4 +81,14 @@ export type DailyActionCenterData = {
   eligibleReminders: EligibleReminderCandidate[];
   businessName: string;
   workspaceTimeZone: string;
+  evaluationDate: string;
 };
+
+export type DailyActionCenterPagination = {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+};
+
+export const DAILY_ACTION_CENTER_PAGE_SIZE = 10 as const;
