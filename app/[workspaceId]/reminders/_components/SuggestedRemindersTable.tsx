@@ -19,6 +19,7 @@ import {
   TABLE_TH_RIGHT,
 } from "@/components/table/tableShell";
 import { EntityCard } from "@/components/ui/EntityCard";
+import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 
 type SuggestedRow = {
   id: string;
@@ -41,6 +42,10 @@ type SuggestedRow = {
   rule_id: string;
   rule_name: string;
   rule_label: string;
+  trigger_type: string;
+  offset_days: number;
+  reason_label: string;
+  human_rule_label: string;
   template_id: string | null;
   scheduled_date: string;
 };
@@ -196,9 +201,8 @@ export function SuggestedRemindersTable({
               }
               meta={
                 <div className="space-y-1 text-xs text-muted-foreground">
-                  <div className="font-medium text-slate-700">
-                    {inv.rule_name} · {inv.rule_label}
-                  </div>
+                  <div className="font-medium text-slate-700">{inv.human_rule_label}</div>
+                  <div className="text-xs text-slate-500">{inv.reason_label}</div>
                   <div>
                     Due{" "}
                     {inv.due_date
@@ -231,6 +235,7 @@ export function SuggestedRemindersTable({
                   ruleId={inv.rule_id}
                   templateId={inv.template_id}
                   scheduledDate={inv.scheduled_date}
+                  showEmailLabel
                 />
               }
             />
@@ -246,10 +251,10 @@ export function SuggestedRemindersTable({
       <table className={TABLE_BASE}>
         <thead className="bg-slate-50 border-b border-slate-200">
           <tr>
-            <th className={`${TABLE_TH} whitespace-nowrap`}>Invoice #</th>
+            <th className={`${TABLE_TH} whitespace-nowrap`}>Invoice</th>
             <th className={`${TABLE_CELL_TEXT_COL} ${TABLE_TH}`}>
               <SortableHeader
-                label="CLIENT"
+                label="Client"
                 sortKey="client_name"
                 workspaceId={workspaceId}
                 currentParams={currentParams}
@@ -258,7 +263,7 @@ export function SuggestedRemindersTable({
             </th>
             <th className={`hidden md:table-cell ${TABLE_TH}`}>
               <SortableHeader
-                label="DUE DATE"
+                label="Due date"
                 sortKey="due_date"
                 workspaceId={workspaceId}
                 currentParams={currentParams}
@@ -267,7 +272,7 @@ export function SuggestedRemindersTable({
             </th>
             <th className={`hidden md:table-cell ${TABLE_TH}`}>
               <SortableHeader
-                label="DAYS OVERDUE"
+                label="Days overdue"
                 sortKey="days_overdue"
                 workspaceId={workspaceId}
                 currentParams={currentParams}
@@ -276,23 +281,15 @@ export function SuggestedRemindersTable({
             </th>
             <th className={TABLE_TH_RIGHT}>
               <SortableHeader
-                label="OUTSTANDING"
+                label="Outstanding"
                 sortKey="outstanding"
                 workspaceId={workspaceId}
                 currentParams={currentParams}
                 align="right"
               />
             </th>
-            <th className={`${TABLE_TH} pl-4`}>Status</th>
-            <th className={`hidden lg:table-cell ${TABLE_TH}`}>
-              <SortableHeader
-                label="RULE"
-                sortKey="rule_name"
-                workspaceId={workspaceId}
-                currentParams={currentParams}
-                align="left"
-              />
-            </th>
+            <th className={`hidden lg:table-cell ${TABLE_TH}`}>Rule</th>
+            <th className={`hidden xl:table-cell ${TABLE_TH}`}>Reason</th>
             <th className={TABLE_TH_RIGHT}>Actions</th>
           </tr>
         </thead>
@@ -336,13 +333,7 @@ export function SuggestedRemindersTable({
 
                 {/* DUE DATE – left aligned */}
                 <td className={`hidden md:table-cell ${TABLE_TD} text-sm text-slate-700`}>
-                  {inv.due_date
-                    ? new Date(inv.due_date).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })
-                    : "—"}
+                  {inv.due_date ? formatDateOnlyField(inv.due_date) : "—"}
                 </td>
 
                 {/* DAYS OVERDUE – left aligned */}
@@ -368,17 +359,14 @@ export function SuggestedRemindersTable({
                   {formatMoney(outstanding, currency)}
                 </td>
 
-                {/* STATUS – left aligned with a soft pill */}
-                <td className={`${TABLE_TD} whitespace-nowrap pl-4`}>
-                  <StatusBadge type="invoice" status={inv.status ?? "sent"} />
-                </td>
-
                 <td className={`hidden lg:table-cell ${TABLE_TD} text-sm text-slate-700`}>
-                  <div className="font-medium text-slate-900">{inv.rule_name}</div>
-                  <div className="text-xs text-slate-500">{inv.rule_label}</div>
+                  <div className="font-medium text-slate-900">{inv.human_rule_label}</div>
                 </td>
 
-                {/* ACTIONS – center aligned for icon */}
+                <td className={`hidden xl:table-cell ${TABLE_TD} text-sm text-slate-600`}>
+                  {inv.reason_label}
+                </td>
+
                 <td className={`${TABLE_TD_RIGHT} whitespace-nowrap`}>
                   <div className={TABLE_ACTIONS_ROW}>
                     <SendReminderButton
@@ -390,6 +378,7 @@ export function SuggestedRemindersTable({
                       ruleId={inv.rule_id}
                       templateId={inv.template_id}
                       scheduledDate={inv.scheduled_date}
+                      showEmailLabel
                     />
                   </div>
                 </td>

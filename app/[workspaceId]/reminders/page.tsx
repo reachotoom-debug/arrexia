@@ -1,10 +1,20 @@
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
+import { loadAutomationGateForWorkspace } from "@/lib/reminders/automationGate";
+import {
+  buildAutomationStatusPresentation,
+  computeHistoryRemindersSummary,
+  computeReadyRemindersSummary,
+  formatHumanReminderRuleLabel,
+  formatReminderActionReason,
+} from "@/lib/reminders/remindersCenterPresentation";
 import { RemindersTabs } from "./_components/RemindersTabs";
 import { RemindersSearchInput } from "./_components/RemindersSearchInput";
 import { SuggestedRemindersTable } from "./_components/SuggestedRemindersTable";
 import { ReminderNotesCell } from "./_components/ReminderNotesCell";
+import { AutomationStatusPanel } from "./_components/AutomationStatusPanel";
+import { RemindersMetricCards } from "./_components/RemindersMetricCards";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PaginationBar } from "@/components/PaginationBar";
 import { EmptyState } from "@/components/ui/state";
@@ -52,6 +62,10 @@ type SuggestedRow = {
   rule_id: string;
   rule_name: string;
   rule_label: string;
+  trigger_type: string;
+  offset_days: number;
+  reason_label: string;
+  human_rule_label: string;
   template_id: string | null;
   scheduled_date: string;
 };
@@ -66,6 +80,57 @@ export default async function RemindersPage({
   const supabase = await supabaseServer();
   const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
   const resolvedSearchParams = (await searchParams) || {};
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
+
+  const [
+    eligibleCandidates,
+    automationGate,
+    settingsResult,
+    rulesResult,
+    historyMetricsResult,
+  ] = await Promise.all([
+    getEligibleReminders(workspaceId),
+    loadAutomationGateForWorkspace(supabase, workspaceId),
+    supabase
+      .from("settings")
+      .select("default_currency, auto_send_reminders")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle(),
+    supabase
+      .from("reminder_rules")
+      .select("is_enabled")
+      .eq("workspace_id", workspaceId),
+    supabase
+      .from("reminders")
+      .select("status, sent_at, created_at")
+      .eq("workspace_id", workspaceId)
+      .gte("sent_at", thirtyDaysAgo.toISOString())
+      .in("status", ["sent", "failed"]),
+  ]);
+
+  const defaultCurrency = settingsResult.data?.default_currency ?? "USD";
+  const settingsLoaded =
+    !settingsResult.error &&
+    !(
+      automationGate.allowed === false &&
+      automationGate.skipReason === "settings_query_failed"
+    );
+
+  const automationStatus = buildAutomationStatusPresentation({
+    workspaceId,
+    automationAllowed: automationGate.allowed,
+    skipReason: automationGate.allowed ? undefined : automationGate.skipReason,
+    rules: rulesResult.data ?? [],
+    settingsLoaded,
+  });
+
+  const readySummary = computeReadyRemindersSummary(eligibleCandidates, defaultCurrency);
+  const historySummary = computeHistoryRemindersSummary({
+    rows: historyMetricsResult.data ?? [],
+    workspaceTimeZone: workspaceTimeZone ?? "UTC",
+  });
 
   const searchQuery = (
     (Array.isArray(resolvedSearchParams.search)
@@ -100,8 +165,6 @@ export default async function RemindersPage({
     ? resolvedSearchParams.dir[0]
     : resolvedSearchParams.dir) as "asc" | "desc" | undefined;
 
-  const eligibleCandidates = await getEligibleReminders(workspaceId);
-
   const suggestedReminders: SuggestedRow[] = eligibleCandidates.map((c) => ({
     id: c.id,
     invoice_id: c.invoiceId,
@@ -126,6 +189,19 @@ export default async function RemindersPage({
     rule_id: c.ruleId,
     rule_name: c.ruleName,
     rule_label: c.ruleLabel,
+    trigger_type: c.triggerType,
+    offset_days: c.offsetDays,
+    human_rule_label: formatHumanReminderRuleLabel({
+      triggerType: c.triggerType,
+      offsetDays: c.offsetDays,
+      ruleName: c.ruleName,
+    }),
+    reason_label: formatReminderActionReason({
+      triggerType: c.triggerType,
+      offsetDays: c.offsetDays,
+      daysFromDue: c.daysFromDueDate,
+      isOverdue: c.isOverdue,
+    }),
     template_id: c.templateId,
     scheduled_date: c.scheduledDate,
   }));
@@ -286,7 +362,24 @@ export default async function RemindersPage({
   );
 
   const suggestedContent = (
-    <div className="space-y-1.5 md:space-y-3">
+    <div className="space-y-4">
+      <RemindersMetricCards
+        ariaLabel="Ready to send summary"
+        metrics={[
+          { label: "Ready now", value: String(readySummary.readyCount) },
+          {
+            label: "Outstanding",
+            value: readySummary.outstandingLabel,
+            detail: readySummary.outstandingDetail,
+          },
+          {
+            label: "Customers",
+            value: String(readySummary.distinctCustomerCount),
+          },
+          { label: "Rules due", value: String(readySummary.distinctRuleCount) },
+        ]}
+      />
+
       <CommandBar>
         <CommandBarSearch>
           <RemindersSearchInput
@@ -298,10 +391,10 @@ export default async function RemindersPage({
 
       {!hasAnyEligible ? (
         <EmptyState
-          title="No reminders are due today"
-          message="Arrexia checks your enabled reminder rules and shows invoices that are due for contact today."
+          title="No reminders are ready right now"
+          message="Upcoming reminders will appear here when they become eligible."
           actionLabel="Manage reminder rules"
-          actionHref={`/${workspaceId}/settings`}
+          actionHref={`/${workspaceId}/settings?section=reminders`}
         />
       ) : (
         <>
@@ -325,12 +418,30 @@ export default async function RemindersPage({
   );
 
   const historyContent = (
-    <>
+    <div className="space-y-4">
+      <RemindersMetricCards
+        ariaLabel="Reminder history summary"
+        metrics={[
+          { label: "Sent today", value: String(historySummary.sentToday) },
+          { label: "Failed today", value: String(historySummary.failedToday) },
+          {
+            label: "Last 30 days",
+            value: String(historySummary.last30DaysCompleted),
+            detail: "Completed send attempts",
+          },
+          {
+            label: "Success rate",
+            value: historySummary.successRateLabel,
+            detail: "Sent / completed attempts",
+          },
+        ]}
+      />
+
       {!hasHistory ? (
         <EmptyState
-          title="No reminders sent yet"
-          message="When you send reminders, they'll appear here."
-          actionLabel="View suggested"
+          title="No reminder activity yet"
+          message="When reminders are sent, they will appear here with delivery status and details."
+          actionLabel="View ready to send"
           actionHref={`/${workspaceId}/reminders`}
         />
       ) : (
@@ -431,7 +542,7 @@ export default async function RemindersPage({
         queryParams={resolvedSearchParams}
         pageParamKey="historyPage"
       />
-    </>
+    </div>
   );
 
   return (
@@ -439,9 +550,11 @@ export default async function RemindersPage({
       <CommandBar>
         <PageHeader
           title="Reminders"
-          description="Suggested follow-ups and history for invoice reminder emails."
+          description="Manage scheduled payment reminders, review what is ready, and track delivery history."
         />
       </CommandBar>
+
+      <AutomationStatusPanel status={automationStatus} />
 
       <RemindersTabs
         defaultValue="suggested"

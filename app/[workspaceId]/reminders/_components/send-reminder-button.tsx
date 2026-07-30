@@ -17,6 +17,8 @@ type SendReminderButtonProps = {
   templateId?: string | null;
   ruleId?: string | null;
   scheduledDate?: string | null;
+  /** When true, shows visible "Email" label beside the send icon. */
+  showEmailLabel?: boolean;
 };
 
 type ButtonStatus = "idle" | "loading" | "sent" | "skipped";
@@ -30,6 +32,7 @@ export function SendReminderButton({
   templateId,
   ruleId,
   scheduledDate,
+  showEmailLabel = false,
 }: SendReminderButtonProps) {
   const [status, setStatus] = useState<ButtonStatus>("idle");
   const [skipReason, setSkipReason] = useState<string | null>(null);
@@ -125,7 +128,7 @@ export function SendReminderButton({
   };
 
   // Determine tooltip text based on status
-  let tooltipText = "Send reminder";
+  let tooltipText = showEmailLabel ? "Email reminder" : "Send reminder";
   if (!clientEmail) {
     tooltipText = "Client email missing";
   } else if (isLoading) {
@@ -140,28 +143,39 @@ export function SendReminderButton({
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size={status === "sent" ? "sm" : "icon"}
-            onClick={handleClick}
-            disabled={isDisabled}
-            aria-label="Send reminder"
-            className={status === "sent" ? "h-8 px-2" : "h-8 w-8"}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : status === "sent" ? (
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="text-xs text-emerald-600 font-medium">Sent</span>
-              </div>
-            ) : status === "skipped" ? (
-              <Send className="h-4 w-4 text-slate-400" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
+          <div className={showEmailLabel ? "inline-flex items-center gap-1.5" : undefined}>
+            <Button
+              type="button"
+              variant="ghost"
+              size={status === "sent" ? "sm" : showEmailLabel ? "sm" : "icon"}
+              onClick={handleClick}
+              disabled={isDisabled}
+              aria-label={showEmailLabel ? "Email" : "Send reminder"}
+              className={
+                status === "sent"
+                  ? "h-8 px-2"
+                  : showEmailLabel
+                    ? "h-8 px-2"
+                    : "h-8 w-8"
+              }
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : status === "sent" ? (
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="text-xs font-medium text-emerald-600">Sent</span>
+                </div>
+              ) : status === "skipped" ? (
+                <Send className="h-4 w-4 text-slate-400" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+            {showEmailLabel && status !== "sent" ? (
+              <span className="text-sm font-medium text-slate-800">Email</span>
+            ) : null}
+          </div>
         </TooltipTrigger>
         <TooltipContent>
           <p>{tooltipText}</p>

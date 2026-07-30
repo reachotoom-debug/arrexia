@@ -32,7 +32,7 @@ export function RemindersTabs({
             onClick={() => setActiveTab("suggested")}
             className={tabBtn(activeTab === "suggested")}
           >
-            Suggested reminders
+            Ready to Send
           </button>
           <button
             type="button"

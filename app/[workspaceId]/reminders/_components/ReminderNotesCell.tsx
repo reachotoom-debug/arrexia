@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { normalizeReminderFailureReason } from "@/lib/reminders/remindersCenterPresentation";
 
 interface ReminderNotesCellProps {
   body: string | null;
@@ -22,8 +23,7 @@ export function ReminderNotesCell({ body, error, status }: ReminderNotesCellProp
 
   // For failed status, show error prominently, then body preview
   if (status === "failed" && errorMessage) {
-    // Clean error message (remove stack traces, keep only human-readable part)
-    const cleanError = errorMessage.split('\n')[0].trim();
+    const cleanError = normalizeReminderFailureReason(errorMessage);
     const truncatedError = cleanError.length > 120 ? cleanError.substring(0, 120) + "..." : cleanError;
     const errorNeedsTruncation = cleanError.length > 120;
     const bodyNeedsTruncation = bodyContent && bodyContent.length > 120;
