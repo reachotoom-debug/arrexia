@@ -1,4 +1,10 @@
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
+import {
+  buildCollectionMessageFooterLines,
+  COLLECTION_MESSAGE_ALREADY_PAID_DISCLAIMER,
+  COLLECTION_MESSAGE_CTA,
+  formatCollectionMessageStatusLine,
+} from "@/lib/collections/collectionMessageFormat";
 import { formatMoney } from "@/lib/utils/format-money";
 
 export type CollectionWhatsAppMessageInput = {
@@ -9,6 +15,8 @@ export type CollectionWhatsAppMessageInput = {
   currency: string | null;
   dueDate: string | null;
   daysOverdue: number;
+  /** Workspace calendar date (YYYY-MM-DD) from server-side evaluation. Required when daysOverdue is 0. */
+  evaluationDate?: string;
 };
 
 export function buildCollectionWhatsAppMessage(input: CollectionWhatsAppMessageInput): string {
@@ -18,27 +26,25 @@ export function buildCollectionWhatsAppMessage(input: CollectionWhatsAppMessageI
   const currency = input.currency?.trim() || "USD";
   const outstandingFormatted = formatMoney(input.outstanding, currency);
   const dueDate = input.dueDate ? formatDateOnlyField(input.dueDate) : "—";
+  const statusLine = formatCollectionMessageStatusLine({
+    daysOverdue: input.daysOverdue,
+    dueDate: input.dueDate,
+    evaluationDate: input.evaluationDate,
+  });
 
   const lines = [
-    `Hi ${clientName},`,
+    `Hello ${clientName},`,
     "",
     `This is a payment reminder from ${businessName} regarding invoice ${invoiceNumber}.`,
     `Outstanding: ${outstandingFormatted}`,
     `Due date: ${dueDate}`,
+    statusLine,
+    "",
+    COLLECTION_MESSAGE_CTA,
+    COLLECTION_MESSAGE_ALREADY_PAID_DISCLAIMER,
+    "",
+    ...buildCollectionMessageFooterLines(businessName),
   ];
-
-  if (input.daysOverdue > 0) {
-    lines.push(`This invoice is ${input.daysOverdue} days overdue.`);
-  }
-
-  lines.push(
-    "",
-    "Please let us know once payment has been arranged.",
-    "",
-    "Thank you,",
-    businessName,
-    "Powered by Arrexia"
-  );
 
   return lines.join("\n");
 }

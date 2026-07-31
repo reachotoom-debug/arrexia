@@ -81,6 +81,8 @@ describe("AI integration contracts", () => {
   it("E — authoritative loader does not select notes for AI context", () => {
     const src = readFileSync(LOAD_CONTEXT, "utf8");
     assert.doesNotMatch(src, /notes/);
+    assert.match(src, /resolveWorkspaceEvaluationDate/);
+    assert.match(src, /evaluationDate/);
   });
 });
 

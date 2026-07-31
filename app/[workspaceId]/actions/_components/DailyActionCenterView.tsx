@@ -320,6 +320,7 @@ export function DailyActionCenterView({
                           currency={item.currency}
                           dueDate={item.dueDate}
                           daysOverdue={item.overdueDays}
+                          evaluationDate={data.evaluationDate}
                           execution={item.execution}
                         />
                       ) : null}

@@ -19,6 +19,7 @@ describe("buildCollectionMessageFacts", () => {
         display_status: "overdue",
       },
       businessName: "FlowCollect LLC",
+      evaluationDate: "2026-07-13",
     });
 
     assert.equal(facts.clientName, "Acme Corp");
@@ -28,6 +29,7 @@ describe("buildCollectionMessageFacts", () => {
     assert.equal(facts.businessName, "FlowCollect LLC");
     assert.equal(facts.daysOverdue, 12);
     assert.equal(facts.isOverdue, true);
+    assert.equal(facts.statusLine, "Status: 12 days overdue");
   });
 
   it("B — partially paid uses outstanding, not total", () => {
@@ -45,6 +47,7 @@ describe("buildCollectionMessageFacts", () => {
         display_status: "partially_paid",
       },
       businessName: "FlowCollect LLC",
+      evaluationDate: "2026-06-20",
     });
 
     assert.equal(facts.partiallyPaid, true);

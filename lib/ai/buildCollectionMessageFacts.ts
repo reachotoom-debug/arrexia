@@ -1,5 +1,6 @@
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 import { formatCurrency } from "@/lib/format/currency";
+import { formatCollectionMessageStatusLine } from "@/lib/collections/collectionMessageFormat";
 import type { CollectionMessageFacts } from "./types";
 
 type InvoiceFactSource = {
@@ -18,8 +19,9 @@ type InvoiceFactSource = {
 export function buildCollectionMessageFacts(params: {
   invoice: InvoiceFactSource;
   businessName: string;
+  evaluationDate: string;
 }): CollectionMessageFacts {
-  const { invoice, businessName } = params;
+  const { invoice, businessName, evaluationDate } = params;
   const currency = invoice.currency?.trim() || "USD";
   const outstanding = Number(invoice.outstanding ?? 0);
   const paid = Number(invoice.paid ?? 0);
@@ -41,6 +43,11 @@ export function buildCollectionMessageFacts(params: {
     daysOverdue,
     isOverdue: Boolean(invoice.is_overdue),
     partiallyPaid,
+    statusLine: formatCollectionMessageStatusLine({
+      daysOverdue,
+      dueDate,
+      evaluationDate,
+    }),
   };
 
   if (paid > 0) {

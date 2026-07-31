@@ -18,6 +18,7 @@ type CollectionActionCellProps = {
   currency: string | null;
   dueDate: string | null;
   daysOverdue: number;
+  evaluationDate: string;
   execution: CollectionActionExecution;
 };
 
@@ -33,6 +34,7 @@ export function CollectionActionCell({
   currency,
   dueDate,
   daysOverdue,
+  evaluationDate,
   execution,
 }: CollectionActionCellProps) {
   const viewLink = (
@@ -55,6 +57,7 @@ export function CollectionActionCell({
       currency={currency}
       dueDate={dueDate}
       daysOverdue={daysOverdue}
+      evaluationDate={evaluationDate}
       variant="link"
     />
   );

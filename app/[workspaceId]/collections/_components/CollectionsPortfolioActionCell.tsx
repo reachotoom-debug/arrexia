@@ -16,6 +16,7 @@ type CollectionsPortfolioActionCellProps = {
   currency: string | null;
   dueDate: string | null;
   daysOverdue: number;
+  evaluationDate: string;
 };
 
 export function CollectionsPortfolioActionCell({
@@ -30,6 +31,7 @@ export function CollectionsPortfolioActionCell({
   currency,
   dueDate,
   daysOverdue,
+  evaluationDate,
 }: CollectionsPortfolioActionCellProps) {
   return (
     <div className="flex min-w-[10.5rem] flex-col items-end gap-1">
@@ -50,6 +52,7 @@ export function CollectionsPortfolioActionCell({
           currency={currency}
           dueDate={dueDate}
           daysOverdue={daysOverdue}
+          evaluationDate={evaluationDate}
           variant="link"
         />
         <span className="hidden sm:inline text-slate-300" aria-hidden="true">

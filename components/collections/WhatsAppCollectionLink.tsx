@@ -15,6 +15,8 @@ type WhatsAppCollectionLinkProps = {
   currency: string | null;
   dueDate: string | null;
   daysOverdue: number;
+  /** Workspace calendar date (YYYY-MM-DD) from server-side evaluation. Required when daysOverdue is 0. */
+  evaluationDate?: string;
   variant?: "button" | "link";
 };
 
@@ -41,6 +43,7 @@ export function WhatsAppCollectionLink({
   currency,
   dueDate,
   daysOverdue,
+  evaluationDate,
   variant = "link",
 }: WhatsAppCollectionLinkProps) {
   const message = buildCollectionWhatsAppMessage({
@@ -51,6 +54,7 @@ export function WhatsAppCollectionLink({
     currency,
     dueDate,
     daysOverdue,
+    evaluationDate,
   });
   const url = buildWhatsAppClickToChatUrl({ phone, clientCountry, message });
   const isDisabled = !url;

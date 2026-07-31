@@ -45,6 +45,8 @@ import {
   shouldRecommendEscalation,
 } from "@/lib/collections/portfolioSummary";
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
+import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 
 const COLLECTIONS_PAGE_SIZE = 10;
 
@@ -69,7 +71,7 @@ async function getCollectionsData(
 ) {
   const supabase = await supabaseServer();
 
-  const [{ count: sentInvoiceCount }, settingsResult] = await Promise.all([
+  const [{ count: sentInvoiceCount }, settingsResult, workspaceTimeZone] = await Promise.all([
     supabase
       .from("invoices_view")
       .select("id", { count: "exact", head: true })
@@ -81,9 +83,11 @@ async function getCollectionsData(
       .select("default_currency")
       .eq("workspace_id", workspaceId)
       .maybeSingle(),
+    loadWorkspaceTimeZone(workspaceId),
   ]);
 
   const defaultCurrency = settingsResult.data?.default_currency ?? "USD";
+  const evaluationDate = resolveWorkspaceEvaluationDate(new Date(), workspaceTimeZone);
 
   let baseQuery = supabase
     .from("invoices_view")
@@ -223,6 +227,7 @@ async function getCollectionsData(
     page,
     pageSize,
     totalPages,
+    evaluationDate,
     summary: {
       invoicesInView: totalCount,
       outstandingByCurrency,
@@ -296,7 +301,8 @@ export default async function CollectionsPage({
     );
   }
 
-  const { rows: invoices, count, page: currentPage, totalPages, summary } = collectionsData;
+  const { rows: invoices, count, page: currentPage, totalPages, summary, evaluationDate } =
+    collectionsData;
 
   const riskOptions = [
     { id: "high", label: "High risk" },
@@ -589,6 +595,7 @@ export default async function CollectionsPage({
                               currency={currency}
                               dueDate={inv.due_date ?? null}
                               daysOverdue={overdueDays}
+                              evaluationDate={evaluationDate}
                             />
                           </td>
                         </tr>

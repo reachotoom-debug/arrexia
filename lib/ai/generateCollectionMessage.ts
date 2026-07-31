@@ -42,6 +42,8 @@ async function requestValidatedMessage(
     message: providerResult.text,
     invoiceNumber: facts.invoiceNumber,
     outstandingFormatted: facts.outstandingFormatted,
+    dueDateFormatted: facts.dueDateFormatted,
+    statusLine: facts.statusLine,
   });
 
   if (!validation.ok) {

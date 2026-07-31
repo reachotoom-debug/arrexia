@@ -19,6 +19,7 @@ export type CollectionMessageFacts = {
   daysOverdue: number;
   isOverdue: boolean;
   partiallyPaid: boolean;
+  statusLine: string;
   amountPaidFormatted?: string;
 };
 

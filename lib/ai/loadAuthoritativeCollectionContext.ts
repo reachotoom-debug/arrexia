@@ -1,8 +1,10 @@
 import "server-only";
 
 import { loadCustomerFacingBusinessName } from "@/lib/branding/loadCustomerFacingBusinessName";
+import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
 import { isInvoiceFullyPaid } from "@/lib/invoices/invoiceFinancialState";
 import { isOperationalReceivableInvoice } from "@/lib/receivables/operationalEligibility";
+import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 import type { supabaseServer } from "@/lib/supabase/server";
 import { buildCollectionMessageFacts } from "./buildCollectionMessageFacts";
 import type { CollectionMessageFacts } from "./types";
@@ -74,9 +76,11 @@ export async function loadAuthoritativeCollectionContext(params: {
   }
 
   const businessName = await loadCustomerFacingBusinessName(supabase, workspaceId);
+  const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
+  const evaluationDate = resolveWorkspaceEvaluationDate(new Date(), workspaceTimeZone);
 
   return {
     ok: true,
-    facts: buildCollectionMessageFacts({ invoice, businessName }),
+    facts: buildCollectionMessageFacts({ invoice, businessName, evaluationDate }),
   };
 }
