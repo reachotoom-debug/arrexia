@@ -5,6 +5,7 @@ import {
   buildAutomationStatusPresentation,
   computeHistoryRemindersSummary,
   computeReadyRemindersSummary,
+  formatAutomationRuleCountLabel,
   formatHumanReminderRuleLabel,
   formatReminderActionReason,
   normalizeReminderFailureReason,
@@ -121,7 +122,7 @@ describe("Reminders Automation Center presentation (Task 4)", () => {
     assert.match(summary.outstandingDetail ?? "", /currency/i);
   });
 
-  it("automation status counts active and disabled rules", () => {
+  it("automation status counts active and disabled rules when enabled", () => {
     const status = buildAutomationStatusPresentation({
       workspaceId: "ws-1",
       automationAllowed: true,
@@ -137,6 +138,44 @@ describe("Reminders Automation Center presentation (Task 4)", () => {
     assert.equal(status.activeRules, 2);
     assert.equal(status.disabledRules, 1);
     assert.match(status.statusDetail, /enabled/i);
+    assert.equal(status.statusSecondaryDetail, undefined);
+  });
+
+  it("disabled automation uses reassuring manual-send copy", () => {
+    const status = buildAutomationStatusPresentation({
+      workspaceId: "ws-1",
+      automationAllowed: false,
+      skipReason: "automation_disabled",
+      rules: [{ is_enabled: true }],
+      settingsLoaded: true,
+    });
+
+    assert.equal(status.statusLabel, "Disabled");
+    assert.equal(status.statusDetail, "Automation is currently disabled.");
+    assert.equal(
+      status.statusSecondaryDetail,
+      "You can still send eligible reminders manually."
+    );
+  });
+
+  it("rule count labels handle singular, plural, and zero", () => {
+    assert.equal(formatAutomationRuleCountLabel(0, "active"), "0 active rules");
+    assert.equal(formatAutomationRuleCountLabel(1, "active"), "1 active rule");
+    assert.equal(formatAutomationRuleCountLabel(2, "active"), "2 active rules");
+    assert.equal(formatAutomationRuleCountLabel(0, "disabled"), "0 disabled rules");
+    assert.equal(formatAutomationRuleCountLabel(1, "disabled"), "1 disabled rule");
+    assert.equal(formatAutomationRuleCountLabel(2, "disabled"), "2 disabled rules");
+  });
+
+  it("Automation Status panel renders rule count chips", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(
+      "app/[workspaceId]/reminders/_components/AutomationStatusPanel.tsx",
+      "utf8"
+    );
+    assert.match(src, /formatAutomationRuleCountLabel/);
+    assert.match(src, /bg-emerald-50 text-emerald-800 ring-emerald-200/);
+    assert.match(src, /bg-slate-100 text-slate-700 ring-slate-200/);
   });
 
   it("history summary uses workspace timezone for today metrics", () => {

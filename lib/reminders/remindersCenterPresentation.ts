@@ -38,11 +38,20 @@ export type HistoryRemindersSummary = {
 export type AutomationStatusPresentation = {
   statusLabel: "Enabled" | "Disabled" | "Unknown";
   statusDetail: string;
+  statusSecondaryDetail?: string;
   activeRules: number;
   disabledRules: number;
   scheduleLabel: string | null;
   settingsHref: string;
 };
+
+export function formatAutomationRuleCountLabel(
+  count: number,
+  kind: "active" | "disabled"
+): string {
+  const noun = count === 1 ? "rule" : "rules";
+  return `${count} ${kind} ${noun}`;
+}
 
 export function formatHumanReminderRuleLabel(params: {
   triggerType: string;
@@ -200,14 +209,21 @@ export function buildAutomationStatusPresentation(params: {
     };
   }
 
-  const detail =
-    skipReason != null
-      ? automationGateSkipMessage(skipReason)
-      : "Automatic reminders are disabled for this workspace.";
+  if (skipReason === "automation_disabled" || skipReason == null) {
+    return {
+      statusLabel: "Disabled",
+      statusDetail: "Automation is currently disabled.",
+      statusSecondaryDetail: "You can still send eligible reminders manually.",
+      activeRules,
+      disabledRules,
+      scheduleLabel: null,
+      settingsHref: `/${workspaceId}/settings?section=reminders`,
+    };
+  }
 
   return {
     statusLabel: "Disabled",
-    statusDetail: detail,
+    statusDetail: automationGateSkipMessage(skipReason),
     activeRules,
     disabledRules,
     scheduleLabel: null,

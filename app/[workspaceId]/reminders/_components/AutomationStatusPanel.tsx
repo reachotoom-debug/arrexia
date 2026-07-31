@@ -1,5 +1,8 @@
 import Link from "next/link";
-import type { AutomationStatusPresentation } from "@/lib/reminders/remindersCenterPresentation";
+import {
+  formatAutomationRuleCountLabel,
+  type AutomationStatusPresentation,
+} from "@/lib/reminders/remindersCenterPresentation";
 
 type AutomationStatusPanelProps = {
   status: AutomationStatusPresentation;
@@ -28,18 +31,27 @@ export function AutomationStatusPanel({ status }: AutomationStatusPanelProps) {
               {status.statusLabel}
             </span>
           </div>
-          <p className="text-sm text-slate-600">{status.statusDetail}</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-            <span>
-              <span className="font-medium text-slate-700">{status.activeRules}</span> active
-              rule{status.activeRules === 1 ? "" : "s"}
+          <div className="space-y-0.5">
+            <p className="text-sm text-slate-600">{status.statusDetail}</p>
+            {status.statusSecondaryDetail ? (
+              <p className="text-sm text-slate-600">{status.statusSecondaryDetail}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span
+              className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset bg-emerald-50 text-emerald-800 ring-emerald-200"
+              aria-label={formatAutomationRuleCountLabel(status.activeRules, "active")}
+            >
+              {formatAutomationRuleCountLabel(status.activeRules, "active")}
             </span>
-            <span>
-              <span className="font-medium text-slate-700">{status.disabledRules}</span> disabled
-              rule{status.disabledRules === 1 ? "" : "s"}
+            <span
+              className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset bg-slate-100 text-slate-700 ring-slate-200"
+              aria-label={formatAutomationRuleCountLabel(status.disabledRules, "disabled")}
+            >
+              {formatAutomationRuleCountLabel(status.disabledRules, "disabled")}
             </span>
             {status.scheduleLabel ? (
-              <span>
+              <span className="text-slate-500">
                 Schedule:{" "}
                 <span className="font-medium text-slate-700">{status.scheduleLabel}</span>
               </span>
