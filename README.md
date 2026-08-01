@@ -75,9 +75,12 @@ Copy `.env.example` to `.env.local` and configure:
 
 ```bash
 RESEND_API_KEY=re_...
+ARREXIA_EMAIL_FROM=Arrexia <hello@arrexia.app>
 EMAIL_FROM=onboarding@resend.dev
 CRON_SECRET=your-random-secret
 ```
+
+Category Reply-To routing (`billing@`, `collections@`, `sales@`, `support@`, `hello@`) is centralized in `lib/email/identities.ts`. See [docs/email-operations.md](docs/email-operations.md).
 
 ### Local testing (before domain verification)
 
@@ -89,9 +92,18 @@ CRON_SECRET=your-random-secret
 
 ### Production (after verifying arrexia.app)
 
+**Deployment gate:** Do not deploy to production until `ARREXIA_EMAIL_FROM` or `EMAIL_FROM` is configured. Preferred:
+
+```bash
+ARREXIA_EMAIL_FROM=Arrexia <hello@arrexia.app>
+```
+
+Production sends fail closed without an explicit From identity. Do not rely on `noreply@arrexia.app` or personal inbox fallbacks.
+
 1. Verify `arrexia.app` in the Resend dashboard.
-2. Set `EMAIL_FROM=noreply@arrexia.app`.
-3. Optionally set workspace **From name** / **From email** in Settings → Email.
+2. Set `ARREXIA_EMAIL_FROM=Arrexia <hello@arrexia.app>` (or `EMAIL_FROM` for backward compatibility).
+3. Confirm all five inbound aliases exist and are tested before enabling category Reply-To routing (see [docs/email-operations.md](docs/email-operations.md)).
+4. Workspace **From name** / **From email** in Settings → Email apply to **Custom SMTP** reminders only; Resend uses the central application sender.
 
 SMTP remains available as an optional fallback when a workspace explicitly selects **Custom SMTP** in settings.
 

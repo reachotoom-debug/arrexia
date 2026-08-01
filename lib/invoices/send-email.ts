@@ -17,6 +17,7 @@ import { buildInvoiceBranding } from "@/app/[workspaceId]/invoices/_utils/brandi
 import { hydratePrintableInvoice } from "@/lib/invoices/hydratePrintableInvoice";
 
 import { sendEmail } from "@/lib/email/sendEmail";
+import { getEmailIdentity } from "@/lib/email/identities";
 import { formatCurrency } from "@/lib/format/currency";
 import { renderInvoiceEmail } from "@/lib/email/templates";
 
@@ -345,6 +346,7 @@ export async function sendInvoiceEmail(options: {
       subject,
       html: bodyHtml,
       text: bodyText,
+      replyTo: getEmailIdentity("invoice").replyTo,
       attachments: [
 
         {

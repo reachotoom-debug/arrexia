@@ -23,6 +23,7 @@ import {
 import { setWorkspacePlan } from "@/lib/billing/setWorkspacePlan";
 import { assertReminderRulesManageAllowed } from "@/lib/billing/reminderRulesAccess";
 import { sendEmail } from "@/lib/email/sendEmail";
+import { getEmailIdentity } from "@/lib/email/identities";
 import { renderTestEmail } from "@/lib/email/templates";
 import { buildInvoiceBranding } from "@/app/[workspaceId]/invoices/_utils/branding";
 
@@ -268,6 +269,7 @@ export async function testEmailSettings(
       subject,
       text,
       html,
+      replyTo: getEmailIdentity("support").replyTo,
     });
 
     if (!result.success) {

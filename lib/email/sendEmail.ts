@@ -7,6 +7,7 @@ import {
   normalizeEmailAddress,
   SANDBOX_FROM_EMAIL,
 } from "@/lib/email/constants";
+import { sanitizeReplyToAddress } from "@/lib/email/emailValidation";
 import {
   EMAIL_SENDER_MISCONFIGURED_MESSAGE,
   getEmailSender,
@@ -39,10 +40,12 @@ export type SendEmailInput = {
   subject: string;
   html?: string;
   text?: string;
-  /** Ignored for Resend — use EMAIL_FROM via getEmailSender(). Kept for SMTP callers. */
+  /** Ignored for Resend — use central identity config. Kept for SMTP callers. */
   from?: string;
   fromName?: string | null;
   fromEmail?: string | null;
+  /** Validated Reply-To address(es). Never derived from unvalidated visitor input here. */
+  replyTo?: string | string[];
   attachments?: EmailAttachment[];
 };
 
@@ -109,6 +112,27 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function resolveReplyToHeader(
+  replyTo: string | string[] | undefined
+): string[] | undefined {
+  if (!replyTo) {
+    return undefined;
+  }
+
+  const values = Array.isArray(replyTo) ? replyTo : [replyTo];
+  const sanitized: string[] = [];
+
+  for (const value of values) {
+    const address = sanitizeReplyToAddress(value);
+    if (!address) {
+      return undefined;
+    }
+    sanitized.push(address);
+  }
+
+  return sanitized.length > 0 ? sanitized : undefined;
+}
+
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
@@ -146,6 +170,14 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
 
   const timeoutMs = attachments?.length ? ATTACHMENT_EMAIL_TIMEOUT_MS : EMAIL_TIMEOUT_MS;
 
+  const replyTo = resolveReplyToHeader(input.replyTo);
+  if (input.replyTo && !replyTo) {
+    return {
+      success: false,
+      error: "Reply-To address is not configured correctly.",
+    };
+  }
+
   const sendPromise =
     input.html != null && input.html !== ""
       ? resend.emails.send({
@@ -154,6 +186,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
           subject: input.subject,
           html: input.html,
           ...(input.text ? { text: input.text } : {}),
+          ...(replyTo ? { replyTo } : {}),
           ...(attachments ? { attachments } : {}),
         })
       : resend.emails.send({
@@ -161,6 +194,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
           to,
           subject: input.subject,
           text: input.text ?? "",
+          ...(replyTo ? { replyTo } : {}),
           ...(attachments ? { attachments } : {}),
         });
 

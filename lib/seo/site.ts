@@ -1,4 +1,5 @@
 import { ARREXIA_BRAND } from "@/lib/brand/assets";
+import { PUBLIC_ARREXIA_EMAIL_ADDRESSES } from "@/lib/email/publicAddresses";
 
 /** Production canonical origin for SEO metadata, sitemap, and robots. */
 export const SEO_SITE_URL = "https://arrexia.app";
@@ -23,8 +24,8 @@ export const SEO_SITE = {
     x: "https://x.com/Otoomai",
     xHandle: "@Otoomai",
   },
-  contactEmail: "hello@arrexia.app",
-  supportEmail: "support@arrexia.app",
+  contactEmail: PUBLIC_ARREXIA_EMAIL_ADDRESSES.hello,
+  supportEmail: PUBLIC_ARREXIA_EMAIL_ADDRESSES.support,
   keywords: [
     "Cash Collection Operations",
     "Accounts Receivable Automation",

@@ -275,9 +275,14 @@ export function getPublicTeaserPriceDisplay(planId: PlanId): {
   };
 }
 
-export function getEnterpriseContactHref(): string {
-  return "/contact";
-}
+export {
+  buildMailtoHref,
+  getEnterpriseContactHref,
+  getGeneralContactMailtoHref,
+  getSupportContactMailtoHref,
+  PUBLIC_ARREXIA_EMAIL_ADDRESSES,
+  PUBLIC_CONTACT_CHANNELS,
+} from "@/lib/email/publicAddresses";
 
 export function trialHref(plan?: "starter" | "pro" | "business") {
   if (plan === "starter" || plan === "pro") {

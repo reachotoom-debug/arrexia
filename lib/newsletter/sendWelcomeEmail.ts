@@ -1,5 +1,6 @@
 import { renderNewsletterWelcomeEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/sendEmail";
+import { getEmailIdentity } from "@/lib/email/identities";
 import { NEWSLETTER_WELCOME_SUBJECT } from "@/lib/newsletter/constants";
 
 export async function sendNewsletterWelcomeEmail(to: string): Promise<void> {
@@ -10,6 +11,7 @@ export async function sendNewsletterWelcomeEmail(to: string): Promise<void> {
     subject: NEWSLETTER_WELCOME_SUBJECT,
     html,
     text,
+    replyTo: getEmailIdentity("newsletter").replyTo,
   });
 
   if (!result.success) {

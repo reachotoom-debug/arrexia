@@ -11,6 +11,7 @@ import {
 } from "@/lib/reminders/render";
 import { logAuditEvent } from "@/lib/audit/log";
 import { resolveEmailProvider, sendEmail } from "@/lib/email/sendEmail";
+import { getEmailIdentity } from "@/lib/email/identities";
 import { renderReminderEmail, sanitizeReminderMainMessage } from "@/lib/email/templates";
 import { formatCurrency } from "@/lib/format/currency";
 import { getWorkspaceOrganizationId } from "@/lib/workspaces/getWorkspaceOrganizationId";
@@ -763,6 +764,8 @@ export async function sendReminderForInvoice(
   const fromName = emailSettings?.from_name || settings?.from_name || "Arrexia";
   const toEmail = client.email!;
 
+  const collectionsReplyTo = getEmailIdentity("collections").replyTo;
+
   try {
     if (emailProvider === "resend") {
       const sendResult = await sendEmail({
@@ -770,6 +773,7 @@ export async function sendReminderForInvoice(
         subject,
         html: emailHtml,
         text: emailText,
+        replyTo: collectionsReplyTo,
       });
 
       if (!sendResult.success) {
@@ -807,6 +811,7 @@ export async function sendReminderForInvoice(
             : fromEmail
           : undefined,
         to: toEmail,
+        replyTo: collectionsReplyTo,
         subject,
         html: emailHtml,
         text: emailText,

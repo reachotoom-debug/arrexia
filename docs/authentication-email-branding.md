@@ -83,7 +83,8 @@ Recommended production sender:
 | Field | Value |
 |-------|-------|
 | Sender name | `Arrexia` |
-| Sender email | `noreply@arrexia.app` |
+| Sender email | `hello@arrexia.app` |
+| Reply-To (if supported) | `support@arrexia.app` |
 
 Resend provides SMTP credentials that can be used here. This is configured **only in the Supabase Dashboard** — not in application environment variables.
 
@@ -114,18 +115,27 @@ Password reset links route through `/auth/callback?next=/reset-password` for PKC
 | Variable | Purpose |
 |----------|---------|
 | `RESEND_API_KEY` | Resend API for invoices, reminders, newsletter |
-| `EMAIL_FROM` | Application sender (default `Arrexia <noreply@arrexia.app>`) |
+| `ARREXIA_EMAIL_FROM` | Preferred application sender (`Arrexia <hello@arrexia.app>`) |
+| `EMAIL_FROM` | Backward-compatible application sender alias |
+| `ARREXIA_EMAIL_REPLY_TO_*` | Category Reply-To routing (billing, collections, sales, support, general) |
+| `ARREXIA_EMAIL_TO_*` | Internal recipients for future/server-side form notifications |
 | `NEXT_PUBLIC_APP_URL` | Fallback app URL for server-side URL building |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 
-Auth email delivery does not use `RESEND_API_KEY` or `EMAIL_FROM` in application code.
+See also `docs/email-operations.md` and `.env.example`.
+
+**Deployment gate:** Do not deploy application email to production until `ARREXIA_EMAIL_FROM` or `EMAIL_FROM` is set to `Arrexia <hello@arrexia.app>`. Production sends fail closed without an explicit From identity.
+
+Auth email delivery does not use `RESEND_API_KEY` or application From variables in code.
 
 ## Launch checklist
 
-1. Copy templates from `supabase/templates/` into Supabase Dashboard email templates.
-2. Configure custom SMTP in Supabase (Resend recommended) with `noreply@arrexia.app`.
-3. Set Site URL and redirect allowlist in Supabase URL Configuration.
-4. Enable email confirmation in Supabase if required for production.
-5. Send test signup and password-reset emails; confirm Arrexia branding and sender.
-6. Verify links land on `/auth/callback` and complete PKCE session exchange.
+1. Set `ARREXIA_EMAIL_FROM=Arrexia <hello@arrexia.app>` (or `EMAIL_FROM`) in production before deployment.
+2. Verify all five inbound aliases exist and reply routing works (see `docs/email-operations.md`).
+3. Copy templates from `supabase/templates/` into Supabase Dashboard email templates.
+4. Configure custom SMTP in Supabase (Resend recommended) with `hello@arrexia.app` and Reply-To `support@arrexia.app` when supported.
+5. Set Site URL and redirect allowlist in Supabase URL Configuration.
+6. Enable email confirmation in Supabase if required for production.
+7. Send test signup and password-reset emails; confirm Arrexia branding and sender.
+8. Verify links land on `/auth/callback` and complete PKCE session exchange.

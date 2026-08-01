@@ -5,6 +5,7 @@ import { BrandPreview } from "@/components/settings/BrandPreview";
 import { WorkspaceProfileForm } from "./_components/WorkspaceProfileForm";
 import { BrandingInvoiceSettingsForm } from "./_components/BrandingInvoiceSettingsForm";
 import { getEmailSender, parseEmailSenderDisplay } from "@/lib/email/getEmailSender";
+import { ARREXIA_EMAIL_ADDRESSES } from "@/lib/email/addresses";
 import { EmailSettingsForm } from "./_components/EmailSettingsForm";
 import { RemindersSettingsSection } from "./_components/RemindersSettingsSection";
 import { AccountSettingsSection } from "./_components/AccountSettingsSection";
@@ -63,7 +64,7 @@ export default async function SettingsPage({ params, searchParams }: SettingsPag
           resendSenderDisplay={
             parseEmailSenderDisplay(getEmailSender()) ?? {
               name: "Arrexia",
-              email: "noreply@arrexia.app",
+              email: ARREXIA_EMAIL_ADDRESSES.hello,
             }
           }
         />
