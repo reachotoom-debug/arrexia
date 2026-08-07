@@ -1,7 +1,18 @@
-export type WorkspacePlan = "free" | "starter" | "pro";
+export type WorkspacePlan = "free" | "starter" | "pro" | "business";
 
 /** Includes future tiers shown in marketing/billing UI but not yet stored in DB. */
-export type PlanId = WorkspacePlan | "business" | "enterprise";
+export type PlanId = WorkspacePlan | "enterprise";
+
+export const WORKSPACE_PLAN_RANK: Record<WorkspacePlan, number> = {
+  free: 0,
+  starter: 1,
+  pro: 2,
+  business: 3,
+};
+
+export function getWorkspacePlanRank(plan: WorkspacePlan): number {
+  return WORKSPACE_PLAN_RANK[plan];
+}
 
 export type BillingInterval = "monthly" | "annual";
 
@@ -20,7 +31,7 @@ export type PlanDefinition = {
   annualPrice: number | null;
   comingSoon: boolean;
   contactSalesOnly: boolean;
-  /** Shown on settings billing cards; business/enterprise are preview-only. */
+  /** Shown on settings billing cards. Enterprise is Contact Sales only. */
   selectableInBilling: boolean;
   mostPopular: boolean;
   publicCtaLabel: string;
@@ -95,7 +106,7 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     annualPrice: 1990,
     comingSoon: false,
     contactSalesOnly: false,
-    selectableInBilling: false,
+    selectableInBilling: true,
     mostPopular: false,
     publicCtaLabel: "Get started free",
     limits: [
@@ -138,7 +149,12 @@ export const PUBLIC_PRICING_PLANS: PlanId[] = ["starter", "pro", "business", "en
 export const BILLING_UI_PLANS: PlanId[] = ["starter", "pro", "business"];
 
 /** Plans users can assign to a workspace today (stored in workspace_plans). */
-export const ASSIGNABLE_WORKSPACE_PLANS: WorkspacePlan[] = ["free", "starter", "pro"];
+export const ASSIGNABLE_WORKSPACE_PLANS: WorkspacePlan[] = [
+  "free",
+  "starter",
+  "pro",
+  "business",
+];
 
 export function isWorkspacePlan(value: string): value is WorkspacePlan {
   return ASSIGNABLE_WORKSPACE_PLANS.includes(value as WorkspacePlan);
@@ -185,7 +201,7 @@ export function getPlanStorageLimits(plan: WorkspacePlan): {
 
 /** True when the workspace can move to a higher paid tier in settings. */
 export function isUpgradeAvailable(plan: WorkspacePlan): boolean {
-  return plan !== "pro";
+  return getWorkspacePlanRank(plan) < getWorkspacePlanRank("business");
 }
 
 export type PublicPlanPricingDisplay = {

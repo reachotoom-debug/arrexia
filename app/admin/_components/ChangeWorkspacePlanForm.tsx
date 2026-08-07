@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { adminSetWorkspacePlanAction } from "../actions";
 import type { WorkspacePlan } from "@/lib/billing/plans";
 
-const PLAN_OPTIONS: WorkspacePlan[] = ["free", "starter", "pro"];
+const PLAN_OPTIONS: WorkspacePlan[] = ["free", "starter", "pro", "business"];
 
 type ChangeWorkspacePlanFormProps = {
   workspaceId: string;
@@ -34,7 +34,15 @@ export function ChangeWorkspacePlanForm({
         startTransition(async () => {
           const result = await adminSetWorkspacePlanAction(workspaceId, nextPlan);
           if (result.ok) {
-            toast({ title: "Plan updated", description: `Workspace set to ${nextPlan}.` });
+            const effective = result.effectivePlan ?? nextPlan;
+            const stored = result.storedPlan ?? nextPlan;
+            toast({
+              title: "Plan updated",
+              description:
+                effective === stored
+                  ? `Workspace set to ${stored} (effective: ${effective}).`
+                  : `Stored ${stored}; effective entitlement ${effective}.`,
+            });
             router.refresh();
           } else {
             toast({

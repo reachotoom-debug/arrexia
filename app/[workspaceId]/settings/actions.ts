@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
-import { requireWorkspace, requireUser } from "@/lib/auth/server";
+import { requireWorkspace, requireUser, requireWorkspaceForApi } from "@/lib/auth/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ZodError } from "zod";
 import {
@@ -16,11 +16,7 @@ import {
   ReminderRuleSchema,
 } from "@/lib/reminders/schema";
 import { MAX_AVATAR_FILE_SIZE_BYTES, ALLOWED_AVATAR_MIME_TYPES, DEFAULT_AVATAR_URL } from "@/lib/constants";
-import {
-  isWorkspacePlan,
-  type WorkspacePlan,
-} from "@/lib/billing/plans";
-import { setWorkspacePlan } from "@/lib/billing/setWorkspacePlan";
+import { changeWorkspacePlan, parseAssignableWorkspacePlan } from "@/lib/billing/changeWorkspacePlan";
 import { assertReminderRulesManageAllowed } from "@/lib/billing/reminderRulesAccess";
 import { sendEmail } from "@/lib/email/sendEmail";
 import { getEmailIdentity } from "@/lib/email/identities";
@@ -296,17 +292,59 @@ export async function setWorkspacePlanAction(formData: FormData) {
   if (!workspaceId) {
     return { ok: false, error: "Missing workspaceId" };
   }
-  if (!isWorkspacePlan(plan)) {
+
+  const targetPlan = parseAssignableWorkspacePlan(plan);
+  if (!targetPlan) {
+    if (plan === "enterprise") {
+      return {
+        ok: false,
+        error: "Enterprise plans require Contact Sales.",
+      };
+    }
     return { ok: false, error: "Invalid plan" };
   }
 
   try {
-    const { user } = await requireUser();
+    const access = await requireWorkspaceForApi(workspaceId);
+    if (!access.ok) {
+      return {
+        ok: false,
+        error:
+          access.status === 401
+            ? "You must be signed in to change the plan."
+            : "You do not have access to this workspace.",
+      };
+    }
 
-    await setWorkspacePlan(workspaceId, plan as WorkspacePlan);
+    if (access.membership.role !== "owner") {
+      return {
+        ok: false,
+        error: "Only workspace owners can change the plan.",
+      };
+    }
+
+    const result = await changeWorkspacePlan({
+      workspaceId,
+      targetPlan,
+      source: "customer_settings",
+      actorUserId: access.user.id,
+    });
+
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
 
     revalidatePath(`/${workspaceId}/settings`);
-    return { ok: true };
+    revalidatePath(`/${workspaceId}/clients`);
+    revalidatePath(`/${workspaceId}/invoices`);
+    revalidatePath(`/${workspaceId}`);
+
+    return {
+      ok: true,
+      message: result.message,
+      effectivePlan: result.newEffectivePlan,
+      storedPlan: result.newStoredPlan,
+    };
   } catch (error: any) {
     const digest = String(error?.digest || "");
     if (digest.includes("NEXT_REDIRECT")) throw error;

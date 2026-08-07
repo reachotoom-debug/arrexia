@@ -3,13 +3,19 @@
 import { setWorkspacePlanAction } from "../actions";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { SettingsCard } from "./SettingsCard";
+import {
+  getBillingPlanCardCta,
+  isSelfServiceBillingPlan,
+  type SelfServiceBillingPlanId,
+} from "@/lib/billing/billingPlanCardCta";
 import {
   BILLING_UI_PLANS,
   formatMonthlyPrice,
   formatPlanLabel,
   getPlanDefinition,
+  type PlanId,
   type WorkspacePlan,
 } from "@/lib/billing/plans";
 import type { TrialDisplayInfo } from "@/lib/billing/getWorkspacePlan";
@@ -29,10 +35,24 @@ export function BillingPlansClient({
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [pendingPlanId, setPendingPlanId] = useState<SelfServiceBillingPlanId | null>(
+    null
+  );
 
-  const handlePlanChange = async (plan: WorkspacePlan) => {
-    if (plan === currentPlan) return;
+  const handlePlanChange = async (plan: SelfServiceBillingPlanId) => {
+    const cta = getBillingPlanCardCta(currentPlan, plan);
+    if (!cta.canSubmit) {
+      if (cta.disabledReason) {
+        toast({
+          variant: "destructive",
+          title: "Plan change unavailable",
+          description: cta.disabledReason,
+        });
+      }
+      return;
+    }
 
+    setPendingPlanId(plan);
     startTransition(async () => {
       try {
         const formData = new FormData();
@@ -45,7 +65,10 @@ export function BillingPlansClient({
           if (result.ok) {
             toast({
               title: "Plan updated",
-              description: `Successfully switched to ${getPlanDefinition(plan).name}.`,
+              description:
+                "message" in result && typeof result.message === "string"
+                  ? result.message
+                  : `Successfully switched to ${getPlanDefinition(plan).name}.`,
             });
             router.refresh();
           } else {
@@ -72,6 +95,8 @@ export function BillingPlansClient({
           description:
             error instanceof Error ? error.message : "Failed to update plan",
         });
+      } finally {
+        setPendingPlanId(null);
       }
     });
   };
@@ -122,7 +147,7 @@ export function BillingPlansClient({
             <p className="mt-2 text-xs text-slate-500">
               Current effective plan: Free
               {storedPlan !== "free" ? ` (stored plan: ${formatPlanLabel(storedPlan)})` : ""}.
-              Select Starter or Pro to upgrade.
+              Select Starter, Pro, or Business to upgrade.
             </p>
           )}
         </div>
@@ -130,8 +155,18 @@ export function BillingPlansClient({
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {BILLING_UI_PLANS.map((planId) => {
             const plan = getPlanDefinition(planId);
-            const isCurrent = currentPlan === planId;
-            const isDisabled = plan.comingSoon || !plan.selectableInBilling;
+            const selfServicePlan = isSelfServiceBillingPlan(planId)
+              ? planId
+              : null;
+            const cta = selfServicePlan
+              ? getBillingPlanCardCta(currentPlan, selfServicePlan)
+              : {
+                  label: "Contact Sales",
+                  disabled: true,
+                  canSubmit: false,
+                };
+            const isSaving = isPending && pendingPlanId === selfServicePlan;
+            const isDisabled = cta.disabled || (isPending && !isSaving);
 
             return (
               <div
@@ -148,14 +183,9 @@ export function BillingPlansClient({
                         Most popular
                       </span>
                     ) : null}
-                    {plan.comingSoon ? (
-                      <span className="rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                        Coming soon
-                      </span>
-                    ) : null}
                   </div>
                   <div className="text-xl font-semibold text-slate-900">
-                    {formatMonthlyPrice(planId)}
+                    {formatMonthlyPrice(planId as PlanId)}
                   </div>
                   <p className="text-sm text-slate-600">{plan.description}</p>
                 </div>
@@ -168,25 +198,20 @@ export function BillingPlansClient({
 
                 <button
                   type="button"
+                  title={cta.disabledReason ?? undefined}
                   onClick={() => {
-                    if (planId === "starter" || planId === "pro") {
-                      void handlePlanChange(planId);
+                    if (selfServicePlan && cta.canSubmit) {
+                      void handlePlanChange(selfServicePlan);
                     }
                   }}
-                  disabled={isCurrent || isPending || isDisabled}
+                  disabled={isDisabled}
                   className={`mt-auto inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold shadow-sm ${
-                    isCurrent || isPending || isDisabled
+                    isDisabled
                       ? "cursor-not-allowed bg-slate-200 text-slate-600"
                       : "bg-blue-600 text-white hover:bg-blue-700"
                   }`}
                 >
-                  {isPending
-                    ? "Saving..."
-                    : isCurrent
-                      ? "Current plan"
-                      : plan.comingSoon
-                        ? "Coming soon"
-                        : "Select plan"}
+                  {isSaving ? "Saving..." : cta.label}
                 </button>
               </div>
             );

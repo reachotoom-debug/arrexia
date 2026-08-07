@@ -8,8 +8,10 @@ import {
   type AdminRole,
 } from "@/lib/admin/requireAdmin";
 import { logAdminAuditEvent } from "@/lib/admin/adminAudit";
-import { isWorkspacePlan } from "@/lib/billing/plans";
-import { setWorkspacePlan } from "@/lib/billing/setWorkspacePlan";
+import {
+  changeWorkspacePlan,
+  parseAssignableWorkspacePlan,
+} from "@/lib/billing/changeWorkspacePlan";
 import { isPostgrestMissingTableError } from "@/lib/admin/postgrestErrors";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -24,47 +26,15 @@ function revalidateAdmin() {
   }
 }
 
-async function syncWorkspaceSubscriptionPlan(
-  workspaceId: string,
-  plan: "free" | "starter" | "pro"
-) {
-  const admin = supabaseAdmin();
-  const status = plan === "free" ? "trial" : "active";
-  const now = new Date().toISOString();
-
-  const { error } = await admin.from("workspace_subscriptions").upsert(
-    {
-      workspace_id: workspaceId,
-      plan,
-      status,
-      payment_provider: "manual",
-      updated_at: now,
-      ...(plan === "free"
-        ? {
-            trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-          }
-        : {
-            current_period_starts_at: now,
-            current_period_ends_at: new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000
-            ).toISOString(),
-          }),
-    },
-    { onConflict: "workspace_id" }
-  );
-
-  if (error) {
-    if (isPostgrestMissingTableError(error)) {
-      return;
-    }
-    throw new Error(`Failed to sync subscription: ${error.message}`);
-  }
-}
-
 export async function adminSetWorkspacePlanAction(
   workspaceId: string,
   plan: string
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  storedPlan?: string;
+  effectivePlan?: string;
+}> {
   try {
     const ctx = await assertAdmin();
     if (!ctx.canAccessFullAdmin) {
@@ -75,23 +45,46 @@ export async function adminSetWorkspacePlanAction(
       return { ok: false, error: "Missing workspace ID" };
     }
 
-    if (!isWorkspacePlan(plan)) {
+    const targetPlan = parseAssignableWorkspacePlan(plan);
+    if (!targetPlan) {
       return { ok: false, error: "Invalid plan" };
     }
 
-    await setWorkspacePlan(workspaceId, plan);
-    await syncWorkspaceSubscriptionPlan(workspaceId, plan);
+    const result = await changeWorkspacePlan({
+      workspaceId,
+      targetPlan,
+      source: "founder_admin",
+      actorUserId: ctx.user.id,
+      allowAdminOverride: true,
+    });
+
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
 
     await logAdminAuditEvent({
       actorUserId: ctx.user.id,
       action: "workspace.plan_changed",
       targetType: "workspace",
       targetId: workspaceId,
-      metadata: { plan },
+      metadata: {
+        plan: targetPlan,
+        previousEffectivePlan: result.previousEffectivePlan,
+        previousStoredPlan: result.previousStoredPlan,
+        newEffectivePlan: result.newEffectivePlan,
+        transitionType: result.transitionType,
+      },
     });
 
     revalidateAdmin();
-    return { ok: true };
+    revalidatePath(`/${workspaceId}/settings`);
+    revalidatePath(`/${workspaceId}`);
+
+    return {
+      ok: true,
+      storedPlan: result.newStoredPlan,
+      effectivePlan: result.newEffectivePlan,
+    };
   } catch (error) {
     return {
       ok: false,

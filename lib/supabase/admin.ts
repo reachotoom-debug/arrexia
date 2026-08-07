@@ -2,6 +2,11 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 let cachedAdminClient: SupabaseClient | null = null;
 
+/** Test-only hook to inject a mock Supabase admin client. */
+export function setSupabaseAdminClientForTests(client: SupabaseClient | null): void {
+  cachedAdminClient = client;
+}
+
 export function supabaseAdmin(): SupabaseClient {
   if (!cachedAdminClient) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

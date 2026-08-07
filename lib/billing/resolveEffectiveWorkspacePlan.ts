@@ -27,11 +27,15 @@ export type EffectivePlanResolution = {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+function isPaidStoredPlan(plan: WorkspacePlan): boolean {
+  return plan === "starter" || plan === "pro" || plan === "business";
+}
+
 function resolveTrialPlan(
   storedPlan: WorkspacePlan,
   subscriptionPlan: WorkspacePlan
 ): WorkspacePlan {
-  if (storedPlan === "starter" || storedPlan === "pro") {
+  if (isPaidStoredPlan(storedPlan)) {
     return storedPlan;
   }
   return subscriptionPlan;
@@ -94,7 +98,7 @@ export function resolveEffectiveWorkspacePlan(
         };
       }
 
-      if (trialPlan === "starter" || trialPlan === "pro") {
+      if (isPaidStoredPlan(trialPlan)) {
         return {
           effectivePlan: "free",
           storedPlan,
@@ -121,7 +125,7 @@ export function resolveEffectiveWorkspacePlan(
       };
     }
 
-    if (storedPlan === "starter" || storedPlan === "pro") {
+    if (isPaidStoredPlan(storedPlan)) {
       return {
         effectivePlan: "free",
         storedPlan,

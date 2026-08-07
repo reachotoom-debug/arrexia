@@ -120,7 +120,7 @@ export function getDefaultEnabledForPlan(
   plan: WorkspacePlan,
   code: CanonicalTemplateCode
 ): boolean {
-  if (plan === "pro") {
+  if (plan === "pro" || plan === "business") {
     return true;
   }
   return STARTER_ENABLED_CODES.has(code);

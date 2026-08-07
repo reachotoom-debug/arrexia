@@ -40,6 +40,7 @@ const PLAN_BADGE_STYLES: Record<WorkspacePlan, string> = {
   free: "bg-slate-100 text-slate-700 border-slate-200",
   starter: "bg-blue-50 text-blue-700 border-blue-200",
   pro: "bg-violet-50 text-violet-700 border-violet-200",
+  business: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
 export function PlanBadge({ plan }: { plan: WorkspacePlan }) {
