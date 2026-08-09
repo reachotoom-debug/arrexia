@@ -20,6 +20,10 @@ import type {
   ReminderEffectivenessData,
 } from "../_types/dashboard";
 import type { DashboardSummaryPremium } from "../_components/PremiumKpiRow";
+import {
+  calculateAveragePaymentTermsDays,
+  sumPaymentsReceivedInLast30CalendarDays,
+} from "./dashboardOverviewMetrics";
 
 export type PeriodStats = {
   invoicedAmount: number;
@@ -981,13 +985,6 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
-  const { data: settingsRow } = await supabase
-    .from("settings")
-    .select("default_currency")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
-  const defaultCurrency = (settingsRow as { default_currency?: string } | null)?.default_currency || "USD";
-
   const now = new Date();
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
@@ -995,10 +992,33 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   previousTwelveMonthsAgo.setMonth(previousTwelveMonthsAgo.getMonth() - 24);
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  // --- Load invoices_view ----------------------------------------------------
+  const [settingsResult, invoicesResult, paymentsResult] = await Promise.all([
+    supabase
+      .from("settings")
+      .select("default_currency, timezone")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle(),
+    supabase
+      .from("invoices_view")
+      .select(
+        "id, total, paid, outstanding, issue_date, due_date, display_status, base_status, is_overdue, risk_level, client_is_active, client_archived_at, currency, archived_at"
+      )
+      .eq("workspace_id", workspaceId)
+      .is("archived_at", null)
+      .not("base_status", "in", '("draft","void")'),
+    supabase
+      .from("payments")
+      .select("amount, net_amount, payment_date, created_at, status")
+      .eq("workspace_id", workspaceId)
+      .is("archived_at", null),
+  ]);
+
+  const settingsRow = settingsResult.data;
+  const defaultCurrency = (settingsRow as { default_currency?: string } | null)?.default_currency || "USD";
+  const workspaceTimeZone =
+    (settingsRow as { timezone?: string | null } | null)?.timezone ?? null;
+
   let invoicesRaw: Array<{
     id: string;
     total: number | string | null;
@@ -1016,28 +1036,31 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
     archived_at: string | null;
   }> = [];
 
-  try {
-    const { data: invoices, error: invoicesError } = await supabase
-      .from("invoices_view")
-      .select(
-        "id, total, paid, outstanding, issue_date, due_date, display_status, base_status, is_overdue, risk_level, client_is_active, client_archived_at, currency, archived_at"
-      )
-      .eq("workspace_id", workspaceId)
-      // invoices_view excludes archived invoices at SQL, but keep explicit for consistency.
-      .is("archived_at", null)
-      // Exclude draft/void from ledger totals + risk exposure.
-      .not("base_status", "in", '("draft","void")');
-
-    if (invoicesError) {
-      console.error("[Dashboard] invoices_view error in getDashboardSummary", invoicesError);
-      invoicesRaw = [];
-    } else {
-      invoicesRaw = invoices ?? [];
-    }
-  } catch (error) {
-    console.error("[Dashboard] failed to load invoices in getDashboardSummary", error);
-    invoicesRaw = [];
+  if (invoicesResult.error) {
+    console.error("[Dashboard] invoices_view error in getDashboardSummary", invoicesResult.error);
+  } else {
+    invoicesRaw = invoicesResult.data ?? [];
   }
+
+  let paymentsRaw: Array<{
+    amount: number | string | null;
+    net_amount: number | string | null;
+    payment_date: string | null;
+    created_at: string | null;
+    status: string | null;
+  }> = [];
+
+  if (paymentsResult.error) {
+    console.error("[Dashboard] payments error in getDashboardSummary", paymentsResult.error);
+  } else {
+    paymentsRaw = paymentsResult.data ?? [];
+  }
+
+  const paymentsReceivedLast30 = sumPaymentsReceivedInLast30CalendarDays(
+    paymentsRaw,
+    workspaceTimeZone,
+    now
+  );
 
   const safeInvoices = invoicesRaw.map((inv) => ({
     id: inv.id,
@@ -1071,13 +1094,9 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
     .filter((inv) => inv.isOverdue && inv.outstanding > 0 && inv.riskLevel === "high")
     .reduce((sum, inv) => sum + inv.outstanding, 0);
 
-  // Payments last 30 days are derived from invoices_view.paid for invoices issued in this window.
-  // This keeps financial rollups sourced from invoices_view only.
-  const invoicesLast30 = safeInvoices.filter(
-    (inv) => inv.issueDate && new Date(inv.issueDate) >= thirtyDaysAgo
-  );
-  const paymentsLast30Days = invoicesLast30.reduce((sum, inv) => sum + inv.paidAmount, 0);
-  const paymentsLast30DaysCount = invoicesLast30.filter((inv) => inv.paidAmount > 0).length;
+  // Payments received in the last 30 workspace-calendar days (payment business date).
+  const paymentsLast30Days = paymentsReceivedLast30.amount;
+  const paymentsLast30DaysCount = paymentsReceivedLast30.count;
 
   // Calculate totals for current 12 months
   const invoices12m = safeInvoices.filter(
@@ -1091,27 +1110,8 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
     .filter((inv) => inv.issueDate && new Date(inv.issueDate) >= twelveMonthsAgo)
     .reduce((sum, inv) => sum + inv.paidAmount, 0);
 
-  // Calculate DSO (rolling 3 months)
-  let dsoRolling3m = 0;
-  const fullyPaid3m = safeInvoices.filter(
-    (inv) => inv.outstanding <= 0 && inv.issueDate && new Date(inv.issueDate) >= threeMonthsAgo
-  );
-
-  if (fullyPaid3m.length > 0) {
-    const daysToPay: number[] = [];
-    for (const inv of fullyPaid3m) {
-      const issue = new Date(inv.issueDate!);
-      const due = inv.dueDate ? new Date(inv.dueDate) : issue;
-      const days = Math.max(
-        Math.round((due.getTime() - issue.getTime()) / (1000 * 60 * 60 * 24)),
-        0
-      );
-      daysToPay.push(days);
-    }
-    if (daysToPay.length > 0) {
-      dsoRolling3m = Math.round(daysToPay.reduce((s, d) => s + d, 0) / daysToPay.length);
-    }
-  }
+  // Average invoice payment terms (issue → due) on fully paid invoices in the last 3 months.
+  const avgPaymentTermsDays = calculateAveragePaymentTermsDays(safeInvoices, threeMonthsAgo);
 
   // Calculate totals for previous 12 months (for deltas)
   const invoicesPrev12m = safeInvoices.filter(
@@ -1218,7 +1218,7 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
     );
 
     // DSO for this month (simplified: use rolling 3m value for recent months)
-    monthlyTrends.dso.push(i >= 9 ? (dsoRolling3m || 0) : 0);
+    monthlyTrends.dso.push(i >= 9 ? (avgPaymentTermsDays ?? 0) : 0);
   }
 
   return {
@@ -1229,7 +1229,8 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
       totalOutstanding: totalOutstandingNow,
       overdueAmount: overdueAmountNow,
       highRiskExposure: highRiskExposureNow,
-      dso: dsoRolling3m,
+      dso: avgPaymentTermsDays ?? 0,
+      avgPaymentTermsDays,
       paymentsLast30Days,
       paymentsLast30DaysCount,
     },
@@ -1248,7 +1249,7 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
       outstandingLabel: "Open balance",
       overdueLabel: "Overdue",
       highRiskLabel: "High-risk overdue",
-      dsoLabel: "Rolling 3 months",
+      dsoLabel: "Avg invoice terms · 3 months",
     },
   };
 }

@@ -1,13 +1,18 @@
-import { requireUser } from "@/lib/auth/server";
 import { requireWorkspace } from "@/lib/auth/server";
+import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
+import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getDashboardData, getDashboardSummary } from "./_utils/dataLoader";
+import {
+  DASHBOARD_VIEW_LABELS,
+  resolveDashboardView,
+  type DashboardView,
+} from "./_utils/dashboardViews";
 import { DashboardKpiRow } from "./_components/DashboardKpiRow";
 import { DashboardInsight } from "./_components/DashboardInsight";
 import { ArFocusView } from "./_components/ArFocusView";
 import { OwnerOverviewView } from "./_components/OwnerOverviewView";
-import { CollectionsModeView } from "./_components/CollectionsModeView";
 import { DailyActionCenterCta } from "./_components/DailyActionCenterCta";
-import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ScrollTabStrip } from "@/components/layout/ScrollTabStrip";
 
@@ -32,7 +37,7 @@ export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
   const { workspaceId } = await params;
-  const { workspace } = await requireWorkspace(workspaceId);
+  await requireWorkspace(workspaceId);
 
   const resolvedSearchParams = (await searchParams) || {};
   const viewParam =
@@ -40,18 +45,20 @@ export default async function DashboardPage({
       ? resolvedSearchParams.view
       : "standard";
 
-  const view = (["standard", "ar-focus", "owner-overview", "collections-mode"].includes(
-    viewParam
-  )
-    ? viewParam
-    : "standard") as "standard" | "ar-focus" | "owner-overview" | "collections-mode";
+  if (viewParam === "collections-mode") {
+    redirect(`/${workspaceId}/dashboard?view=standard`);
+  }
 
-  const dashboardSummary = await getDashboardSummary(workspaceId);
-  const dashboardData =
-    view === "standard" ? null : await getDashboardData(workspaceId);
+  const { view } = resolveDashboardView(viewParam);
+  const isOverview = view === "standard";
 
-  // Build tab URL helper
-  const buildTabUrl = (tabView: string) => {
+  const [dashboardSummary, dashboardData, eligibleReminders] = await Promise.all([
+    getDashboardSummary(workspaceId),
+    isOverview ? Promise.resolve(null) : getDashboardData(workspaceId),
+    isOverview ? getEligibleReminders(workspaceId) : Promise.resolve([]),
+  ]);
+
+  const buildTabUrl = (tabView: DashboardView) => {
     const params = new URLSearchParams();
     params.set("view", tabView);
     return `/${workspaceId}/dashboard?${params.toString()}`;
@@ -70,10 +77,6 @@ export default async function DashboardPage({
       title: "Performance Snapshot",
       description: "Trends, efficiency, and collection performance",
     },
-    "collections-mode": {
-      title: "Execution Mode",
-      description: "Work through overdue invoices and take action",
-    },
   }[view];
 
   return (
@@ -91,39 +94,25 @@ export default async function DashboardPage({
       </div>
 
       <ScrollTabStrip aria-label="Dashboard views">
+        {(["standard", "ar-focus", "owner-overview"] as const).map((tabView) => (
           <Link
-            href={buildTabUrl("standard")}
-            className={dashboardTabClass(view === "standard")}
+            key={tabView}
+            href={buildTabUrl(tabView)}
+            className={dashboardTabClass(view === tabView)}
           >
-            Standard
+            {DASHBOARD_VIEW_LABELS[tabView]}
           </Link>
-          <Link
-            href={buildTabUrl("ar-focus")}
-            className={dashboardTabClass(view === "ar-focus")}
-          >
-            AR focus
-          </Link>
-          <Link
-            href={buildTabUrl("owner-overview")}
-            className={dashboardTabClass(view === "owner-overview")}
-          >
-            Owner overview
-          </Link>
-          <Link
-            href={buildTabUrl("collections-mode")}
-            className={dashboardTabClass(view === "collections-mode")}
-          >
-            Collections mode
-          </Link>
+        ))}
       </ScrollTabStrip>
 
-      {/* Tab Content */}
       {view === "standard" && (
         <section className="mt-6 space-y-6">
-          <DailyActionCenterCta workspaceId={workspaceId} />
-          {/* High-level metrics only */}
+          <DailyActionCenterCta
+            workspaceId={workspaceId}
+            remindersReadyCount={eligibleReminders.length}
+          />
           <DashboardKpiRow summary={dashboardSummary} showPaymentsLast30Days />
-          <DashboardInsight summary={dashboardSummary} />
+          <DashboardInsight summary={dashboardSummary} workspaceId={workspaceId} />
         </section>
       )}
 
@@ -133,10 +122,6 @@ export default async function DashboardPage({
 
       {view === "owner-overview" && dashboardData && (
         <OwnerOverviewView data={dashboardData} workspaceId={workspaceId} />
-      )}
-
-      {view === "collections-mode" && dashboardData && (
-        <CollectionsModeView data={dashboardData.collectionsMode} workspaceId={workspaceId} />
       )}
     </div>
   );

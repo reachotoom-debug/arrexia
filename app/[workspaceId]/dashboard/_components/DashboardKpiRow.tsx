@@ -25,6 +25,8 @@ export function DashboardKpiRow({
     totals.totalInvoiced > 0
       ? (totals.totalCollected / totals.totalInvoiced) * 100
       : null;
+  const avgPaymentTermsDays =
+    totals.avgPaymentTermsDays ?? (totals.dso > 0 ? totals.dso : null);
 
   const fmt = (amount: number) =>
     formatCurrency(amount, { currency: currencyCode, fallbackCurrency: "USD" });
@@ -50,25 +52,25 @@ export function DashboardKpiRow({
         value={
           collectionRate !== null ? `${collectionRate.toFixed(1)}%` : "—"
         }
-        subtext="Collection efficiency (lifetime)"
+        subtext="Lifetime paid / invoiced"
         intent={collectionRate !== null && collectionRate >= 85 ? "success" : "default"}
         icon={TrendingUp}
       />
       <KPI
-        title="Avg Days to Pay"
-        value={totals.dso > 0 ? `${totals.dso} days` : "—"}
-        subtext="Rolling 3 months"
+        title="Avg Payment Terms"
+        value={
+          avgPaymentTermsDays !== null ? `${avgPaymentTermsDays} days` : "—"
+        }
+        subtext="Issue to due · paid invoices · 3 months"
         icon={Calendar}
       />
       {showPaymentsLast30Days && (() => {
         const amount = totals.paymentsLast30Days ?? 0;
-        const count = totals.paymentsLast30DaysCount ?? 0;
-        const formatted = fmt(amount);
         return (
           <KPI
             title="Collected (Last 30 Days)"
-            value={formatted}
-            subtext="From completed payments"
+            value={fmt(amount)}
+            subtext="Payments received · workspace calendar"
             intent="success"
             icon={Wallet}
           />

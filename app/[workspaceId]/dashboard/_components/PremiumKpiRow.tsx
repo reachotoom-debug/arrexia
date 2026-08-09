@@ -13,6 +13,8 @@ export interface DashboardSummaryPremium {
     overdueAmount: number;
     highRiskExposure: number;
     dso: number;
+    /** Avg issue-to-due days on fully paid invoices; null when no qualifying data. */
+    avgPaymentTermsDays?: number | null;
     paymentsLast30Days?: number;
     paymentsLast30DaysCount?: number;
   };
