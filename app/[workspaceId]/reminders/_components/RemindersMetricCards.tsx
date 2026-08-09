@@ -7,11 +7,16 @@ type RemindersMetricCard = {
 type RemindersMetricCardsProps = {
   metrics: RemindersMetricCard[];
   ariaLabel: string;
+  helperText?: string;
 };
 
-export function RemindersMetricCards({ metrics, ariaLabel }: RemindersMetricCardsProps) {
+export function RemindersMetricCards({ metrics, ariaLabel, helperText }: RemindersMetricCardsProps) {
   return (
-    <section aria-label={ariaLabel} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <section aria-label={ariaLabel} className="space-y-2">
+      {helperText ? (
+        <p className="text-xs leading-snug text-slate-500">{helperText}</p>
+      ) : null}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {metrics.map((metric) => (
         <div
           key={metric.label}
@@ -28,6 +33,7 @@ export function RemindersMetricCards({ metrics, ariaLabel }: RemindersMetricCard
           ) : null}
         </div>
       ))}
+      </div>
     </section>
   );
 }

@@ -58,6 +58,8 @@ export type DailyActionSummary = {
   requiringAttentionCurrency: string;
   requiringAttentionMixedCurrency: boolean;
   requiringAttentionByCurrency: CurrencyExposureTotal[];
+  overdueCollectibleCount: number;
+  overdueCollectibleByCurrency: CurrencyExposureTotal[];
   remindersDueCount: number;
   highRiskCustomerCount: number;
   newlyOverdueCount: number;

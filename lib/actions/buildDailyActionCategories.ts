@@ -172,6 +172,17 @@ export function buildDailyActionCategories(params: {
     action.reasons.some((reason) => reason.type === "newly_overdue")
   ).length;
 
+  const overdueCollectibleInvoices = invoices.filter(
+    (row) => row.isOverdue && isChaseableInvoice(row)
+  );
+  const overdueCollectibleByCurrency = computeOutstandingByCurrency({
+    outstandingAmounts: overdueCollectibleInvoices.map((row) => ({
+      outstanding: row.outstanding,
+      currency: row.currency,
+    })),
+    defaultCurrency,
+  });
+
   return {
     summary: {
       actionsTodayCount: collectionActions.length,
@@ -179,6 +190,8 @@ export function buildDailyActionCategories(params: {
       requiringAttentionCurrency: requiringAttention.currency,
       requiringAttentionMixedCurrency: requiringAttention.isMixedCurrency,
       requiringAttentionByCurrency,
+      overdueCollectibleCount: overdueCollectibleInvoices.length,
+      overdueCollectibleByCurrency,
       remindersDueCount,
       highRiskCustomerCount,
       newlyOverdueCount,

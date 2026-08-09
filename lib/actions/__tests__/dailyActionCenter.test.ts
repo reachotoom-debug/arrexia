@@ -3,6 +3,11 @@ import { describe, it } from "node:test";
 
 import { buildDailyActionCategories, isChaseableInvoice } from "@/lib/actions/buildDailyActionCategories";
 import {
+  formatOverduePortfolioEmptyContext,
+  NO_ACTIONS_SCHEDULED_TODAY,
+  shouldShowOverduePortfolioEmptyState,
+} from "@/lib/actions/dailyActionCenterPresentation";
+import {
   computeFirstOverdueDate,
   computeMilestoneCrossDate,
   computeRequiringAttentionTotal,
@@ -544,7 +549,24 @@ describe("Action Center UI contracts (Task 2)", () => {
 
     assert.match(src, /CAUGHT_UP_ACTIONS_EMPTY/);
     assert.match(src, /FIRST_RUN_ACTIONS_EMPTY/);
+    assert.match(src, /NO_ACTIONS_SCHEDULED_TODAY/);
+    assert.match(src, /shouldShowOverduePortfolioEmptyState/);
+    assert.match(src, /View Collections/);
+    assert.match(src, /\/collections/);
     assert.match(src, /recommendedAction/);
+  });
+
+  it("CollectionsPortfolioActionCell exposes manual email send outside reminder eligibility", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(
+      "app/[workspaceId]/collections/_components/CollectionsPortfolioActionCell.tsx",
+      "utf8"
+    );
+
+    assert.match(src, /SendReminderButton/);
+    assert.match(src, /ruleId=\{null\}/);
+    assert.match(src, /scheduledDate=\{null\}/);
+    assert.match(src, /clientEmail/);
   });
 });
 
@@ -824,5 +846,106 @@ describe("Task 2/3 acceptance — Actions vs Collections eligibility (Part H)", 
     });
 
     assert.deepEqual(result.collectionActions.map((row) => row.id), ["rem", "mile", "high", "low"]);
+  });
+});
+
+describe("Launch fix — reminders/actions coherence", () => {
+  const evaluationDate = addCalendarDays(DUE, 33)!;
+
+  it("overdue collectible portfolio is tracked separately from today actions", () => {
+    const overdueInvoice = invoice({
+      id: "inv-0002",
+      overdueDays: 33,
+      outstanding: 4000,
+      invoiceNumber: "INV-0002",
+    });
+
+    const result = build({
+      invoices: [overdueInvoice],
+      evaluationDate,
+    });
+
+    assert.equal(result.summary.actionsTodayCount, 0);
+    assert.equal(result.summary.overdueCollectibleCount, 1);
+    assert.equal(result.summary.overdueCollectibleByCurrency[0]?.amount, 4000);
+    assert.equal(result.summary.overdueCollectibleByCurrency[0]?.currency, "USD");
+  });
+
+  it("reminder metrics stay zero when no rule is due today", () => {
+    const result = build({
+      invoices: [invoice({ id: "inv-0002", overdueDays: 33, outstanding: 4000 })],
+      reminderEligible: new Set(),
+      evaluationDate,
+    });
+
+    assert.equal(result.summary.actionsTodayCount, 0);
+    assert.equal(result.summary.remindersDueCount, 0);
+    assert.equal(result.summary.overdueCollectibleCount, 1);
+  });
+
+  it("does not add overdue invoice to actions merely because it is overdue", () => {
+    const result = build({
+      invoices: [invoice({ id: "inv-0002", overdueDays: 33, outstanding: 4000 })],
+      evaluationDate,
+    });
+
+    assert.equal(result.collectionActions.length, 0);
+    assert.equal(result.summary.overdueCollectibleCount, 1);
+  });
+
+  it("empty state helper distinguishes overdue portfolio from caught up", () => {
+    const summary = build({
+      invoices: [invoice({ id: "inv-0002", overdueDays: 33, outstanding: 4000 })],
+      evaluationDate,
+    }).summary;
+
+    assert.equal(shouldShowOverduePortfolioEmptyState(summary), true);
+    assert.equal(NO_ACTIONS_SCHEDULED_TODAY.title, "No collection actions scheduled for today.");
+
+    const message = formatOverduePortfolioEmptyContext({
+      overdueCollectibleCount: summary.overdueCollectibleCount,
+      overdueCollectibleByCurrency: summary.overdueCollectibleByCurrency,
+      defaultCurrency: summary.requiringAttentionCurrency,
+    });
+
+    assert.match(message, /\$4,000\.00/);
+    assert.match(message, /1 invoice/);
+    assert.doesNotMatch(message, /caught up/i);
+  });
+
+  it("caught-up empty state remains when no overdue collectible invoices exist", () => {
+    const summary = build({
+      invoices: [invoice({ id: "inv-paid", isOverdue: false, overdueDays: 0, outstanding: 0 })],
+      evaluationDate,
+    }).summary;
+
+    assert.equal(summary.actionsTodayCount, 0);
+    assert.equal(summary.overdueCollectibleCount, 0);
+    assert.equal(shouldShowOverduePortfolioEmptyState(summary), false);
+  });
+
+  it("exact-date automated reminder behavior remains unchanged", () => {
+    const cross7 = addCalendarDays(DUE, 7)!;
+    const result = build({
+      invoices: [invoice({ id: "inv-7", overdueDays: 7 })],
+      reminderEligible: new Set(["inv-7"]),
+      evaluationDate: cross7,
+    });
+
+    assert.equal(result.collectionActions.length, 1);
+    assert.ok(result.collectionActions[0]?.reasons.some((r) => r.type === "reminder_due"));
+  });
+
+  it("manual collection execution stays available without scheduled reminder eligibility", async () => {
+    const { resolveCollectionActionExecution } = await import(
+      "@/lib/actions/resolveCollectionActionExecution"
+    );
+
+    const execution = resolveCollectionActionExecution({
+      hasReminderDue: false,
+      clientEmail: "client@example.com",
+    });
+
+    assert.equal(execution.mode, "manual");
   });
 });

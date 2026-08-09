@@ -585,6 +585,7 @@ export default async function CollectionsPage({
                               invoiceId={inv.id}
                               invoiceNumber={inv.invoice_number ?? null}
                               clientName={inv.client_name ?? null}
+                              clientEmail={client?.email ?? null}
                               clientPhone={resolveClientWhatsAppPhone(
                                 client?.whatsapp_phone,
                                 client?.whatsapp

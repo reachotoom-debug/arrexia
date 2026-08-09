@@ -79,13 +79,24 @@ describe("Collections portfolio summary (Task 3)", () => {
     assert.match(src, /AiCollectionAssistDialog/);
   });
 
-  it("H — Collections does not duplicate Send Reminder logic", () => {
+  it("H — Collections reuses manual email send without duplicating scheduled reminder logic", () => {
     const pageSrc = readFileSync(COLLECTIONS_PAGE, "utf8");
     const cellSrc = readFileSync(PORTFOLIO_ACTION_CELL, "utf8");
+    const collectionsSrc = `${pageSrc}\n${cellSrc}`;
+
+    assert.match(cellSrc, /SendReminderButton/);
+    assert.match(cellSrc, /ruleId=\{null\}/);
+    assert.match(cellSrc, /templateId=\{null\}/);
+    assert.match(cellSrc, /scheduledDate=\{null\}/);
+    assert.match(cellSrc, /clientEmail/);
+
+    assert.doesNotMatch(collectionsSrc, /getEligibleReminders/);
+    assert.doesNotMatch(collectionsSrc, /evaluateReminderEligibility/);
+    assert.doesNotMatch(collectionsSrc, /run-reminders/);
+    assert.doesNotMatch(collectionsSrc, /runReminders/);
 
     assert.doesNotMatch(pageSrc, /SendReminderButton/);
     assert.doesNotMatch(pageSrc, /sendReminderAction/);
-    assert.doesNotMatch(cellSrc, /SendReminderButton/);
     assert.doesNotMatch(cellSrc, /sendReminderAction/);
   });
 

@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 
 import {
   buildAutomationStatusPresentation,
+  buildReadyRemindersMetricCards,
   computeHistoryRemindersSummary,
   computeReadyRemindersSummary,
   formatAutomationRuleCountLabel,
   formatHumanReminderRuleLabel,
   formatReminderActionReason,
   normalizeReminderFailureReason,
+  READY_REMINDERS_TODAY_HELPER,
 } from "../remindersCenterPresentation";
 
 describe("Reminders Automation Center presentation (Task 4)", () => {
@@ -120,6 +122,40 @@ describe("Reminders Automation Center presentation (Task 4)", () => {
     assert.match(summary.outstandingLabel, /\$/);
     assert.match(summary.outstandingLabel, /€/);
     assert.match(summary.outstandingDetail ?? "", /currency/i);
+  });
+
+  it("ready metric cards use today-specific labels and helper copy", () => {
+    const summary = computeReadyRemindersSummary([], "USD");
+    const presentation = buildReadyRemindersMetricCards(summary);
+
+    assert.equal(presentation.metrics[0]?.label, "Ready to Send Today");
+    assert.equal(presentation.metrics[0]?.value, "0");
+    assert.equal(presentation.metrics[1]?.label, "Eligible Outstanding Today");
+    assert.equal(presentation.metrics[2]?.label, "Customers Today");
+    assert.equal(presentation.metrics[3]?.label, "Rules Due Today");
+    assert.match(presentation.helperText, /eligible for a reminder today/i);
+    assert.match(presentation.helperText, /View Collections/i);
+    assert.equal(presentation.helperText, READY_REMINDERS_TODAY_HELPER);
+  });
+
+  it("ready metric cards preserve computed values without changing totals", () => {
+    const summary = computeReadyRemindersSummary(
+      [
+        {
+          clientId: "c1",
+          ruleId: "r1",
+          outstanding: 4000,
+          currency: "USD",
+        },
+      ],
+      "USD"
+    );
+    const presentation = buildReadyRemindersMetricCards(summary);
+
+    assert.equal(presentation.metrics[0]?.value, "1");
+    assert.match(presentation.metrics[1]?.value, /4,000/);
+    assert.equal(presentation.metrics[2]?.value, "1");
+    assert.equal(presentation.metrics[3]?.value, "1");
   });
 
   it("automation status counts active and disabled rules when enabled", () => {

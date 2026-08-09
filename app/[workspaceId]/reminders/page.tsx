@@ -4,6 +4,7 @@ import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
 import { loadAutomationGateForWorkspace } from "@/lib/reminders/automationGate";
 import {
   buildAutomationStatusPresentation,
+  buildReadyRemindersMetricCards,
   computeHistoryRemindersSummary,
   computeReadyRemindersSummary,
   formatHumanReminderRuleLabel,
@@ -127,6 +128,7 @@ export default async function RemindersPage({
   });
 
   const readySummary = computeReadyRemindersSummary(eligibleCandidates, defaultCurrency);
+  const readyMetrics = buildReadyRemindersMetricCards(readySummary);
   const historySummary = computeHistoryRemindersSummary({
     rows: historyMetricsResult.data ?? [],
     workspaceTimeZone: workspaceTimeZone ?? "UTC",
@@ -365,19 +367,8 @@ export default async function RemindersPage({
     <div className="space-y-4">
       <RemindersMetricCards
         ariaLabel="Ready to send summary"
-        metrics={[
-          { label: "Ready now", value: String(readySummary.readyCount) },
-          {
-            label: "Outstanding",
-            value: readySummary.outstandingLabel,
-            detail: readySummary.outstandingDetail,
-          },
-          {
-            label: "Customers",
-            value: String(readySummary.distinctCustomerCount),
-          },
-          { label: "Rules due", value: String(readySummary.distinctRuleCount) },
-        ]}
+        helperText={readyMetrics.helperText}
+        metrics={readyMetrics.metrics}
       />
 
       <CommandBar>

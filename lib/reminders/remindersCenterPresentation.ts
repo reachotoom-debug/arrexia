@@ -28,6 +28,15 @@ export type ReadyRemindersSummary = {
   outstandingDetail?: string;
 };
 
+export type RemindersMetricCardPresentation = {
+  label: string;
+  value: string;
+  detail?: string;
+};
+
+export const READY_REMINDERS_TODAY_HELPER =
+  "Amounts shown here include only invoices eligible for a reminder today. View Collections for your full overdue portfolio.";
+
 export type HistoryRemindersSummary = {
   sentToday: number;
   failedToday: number;
@@ -279,6 +288,27 @@ export function computeReadyRemindersSummary(
     distinctRuleCount,
     outstandingLabel: totals.map((row) => formatMoney(row.amount, row.currency)).join(" · "),
     outstandingDetail: "Totals shown separately by currency.",
+  };
+}
+
+export function buildReadyRemindersMetricCards(
+  summary: ReadyRemindersSummary
+): {
+  metrics: RemindersMetricCardPresentation[];
+  helperText: string;
+} {
+  return {
+    helperText: READY_REMINDERS_TODAY_HELPER,
+    metrics: [
+      { label: "Ready to Send Today", value: String(summary.readyCount) },
+      {
+        label: "Eligible Outstanding Today",
+        value: summary.outstandingLabel,
+        detail: summary.outstandingDetail,
+      },
+      { label: "Customers Today", value: String(summary.distinctCustomerCount) },
+      { label: "Rules Due Today", value: String(summary.distinctRuleCount) },
+    ],
   };
 }
 

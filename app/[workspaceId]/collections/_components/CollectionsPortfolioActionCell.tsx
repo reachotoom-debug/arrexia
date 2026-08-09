@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
 import { AiCollectionAssistDialog } from "@/components/collections/AiCollectionAssistDialog";
+import { SendReminderButton } from "../../reminders/_components/send-reminder-button";
 
 type CollectionsPortfolioActionCellProps = {
   workspaceId: string;
   invoiceId: string;
   invoiceNumber: string | null;
   clientName: string | null;
+  clientEmail: string | null;
   clientPhone: string | null;
   clientCountry: string | null;
   businessName: string;
@@ -24,6 +26,7 @@ export function CollectionsPortfolioActionCell({
   invoiceId,
   invoiceNumber,
   clientName,
+  clientEmail,
   clientPhone,
   clientCountry,
   businessName,
@@ -42,6 +45,26 @@ export function CollectionsPortfolioActionCell({
         View account
       </Link>
       <div className="flex flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 text-[11px] text-slate-500">
+        {clientEmail ? (
+          <>
+            <span className="inline-flex items-center gap-1">
+              <SendReminderButton
+                workspaceId={workspaceId}
+                invoiceId={invoiceId}
+                invoiceNumber={invoiceNumber}
+                clientName={clientName}
+                clientEmail={clientEmail}
+                ruleId={null}
+                templateId={null}
+                scheduledDate={null}
+              />
+              <span className="font-medium text-slate-600">Email</span>
+            </span>
+            <span className="hidden sm:inline text-slate-300" aria-hidden="true">
+              ·
+            </span>
+          </>
+        ) : null}
         <WhatsAppCollectionLink
           phone={clientPhone}
           clientCountry={clientCountry}

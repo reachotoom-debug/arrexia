@@ -8,6 +8,11 @@ import {
   FIRST_RUN_ACTIONS_EMPTY,
   hasNeverEnteredCollectionsWorkflow,
 } from "@/lib/onboarding/workspaceOnboardingState";
+import {
+  formatOverduePortfolioEmptyContext,
+  NO_ACTIONS_SCHEDULED_TODAY,
+  shouldShowOverduePortfolioEmptyState,
+} from "@/lib/actions/dailyActionCenterPresentation";
 import { EmptyState } from "@/components/ui/state";
 import { PaginationBar } from "@/components/PaginationBar";
 import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
@@ -115,9 +120,21 @@ export function DailyActionCenterView({
       invoiceCount: summary.sentInvoiceCount,
       sentInvoiceCount: summary.sentInvoiceCount,
     };
-    const emptyCopy = hasNeverEnteredCollectionsWorkflow(onboardingSignals)
+    const isFirstRun = hasNeverEnteredCollectionsWorkflow(onboardingSignals);
+    const hasOverduePortfolio = shouldShowOverduePortfolioEmptyState(summary);
+
+    const emptyCopy = isFirstRun
       ? FIRST_RUN_ACTIONS_EMPTY
-      : CAUGHT_UP_ACTIONS_EMPTY;
+      : hasOverduePortfolio
+        ? {
+            title: NO_ACTIONS_SCHEDULED_TODAY.title,
+            message: formatOverduePortfolioEmptyContext({
+              overdueCollectibleCount: summary.overdueCollectibleCount,
+              overdueCollectibleByCurrency: summary.overdueCollectibleByCurrency,
+              defaultCurrency: summary.requiringAttentionCurrency,
+            }),
+          }
+        : CAUGHT_UP_ACTIONS_EMPTY;
 
     return (
       <div className="space-y-6">
@@ -134,12 +151,18 @@ export function DailyActionCenterView({
           title={emptyCopy.title}
           message={emptyCopy.message}
           actionLabel={
-            hasNeverEnteredCollectionsWorkflow(onboardingSignals) ? "Create invoice" : undefined
+            isFirstRun
+              ? "Create invoice"
+              : hasOverduePortfolio
+                ? "View Collections"
+                : undefined
           }
           actionHref={
-            hasNeverEnteredCollectionsWorkflow(onboardingSignals)
+            isFirstRun
               ? `/${workspaceId}/invoices/new`
-              : undefined
+              : hasOverduePortfolio
+                ? `/${workspaceId}/collections`
+                : undefined
           }
         />
       </div>
