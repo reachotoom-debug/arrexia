@@ -46,8 +46,9 @@ describe("Launch blocker regression contracts", () => {
   });
 
   it("P1 — invoice PDF route validates workspace membership and scopes invoice query", () => {
-    const src = readFileSync("app/[workspaceId]/invoices/[invoiceId]/pdf/route.ts", "utf8");
+    const src = readFileSync("lib/invoices/invoice-pdf-route.ts", "utf8");
     assert.match(src, /requireWorkspaceForApi\(workspaceId\)/);
+    assert.match(src, /if \(!auth\.ok\)/);
     assert.match(src, /\.eq\("workspace_id", workspaceId\)/);
   });
 

@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 
 type DownloadInvoicePdfButtonProps = {
-  /** Absolute path to the PDF route, e.g. /{workspaceId}/invoices/{id}/pdf */
+  /** Absolute path to the PDF API route, e.g. /api/workspaces/{workspaceId}/invoices/{id}/pdf */
   pdfHref: string;
   /** Suggested download filename */
   fileName: string;

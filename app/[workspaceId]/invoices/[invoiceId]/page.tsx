@@ -26,6 +26,7 @@ import { resolveWorkspaceBusinessDate } from "@/lib/invoices/workspaceInvoiceAgi
 import { formatPaymentBusinessDate } from "@/lib/payments/paymentBusinessDate";
 import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 import { canShowRecordPaymentCta } from "@/lib/invoices/invoiceFinancialState";
+import { buildInvoicePdfApiPath } from "@/lib/invoices/invoice-pdf-route";
 
 interface InvoicePageProps {
   params: Promise<{ workspaceId: string; invoiceId: string }>;
@@ -417,7 +418,7 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
             />
           )}
           <DownloadInvoicePdfButton
-            pdfHref={`/${workspaceId}/invoices/${invoice.id}/pdf`}
+            pdfHref={buildInvoicePdfApiPath(workspaceId, invoice.id)}
             fileName={`invoice-${invoice.invoice_number}.pdf`}
             className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
           />
