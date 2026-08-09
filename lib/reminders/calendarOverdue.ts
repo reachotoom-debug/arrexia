@@ -1,10 +1,10 @@
 /**
- * Canonical workspace-calendar overdue calculation for reminder rendering (R2B.4).
+ * Canonical workspace-calendar overdue calculation for reminder rendering.
+ * Email copy uses current overdue age at send/render time — not rule scheduled_at.
  */
 
 import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
-import { resolveScheduledDateForRuleSend } from "./ruleOccurrenceGuard";
-import { differenceCalendarDays } from "./ruleTrigger";
+import { computeInvoiceOverdueDays } from "@/lib/invoices/workspaceInvoiceAging";
 
 const CALENDAR_DATE_PREFIX_RE = /^(\d{4}-\d{2}-\d{2})/;
 
@@ -25,36 +25,24 @@ export function computeReminderDaysOverdue(params: {
   const reference = normalizeCalendarDateString(params.referenceDate);
   if (!due || !reference) return 0;
 
-  const diff = differenceCalendarDays(reference, due);
-  if (diff === null || diff <= 0) return 0;
-  return diff;
+  return computeInvoiceOverdueDays({
+    dueDate: due,
+    workspaceToday: reference,
+  });
 }
 
+/**
+ * Workspace-local evaluation date for reminder email overdue-age copy.
+ * scheduled_at identifies the logical reminder occurrence; overdue days in
+ * customer-facing copy always reflect the invoice age at send/render time.
+ */
 export function resolveReminderOverdueReferenceDate(params: {
-  ruleId?: string | null;
-  scheduledDate?: string | null;
-  dueDate?: string | null;
-  triggerType?: string | null;
-  offsetDays?: number | null;
   workspaceTimeZone?: string | null;
   evaluationInstant?: Date;
-}): string | null {
-  if (params.ruleId) {
-    const explicit = normalizeCalendarDateString(params.scheduledDate ?? undefined);
-    if (explicit) return explicit;
-
-    if (params.dueDate && params.triggerType != null) {
-      return resolveScheduledDateForRuleSend({
-        dueDate: params.dueDate,
-        triggerType: params.triggerType,
-        offsetDays: Number(params.offsetDays ?? 0),
-        explicitScheduledDate: null,
-      });
-    }
-
-    return null;
-  }
-
+}): string {
   const instant = params.evaluationInstant ?? new Date();
-  return instantToWorkspaceCalendarDate(instant, params.workspaceTimeZone ?? "UTC");
+  return (
+    instantToWorkspaceCalendarDate(instant, params.workspaceTimeZone ?? "UTC") ??
+    instant.toISOString().slice(0, 10)
+  );
 }

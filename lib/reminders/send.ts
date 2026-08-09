@@ -666,15 +666,6 @@ export async function sendReminderForInvoice(
         };
       }
     }
-
-    overdueReferenceDate = resolveReminderOverdueReferenceDate({
-      ruleId,
-      scheduledDate: scheduledDate ?? duplicateCheck.scheduledDate,
-      dueDate: invoiceView.due_date,
-      triggerType: resolution.rule.trigger_type,
-      offsetDays: Number(resolution.rule.offset_days ?? 0),
-      workspaceTimeZone,
-    });
   } else {
     const { data: settingsRow } = await supabase
       .from("settings")
@@ -683,10 +674,6 @@ export async function sendReminderForInvoice(
       .maybeSingle();
 
     workspaceTimeZone = settingsRow?.timezone ?? "UTC";
-    overdueReferenceDate = resolveReminderOverdueReferenceDate({
-      ruleId: null,
-      workspaceTimeZone,
-    });
 
     const manualResolution = await resolveGenericManualTemplate(
       supabase,
@@ -696,6 +683,10 @@ export async function sendReminderForInvoice(
     resolvedTemplateId = manualResolution.resolvedTemplateId;
     templateData = manualResolution.templateData;
   }
+
+  overdueReferenceDate = resolveReminderOverdueReferenceDate({
+    workspaceTimeZone,
+  });
 
   const daysOverdue = computeReminderDaysOverdue({
     dueDate: invoiceView.due_date,
