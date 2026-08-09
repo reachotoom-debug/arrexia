@@ -66,8 +66,14 @@ export function formatHumanReminderRuleLabel(params: {
   triggerType: string;
   offsetDays: number;
   ruleName?: string | null;
+  isRecurring?: boolean;
 }): string {
-  const { triggerType, offsetDays, ruleName } = params;
+  const { triggerType, offsetDays, ruleName, isRecurring } = params;
+
+  if (isRecurring) {
+    return "Recurring overdue chase";
+  }
+
   const abs = Math.abs(Number(offsetDays ?? 0));
 
   if (triggerType === "on_due" || (triggerType === "relative_to_due_date" && offsetDays === 0)) {
@@ -101,8 +107,14 @@ export function formatReminderActionReason(params: {
   offsetDays: number;
   daysFromDue: number | null;
   isOverdue: boolean;
+  isRecurring?: boolean;
 }): string {
-  const { triggerType, offsetDays, daysFromDue, isOverdue } = params;
+  const { triggerType, offsetDays, daysFromDue, isOverdue, isRecurring } = params;
+
+  if (isRecurring) {
+    return "Scheduled follow-up";
+  }
+
   const abs = Math.abs(Number(offsetDays ?? 0));
 
   if (triggerType === "before_due") {

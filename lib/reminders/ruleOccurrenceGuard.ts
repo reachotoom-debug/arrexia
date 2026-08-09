@@ -18,7 +18,7 @@ export async function loadRuleOccurrenceHistory(
 ): Promise<ReminderHistoryEntry[]> {
   const { data, error } = await supabase
     .from("reminders")
-    .select("rule_id, status, sent_at")
+    .select("rule_id, status, sent_at, scheduled_at")
     .eq("workspace_id", workspaceId)
     .eq("invoice_id", invoiceId);
 
@@ -31,6 +31,7 @@ export async function loadRuleOccurrenceHistory(
     ruleId: row.rule_id,
     status: row.status,
     sentAt: row.sent_at,
+    scheduledAt: row.scheduled_at ?? null,
   }));
 }
 
@@ -56,12 +57,17 @@ export function ruleOccurrenceAlreadySent(params: {
   ruleId: string;
   scheduledDate: string;
   workspaceTimeZone: string | null | undefined;
+  triggerType: string;
+  offsetDays: number;
+  dueDate: string;
 }): boolean {
   return sentHistoryBlocksRuleOccurrence(
     params.history,
     params.ruleId,
     params.scheduledDate,
-    params.workspaceTimeZone
+    params.workspaceTimeZone,
+    { triggerType: params.triggerType, offsetDays: params.offsetDays },
+    params.dueDate
   );
 }
 
@@ -93,11 +99,15 @@ export async function checkRuleOccurrenceDuplicateBeforeSend(params: {
     params.invoiceId
   );
 
+  const dueDate = params.dueDate?.slice(0, 10) ?? "";
   const blocked = ruleOccurrenceAlreadySent({
     history,
     ruleId: params.ruleId,
     scheduledDate,
     workspaceTimeZone: params.workspaceTimeZone ?? "UTC",
+    triggerType: params.triggerType,
+    offsetDays: params.offsetDays,
+    dueDate,
   });
 
   return { blocked, scheduledDate };

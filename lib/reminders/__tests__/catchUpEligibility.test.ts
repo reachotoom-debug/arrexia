@@ -204,14 +204,15 @@ describe("catch-up selection — one candidate per invoice", () => {
     assert.equal(results.length, 1);
   });
 
-  it("9 — latest applicable occurrence is +14", () => {
+  it("9 — deeply overdue import with no history selects latest recurring occurrence", () => {
     const results = evaluateCandidates({
       evaluationDate: "2026-08-09",
       invoices: [invoice({ due_date: "2026-07-01" })],
       rules: multiRules,
     });
     assert.equal(results[0]?.ruleId, "rule-after-14");
-    assert.equal(results[0]?.scheduledDate, "2026-07-15");
+    assert.equal(results[0]?.scheduledDate, "2026-08-05");
+    assert.equal(results[0]?.isRecurring, true);
   });
 
   it("10 — older +3/+7 do not replay after +14 is successfully satisfied", () => {
@@ -225,10 +226,13 @@ describe("catch-up selection — one candidate per invoice", () => {
           rule_id: "rule-after-14",
           status: "sent",
           sent_at: "2026-08-12T10:00:00.000Z",
+          scheduled_at: "2026-07-15",
         },
       ],
     });
-    assert.equal(results.length, 0);
+    assert.equal(results.length, 1);
+    assert.equal(results[0]?.scheduledDate, "2026-08-19");
+    assert.equal(results[0]?.isRecurring, true);
   });
 
   it("11 — +3 sent but +7/+14 missed selects +14 only", () => {
@@ -342,7 +346,7 @@ describe("catch-up timezone and manual suppression", () => {
     assert.equal(results.length, 0);
   });
 
-  it("20 — manual email yesterday does not permanently satisfy today's rule occurrence", () => {
+  it("20 — manual email yesterday satisfies that occurrence (no duplicate today)", () => {
     const results = evaluateCandidates({
       evaluationDate: "2026-08-11",
       historyRows: [
@@ -354,8 +358,7 @@ describe("catch-up timezone and manual suppression", () => {
         },
       ],
     });
-    assert.equal(results.length, 1);
-    assert.equal(results[0]?.ruleId, "rule-after-14");
+    assert.equal(results.length, 0);
   });
 
   it("21 — WhatsApp has no effect on email reminder eligibility", () => {

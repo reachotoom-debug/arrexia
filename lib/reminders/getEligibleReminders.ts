@@ -7,11 +7,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
 import {
   evaluateReminderEligibility,
+  evaluateScheduledOccurrenceEligibility,
   getMaxSatisfiedOccurrenceScheduledDate,
+  isRecurringContactCooldownActive,
   manualEmailSentTodayForInvoice,
+  shouldImportJumpToRecurring,
   type ReminderEligibilityReason,
   type ReminderHistoryEntry,
 } from "./eligibility";
+import {
+  computeLatestRecurringOccurrence,
+  findFinalAfterDueRule,
+  isRecurringOccurrence,
+  RECURRING_OVERDUE_ENABLED,
+  RECURRING_OVERDUE_INTERVAL_DAYS,
+} from "./recurringChase";
+import { computeScheduledDateForRule } from "./ruleTrigger";
 import { formatRuleWhenText } from "./shared";
 import {
   normalizeJoinedReminderTemplate,
@@ -20,7 +31,7 @@ import {
 } from "./ruleTemplate";
 
 export type EligibleReminderCandidate = {
-  /** Stable row key: `${invoiceId}:${ruleId}` */
+  /** Stable row key: `${invoiceId}:${ruleId}:${scheduledDate}` */
   id: string;
   invoiceId: string;
   invoiceNumber: string | null;
@@ -44,6 +55,8 @@ export type EligibleReminderCandidate = {
   daysFromDueDate: number | null;
   ruleLabel: string;
   eligibilityReason: ReminderEligibilityReason;
+  /** True when scheduledDate is a recurring overdue chase (k >= 1). */
+  isRecurring?: boolean;
 };
 
 export type InvoiceCandidateRow = {
@@ -86,6 +99,8 @@ export type ReminderHistoryCandidateRow = {
   rule_id: string | null;
   status: string;
   sent_at: string | null;
+  scheduled_at?: string | null;
+  channel?: string | null;
 };
 
 /** PostgREST nested-select shape for reminder_rules + reminder_templates join. */
@@ -143,10 +158,22 @@ function groupHistoryByInvoiceId(
       ruleId: row.rule_id,
       status: row.status,
       sentAt: row.sent_at,
+      scheduledAt: row.scheduled_at ?? null,
+      channel: row.channel ?? null,
     });
     map.set(row.invoice_id, entries);
   }
   return map;
+}
+
+function toAllRulesRef(rules: ReminderRuleCandidateRow[]) {
+  return rules.map((rule) => ({
+    id: rule.id,
+    triggerType: rule.trigger_type,
+    offsetDays: Number(rule.offset_days ?? 0),
+    sortOrder: rule.sort_order,
+    createdAt: rule.created_at ?? null,
+  }));
 }
 
 /**
@@ -247,53 +274,130 @@ function selectCatchUpCandidateForInvoice(params: {
   }
 
   const dueDate = invoice.due_date.slice(0, 10);
-  const maxSatisfied = getMaxSatisfiedOccurrenceScheduledDate({
-    history,
-    rules: enabledRules.map((rule) => ({
+  const allRulesRef = toAllRulesRef(enabledRules);
+  const finalRule = findFinalAfterDueRule(
+    enabledRules.map((rule) => ({
       id: rule.id,
       triggerType: rule.trigger_type,
       offsetDays: Number(rule.offset_days ?? 0),
-    })),
+      sortOrder: rule.sort_order,
+      createdAt: rule.created_at ?? null,
+    }))
+  );
+
+  const finalOneShotDate =
+    finalRule != null
+      ? computeScheduledDateForRule(dueDate, "after_due", finalRule.offsetDays)
+      : null;
+
+  const importJumpToRecurring = shouldImportJumpToRecurring({
+    history,
+    finalOneShotDate,
+    evaluationDate,
     dueDate,
+    finalOffsetDays: finalRule != null ? Number(finalRule.offsetDays ?? 0) : 0,
+    recurringIntervalDays: RECURRING_OVERDUE_INTERVAL_DAYS,
   });
+
+  const maxSatisfied = getMaxSatisfiedOccurrenceScheduledDate({
+    history,
+    rules: allRulesRef,
+    dueDate,
+    workspaceTimeZone,
+    recurringIntervalDays: RECURRING_OVERDUE_INTERVAL_DAYS,
+  });
+
+  const invoiceInput = {
+    dueDate: invoice.due_date,
+    outstanding: Number(invoice.outstanding),
+    paid: Number(invoice.paid ?? 0),
+    baseStatus: invoice.base_status,
+    archivedAt: invoice.archived_at ?? null,
+    clientArchivedAt: invoice.client_archived_at,
+    clientIsActive: invoice.client_is_active,
+  };
 
   const eligibleOccurrences: Array<{
     rule: ReminderRuleCandidateRow;
     eligibility: ReturnType<typeof evaluateReminderEligibility>;
+    isRecurring: boolean;
   }> = [];
 
-  for (const rule of enabledRules) {
-    const eligibility = evaluateReminderEligibility({
+  if (!importJumpToRecurring) {
+    for (const rule of enabledRules) {
+      const eligibility = evaluateReminderEligibility({
+        evaluationDate,
+        workspaceTimeZone,
+        rule: {
+          id: rule.id,
+          isEnabled: rule.is_enabled,
+          triggerType: rule.trigger_type,
+          offsetDays: Number(rule.offset_days ?? 0),
+          forStatus: rule.for_status,
+        },
+        invoice: invoiceInput,
+        history,
+        allRules: allRulesRef,
+      });
+
+      if (!eligibility.eligible || !eligibility.scheduledDate) {
+        continue;
+      }
+
+      if (maxSatisfied && eligibility.scheduledDate <= maxSatisfied) {
+        continue;
+      }
+
+      eligibleOccurrences.push({ rule, eligibility, isRecurring: false });
+    }
+  }
+
+  if (RECURRING_OVERDUE_ENABLED && finalRule) {
+    const recurringContactCooldown = isRecurringContactCooldownActive({
       evaluationDate,
-      workspaceTimeZone,
-      rule: {
-        id: rule.id,
-        isEnabled: rule.is_enabled,
-        triggerType: rule.trigger_type,
-        offsetDays: Number(rule.offset_days ?? 0),
-        forStatus: rule.for_status,
-      },
-      invoice: {
-        dueDate: invoice.due_date,
-        outstanding: Number(invoice.outstanding),
-        paid: Number(invoice.paid ?? 0),
-        baseStatus: invoice.base_status,
-        archivedAt: invoice.archived_at ?? null,
-        clientArchivedAt: invoice.client_archived_at,
-        clientIsActive: invoice.client_is_active,
-      },
       history,
+      workspaceTimeZone,
     });
 
-    if (!eligibility.eligible || !eligibility.scheduledDate) {
-      continue;
-    }
+    const recurring = computeLatestRecurringOccurrence({
+      dueDate,
+      finalOffsetDays: Number(finalRule.offsetDays ?? 0),
+      intervalDays: RECURRING_OVERDUE_INTERVAL_DAYS,
+      evaluationDate,
+    });
 
-    if (maxSatisfied && eligibility.scheduledDate <= maxSatisfied) {
-      continue;
-    }
+    if (recurring && recurring.k >= 1 && !recurringContactCooldown) {
+      const finalRuleRow = enabledRules.find((rule) => rule.id === finalRule.id);
+      if (finalRuleRow) {
+        const eligibility = evaluateScheduledOccurrenceEligibility({
+          evaluationDate,
+          workspaceTimeZone,
+          scheduledDate: recurring.scheduledDate,
+          rule: {
+            id: finalRuleRow.id,
+            isEnabled: finalRuleRow.is_enabled,
+            triggerType: finalRuleRow.trigger_type,
+            offsetDays: Number(finalRuleRow.offset_days ?? 0),
+            forStatus: finalRuleRow.for_status,
+          },
+          invoice: invoiceInput,
+          history,
+          allRules: allRulesRef,
+        });
 
-    eligibleOccurrences.push({ rule, eligibility });
+        if (
+          eligibility.eligible &&
+          eligibility.scheduledDate &&
+          (!maxSatisfied || eligibility.scheduledDate > maxSatisfied)
+        ) {
+          eligibleOccurrences.push({
+            rule: finalRuleRow,
+            eligibility,
+            isRecurring: true,
+          });
+        }
+      }
+    }
   }
 
   if (eligibleOccurrences.length === 0) {
@@ -323,10 +427,14 @@ function selectCatchUpCandidateForInvoice(params: {
   });
 
   const winner = filtered[0];
-  const { rule, eligibility } = winner;
+  const { rule, eligibility, isRecurring } = winner;
+
+  const ruleLabel = isRecurring
+    ? "Recurring overdue chase"
+    : formatRuleWhenText(rule.trigger_type, Number(rule.offset_days ?? 0));
 
   return {
-    id: `${invoice.id}:${rule.id}`,
+    id: `${invoice.id}:${rule.id}:${eligibility.scheduledDate!}`,
     invoiceId: invoice.id,
     invoiceNumber: invoice.invoice_number,
     clientId: invoice.client_id,
@@ -347,8 +455,9 @@ function selectCatchUpCandidateForInvoice(params: {
     offsetDays: Number(rule.offset_days ?? 0),
     scheduledDate: eligibility.scheduledDate!,
     daysFromDueDate: eligibility.daysFromDueDate ?? null,
-    ruleLabel: formatRuleWhenText(rule.trigger_type, Number(rule.offset_days ?? 0)),
+    ruleLabel,
     eligibilityReason: eligibility.reason,
+    isRecurring,
   };
 }
 
@@ -473,14 +582,11 @@ export async function getEligibleReminders(
     );
   }
 
-  // Batch-load reminder history for duplicate evaluation (R2A).
-  // Tenant isolation: MUST scope by workspace_id in addition to candidate invoice IDs
-  // so another workspace's sent rows never suppress this workspace's eligibility.
   let historyRows: ReminderHistoryCandidateRow[] = [];
   if (invoiceIds.length > 0) {
     const { data, error: historyError } = await supabase
       .from("reminders")
-      .select("invoice_id, rule_id, status, sent_at")
+      .select("invoice_id, rule_id, status, sent_at, scheduled_at, channel")
       .eq("workspace_id", workspaceId)
       .in("invoice_id", invoiceIds);
 
@@ -520,3 +626,5 @@ export async function getEligibleReminders(
     clientEmailsByClientId,
   });
 }
+
+export { isRecurringOccurrence };

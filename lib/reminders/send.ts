@@ -140,6 +140,8 @@ export async function sendReminderForInvoice(
     return cachedWorkspaceOrganizationId;
   };
 
+  let ruleBoundOccurrenceScheduledDate: string | null = null;
+
   const recordReminderOutcome = async (params: {
     status: "sent" | "failed" | "skipped";
     invoiceId: string;
@@ -149,6 +151,7 @@ export async function sendReminderForInvoice(
     subject: string;
     body: string;
     sentAt: string;
+    scheduledAt?: string | null;
     errorMessage?: string;
     skipReason?: string | null;
     organizationId?: string | null;
@@ -163,6 +166,7 @@ export async function sendReminderForInvoice(
       subject,
       body,
       sentAt,
+      scheduledAt,
       errorMessage,
       skipReason,
       organizationId,
@@ -173,6 +177,8 @@ export async function sendReminderForInvoice(
     let persistError: string | undefined;
     try {
       const resolvedOrganizationId = await resolveOrganizationId(organizationId);
+      const occurrenceScheduledAt = scheduledAt?.slice(0, 10) ?? null;
+
       const { data: reminderLog, error: insertError } = await supabase
         .from("reminders")
         .insert({
@@ -186,6 +192,7 @@ export async function sendReminderForInvoice(
           body,
           status,
           sent_at: sentAt,
+          scheduled_at: occurrenceScheduledAt,
           last_error: errorMessage ? errorMessage.substring(0, 500) : null,
           error_message: errorMessage ? errorMessage.substring(0, 500) : null,
           type: "reminder",
@@ -604,6 +611,7 @@ export async function sendReminderForInvoice(
         subject: "Payment Reminder",
         body: `Reminder skipped: ${errorMessage}`,
         sentAt: new Date().toISOString(),
+        scheduledAt: duplicateCheck.scheduledDate,
         errorMessage,
         skipReason: "already_sent_for_rule",
         organizationId: invoice.organization_id || null,
@@ -618,6 +626,8 @@ export async function sendReminderForInvoice(
         skipReason: "already_sent_for_rule",
       };
     }
+
+    ruleBoundOccurrenceScheduledDate = duplicateCheck.scheduledDate;
 
     if (source === "auto_cron") {
       const evaluationDate = resolveWorkspaceEvaluationDate(
@@ -963,6 +973,7 @@ export async function sendReminderForInvoice(
     subject,
     body: emailText,
     sentAt: new Date().toISOString(),
+    scheduledAt: ruleBoundOccurrenceScheduledDate,
     errorMessage: finalErrorMessage,
     skipReason: null,
     organizationId: invoice.organization_id || null,

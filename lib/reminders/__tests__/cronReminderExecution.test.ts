@@ -224,6 +224,9 @@ describe("cron reminder execution (P0)", () => {
         ruleId: "on-due",
         scheduledDate: "2026-07-26",
         workspaceTimeZone: TZ,
+        triggerType: "on_due",
+        offsetDays: 0,
+        dueDate: "2026-07-26",
       }),
       true
     );

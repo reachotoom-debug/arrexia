@@ -329,7 +329,7 @@ describe("getEligibleReminders suggested send metadata", () => {
     const results = evaluate({});
     assert.equal(results[0].ruleId, "rule-on-due");
     assert.equal(results[0].templateId, "tpl-on-due");
-    assert.match(results[0].id, /^inv-1:rule-on-due$/);
+    assert.match(results[0].id, /^inv-1:rule-on-due:2026-07-22$/);
   });
 });
 

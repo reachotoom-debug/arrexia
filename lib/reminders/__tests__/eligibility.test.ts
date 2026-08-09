@@ -393,7 +393,7 @@ describe("evaluateReminderEligibility — history", () => {
     assert.equal(result.eligible, true);
   });
 
-  it("manual reminder with rule_id = null → does not block rule-specific eligibility", () => {
+  it("manual reminder with rule_id = null satisfies the current due occurrence", () => {
     const result = evaluateReminderEligibility({
       ...historyBase,
       history: [
@@ -403,8 +403,15 @@ describe("evaluateReminderEligibility — history", () => {
           sentAt: "2026-07-29T10:00:00.000Z",
         },
       ],
+      allRules: [
+        {
+          id: "rule-1",
+          triggerType: "after_due",
+          offsetDays: 7,
+        },
+      ],
     });
-    assert.equal(result.eligible, true);
+    assert.equal(result.reason, "already_sent_for_rule");
   });
 
   it("catch-up send on a later calendar day blocks the rule occurrence", () => {

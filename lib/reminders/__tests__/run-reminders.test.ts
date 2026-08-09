@@ -340,6 +340,9 @@ describe("ruleOccurrence duplicate guard", () => {
       ruleId: "rule-on-due",
       scheduledDate: "2026-07-22",
       workspaceTimeZone: "UTC",
+      triggerType: "on_due",
+      offsetDays: 0,
+      dueDate: "2026-07-22",
     });
     assert.equal(blocked, true);
   });
@@ -356,6 +359,9 @@ describe("ruleOccurrence duplicate guard", () => {
       ruleId: "rule-on-due",
       scheduledDate: "2026-07-22",
       workspaceTimeZone: "UTC",
+      triggerType: "on_due",
+      offsetDays: 0,
+      dueDate: "2026-07-22",
     });
     assert.equal(blocked, false);
   });
