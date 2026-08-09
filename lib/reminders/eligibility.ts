@@ -5,10 +5,8 @@
 
 import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
 import {
-  computeInvoiceTimingFromCalendarDates,
   computeScheduledDateForRule,
   differenceCalendarDays,
-  matchesReminderRuleTrigger,
 } from "./ruleTrigger";
 
 /** Stored rule scope values from Settings schema + DB defaults. */
@@ -180,14 +178,87 @@ export function isSupportedTriggerType(triggerType: string): boolean {
   );
 }
 
+/**
+ * A rule defines one logical occurrence per invoice (scheduledDate derived from due date).
+ * Any successful send for that rule satisfies the occurrence — including catch-up sends
+ * sent on a later calendar day than the original scheduledDate.
+ */
 export function sentHistoryBlocksRuleOccurrence(
   history: ReminderHistoryEntry[],
   ruleId: string,
-  scheduledDate: string,
+  _scheduledDate: string,
+  _workspaceTimeZone?: string | null | undefined
+): boolean {
+  return history.some(
+    (entry) => entry.ruleId === ruleId && entry.status === "sent"
+  );
+}
+
+/** Whether a rule occurrence's scheduledDate has arrived and catch-up still applies. */
+export function isOccurrenceCatchUpEligible(params: {
+  evaluationDate: string;
+  dueDate: string;
+  scheduledDate: string;
+  triggerType: string;
+}): boolean {
+  const { evaluationDate, dueDate, scheduledDate, triggerType } = params;
+
+  if (scheduledDate > evaluationDate) {
+    return false;
+  }
+
+  if (triggerType === "before_due") {
+    return evaluationDate <= dueDate;
+  }
+
+  if (triggerType === "on_due") {
+    return dueDate <= evaluationDate;
+  }
+
+  if (triggerType === "after_due") {
+    return scheduledDate <= evaluationDate;
+  }
+
+  return false;
+}
+
+/** Latest scheduledDate among successfully sent rule-bound occurrences for an invoice. */
+export function getMaxSatisfiedOccurrenceScheduledDate(params: {
+  history: ReminderHistoryEntry[];
+  rules: Array<{ id: string; triggerType: string; offsetDays: number }>;
+  dueDate: string;
+}): string | null {
+  const ruleById = new Map(params.rules.map((rule) => [rule.id, rule]));
+  let max: string | null = null;
+
+  for (const entry of params.history) {
+    if (entry.status !== "sent" || !entry.ruleId) continue;
+    const rule = ruleById.get(entry.ruleId);
+    if (!rule) continue;
+
+    const scheduledDate = computeScheduledDateForRule(
+      params.dueDate,
+      rule.triggerType,
+      rule.offsetDays
+    );
+    if (!scheduledDate) continue;
+
+    if (max === null || scheduledDate > max) {
+      max = scheduledDate;
+    }
+  }
+
+  return max;
+}
+
+/** Generic manual email (ruleId=null) sent today suppresses automated sends for the invoice. */
+export function manualEmailSentTodayForInvoice(
+  history: ReminderHistoryEntry[],
+  evaluationDate: string,
   workspaceTimeZone: string | null | undefined
 ): boolean {
   for (const entry of history) {
-    if (entry.ruleId !== ruleId) continue;
+    if (entry.ruleId !== null) continue;
     if (entry.status !== "sent") continue;
     if (!entry.sentAt) continue;
 
@@ -195,7 +266,7 @@ export function sentHistoryBlocksRuleOccurrence(
       entry.sentAt,
       workspaceTimeZone
     );
-    if (sentCalendarDate === scheduledDate) {
+    if (sentCalendarDate === evaluationDate) {
       return true;
     }
   }
@@ -269,14 +340,15 @@ export function evaluateReminderEligibility(
   }
 
   const daysFromDueDate = differenceCalendarDays(evaluationDate, dueDate);
-  const timing = computeInvoiceTimingFromCalendarDates(evaluationDate, dueDate);
-  const triggerMatches = matchesReminderRuleTrigger(
-    timing,
-    rule.triggerType,
-    rule.offsetDays
-  );
 
-  if (!triggerMatches || evaluationDate !== scheduledDate) {
+  if (
+    !isOccurrenceCatchUpEligible({
+      evaluationDate,
+      dueDate,
+      scheduledDate,
+      triggerType: rule.triggerType,
+    })
+  ) {
     return ineligible("trigger_not_due", {
       daysFromDueDate: daysFromDueDate ?? undefined,
       scheduledDate,

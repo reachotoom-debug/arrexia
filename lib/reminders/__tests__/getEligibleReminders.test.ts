@@ -198,7 +198,7 @@ describe("buildEligibleReminderCandidates", () => {
     assert.equal(results.length, 0);
   });
 
-  it("uses workspace-local evaluation date for duplicate checks", () => {
+  it("blocks occurrence when rule was already sent regardless of sent_at timezone", () => {
     const tz = "America/Los_Angeles";
     const evaluationDate = instantToWorkspaceCalendarDate(
       new Date("2026-07-22T07:00:00.000Z"),
@@ -217,16 +217,15 @@ describe("buildEligibleReminderCandidates", () => {
           invoice_id: "inv-1",
           rule_id: "rule-on-due",
           status: "sent",
-          // 2026-07-22 06:59 UTC is still 2026-07-21 in Los Angeles
           sent_at: "2026-07-22T06:59:00.000Z",
         },
       ],
       clientEmailsByClientId: new Map([["client-1", "billing@acme.test"]]),
     });
-    assert.equal(results.length, 1);
+    assert.equal(results.length, 0);
   });
 
-  it("returns one row per eligible rule occurrence (deterministic order)", () => {
+  it("returns at most one catch-up candidate per invoice (deterministic order)", () => {
     const results = evaluate({
       evaluationDate: "2026-07-22",
       rules: [
@@ -260,10 +259,8 @@ describe("buildEligibleReminderCandidates", () => {
         }),
       ],
     });
-    assert.equal(bothDue.length, 2);
-    assert.equal(bothDue[0].ruleId, "rule-a");
-    assert.equal(bothDue[1].ruleId, "rule-b");
-    assert.notEqual(bothDue[0].id, bothDue[1].id);
+    assert.equal(bothDue.length, 1);
+    assert.equal(bothDue[0].ruleId, "rule-b");
   });
 
   it("excludes disabled reminder_template", () => {

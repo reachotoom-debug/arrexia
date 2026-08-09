@@ -232,7 +232,7 @@ describe("R2C eligibility (canonical builder)", () => {
     assert.equal(results.length, 1);
   });
 
-  it("respects workspace-local evaluation date boundary", () => {
+  it("respects workspace-local evaluation date boundary for catch-up duplicate blocking", () => {
     const evaluationDate = instantToWorkspaceCalendarDate(
       new Date("2026-07-22T07:00:00.000Z"),
       TZ
@@ -255,7 +255,7 @@ describe("R2C eligibility (canonical builder)", () => {
       ],
       clientEmailsByClientId: new Map([["client-1", "a@test.com"]]),
     });
-    assert.equal(results.length, 1);
+    assert.equal(results.length, 0);
   });
 });
 
@@ -286,14 +286,18 @@ describe("executeEligibleReminderCandidates", () => {
       evaluationDate: "2026-07-29",
       rules: [
         rule({ id: "rule-a", trigger_type: "after_due", offset_days: 7, sort_order: 1 }),
-        {
-          ...rule({ id: "rule-b", trigger_type: "after_due", offset_days: 7, sort_order: 2 }),
-          template_id: "rule-b-tpl",
-          reminder_template: usableTemplate("rule-b-tpl"),
-        },
       ],
       invoices: [
         invoice({
+          id: "inv-1",
+          due_date: "2026-07-22",
+          display_status: "overdue",
+          is_overdue: true,
+          overdue_days: 7,
+        }),
+        invoice({
+          id: "inv-2",
+          client_id: "client-2",
           due_date: "2026-07-22",
           display_status: "overdue",
           is_overdue: true,

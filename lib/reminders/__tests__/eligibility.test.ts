@@ -257,7 +257,7 @@ describe("evaluateReminderEligibility — triggers", () => {
     assert.equal(result.scheduledDate, "2026-07-19");
   });
 
-  it("before_due 3 rejects two days before due", () => {
+  it("before_due 3 catch-up eligible one day after missed scheduled date", () => {
     const result = evaluateReminderEligibility(
       baseInput({
         evaluationDate: "2026-07-20",
@@ -269,7 +269,8 @@ describe("evaluateReminderEligibility — triggers", () => {
         invoice: { ...baseInput().invoice, dueDate: "2026-07-22" },
       })
     );
-    assert.equal(result.reason, "trigger_not_due");
+    assert.equal(result.eligible, true);
+    assert.equal(result.scheduledDate, "2026-07-19");
   });
 
   it("on_due matches due date only", () => {
@@ -406,7 +407,7 @@ describe("evaluateReminderEligibility — history", () => {
     assert.equal(result.eligible, true);
   });
 
-  it("sent on a different calendar day does not block the scheduled occurrence", () => {
+  it("catch-up send on a later calendar day blocks the rule occurrence", () => {
     const result = evaluateReminderEligibility({
       ...historyBase,
       history: [
@@ -417,7 +418,7 @@ describe("evaluateReminderEligibility — history", () => {
         },
       ],
     });
-    assert.equal(result.eligible, true);
+    assert.equal(result.reason, "already_sent_for_rule");
   });
 });
 

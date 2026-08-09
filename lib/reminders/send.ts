@@ -20,7 +20,9 @@ import {
   resolveGenericManualTemplate,
   ruleTemplateErrorOutcome,
 } from "@/lib/reminders/ruleTemplate";
-import { checkRuleOccurrenceDuplicateBeforeSend } from "@/lib/reminders/ruleOccurrenceGuard";
+import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
+import { checkRuleOccurrenceDuplicateBeforeSend, loadRuleOccurrenceHistory } from "@/lib/reminders/ruleOccurrenceGuard";
+import { manualEmailSentTodayForInvoice } from "@/lib/reminders/eligibility";
 import {
   computeReminderDaysOverdue,
   resolveReminderOverdueReferenceDate,
@@ -615,6 +617,44 @@ export async function sendReminderForInvoice(
         reminderLogId: reminderId,
         skipReason: "already_sent_for_rule",
       };
+    }
+
+    if (source === "auto_cron") {
+      const evaluationDate = resolveWorkspaceEvaluationDate(
+        new Date(),
+        workspaceTimeZone
+      );
+      const history = await loadRuleOccurrenceHistory(
+        supabase,
+        workspaceId,
+        invoice.id
+      );
+      if (manualEmailSentTodayForInvoice(history, evaluationDate, workspaceTimeZone)) {
+        const errorMessage =
+          "A manual collection email was already sent for this invoice today.";
+        const { reminderId } = await recordReminderOutcome({
+          status: "skipped",
+          invoiceId: invoice.id,
+          clientId: client.id,
+          ruleId,
+          templateId: null,
+          subject: "Payment Reminder",
+          body: `Reminder skipped: ${errorMessage}`,
+          sentAt: new Date().toISOString(),
+          errorMessage,
+          skipReason: "manual_email_sent_today",
+          organizationId: invoice.organization_id || null,
+        });
+
+        return {
+          success: false,
+          status: "skipped",
+          errorMessage,
+          reminderId,
+          reminderLogId: reminderId,
+          skipReason: "manual_email_sent_today",
+        };
+      }
     }
 
     overdueReferenceDate = resolveReminderOverdueReferenceDate({

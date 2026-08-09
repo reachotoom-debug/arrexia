@@ -7,6 +7,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
 import {
   evaluateReminderEligibility,
+  getMaxSatisfiedOccurrenceScheduledDate,
+  manualEmailSentTodayForInvoice,
   type ReminderEligibilityReason,
   type ReminderHistoryEntry,
 } from "./eligibility";
@@ -148,7 +150,7 @@ function groupHistoryByInvoiceId(
 }
 
 /**
- * Pure in-memory evaluation: one candidate per eligible invoice × rule occurrence.
+ * Pure in-memory evaluation: at most one catch-up candidate per invoice.
  * Rules are evaluated in deterministic sort_order (then created_at, then id).
  */
 export function buildEligibleReminderCandidates(params: {
@@ -194,58 +196,18 @@ export function buildEligibleReminderCandidates(params: {
         ? clientEmailsByClientId.get(invoice.client_id) ?? null
         : null;
 
-    for (const rule of enabledRules) {
-      const eligibility = evaluateReminderEligibility({
-        evaluationDate,
-        workspaceTimeZone,
-        rule: {
-          id: rule.id,
-          isEnabled: rule.is_enabled,
-          triggerType: rule.trigger_type,
-          offsetDays: Number(rule.offset_days ?? 0),
-          forStatus: rule.for_status,
-        },
-        invoice: {
-          dueDate: invoice.due_date,
-          outstanding: Number(invoice.outstanding),
-          paid: Number(invoice.paid ?? 0),
-          baseStatus: invoice.base_status,
-          archivedAt: invoice.archived_at ?? null,
-          clientArchivedAt: invoice.client_archived_at,
-          clientIsActive: invoice.client_is_active,
-        },
-        history,
-      });
+    const candidate = selectCatchUpCandidateForInvoice({
+      workspaceId,
+      evaluationDate,
+      workspaceTimeZone,
+      invoice,
+      enabledRules,
+      history,
+      clientEmail,
+    });
 
-      if (!eligibility.eligible || !eligibility.scheduledDate) {
-        continue;
-      }
-
-      results.push({
-        id: `${invoice.id}:${rule.id}`,
-        invoiceId: invoice.id,
-        invoiceNumber: invoice.invoice_number,
-        clientId: invoice.client_id,
-        clientName: invoice.client_name,
-        clientEmail,
-        dueDate: invoice.due_date.slice(0, 10),
-        total: Number(invoice.total ?? 0),
-        paid: Number(invoice.paid ?? 0),
-        outstanding: Number(invoice.outstanding),
-        baseStatus: invoice.base_status,
-        displayStatus: invoice.display_status,
-        currency: invoice.currency,
-        isOverdue: invoice.is_overdue ?? false,
-        ruleId: rule.id,
-        ruleName: rule.name,
-        templateId: rule.template_id,
-        triggerType: rule.trigger_type,
-        offsetDays: Number(rule.offset_days ?? 0),
-        scheduledDate: eligibility.scheduledDate,
-        daysFromDueDate: eligibility.daysFromDueDate ?? null,
-        ruleLabel: formatRuleWhenText(rule.trigger_type, Number(rule.offset_days ?? 0)),
-        eligibilityReason: eligibility.reason,
-      });
+    if (candidate) {
+      results.push(candidate);
     }
   }
 
@@ -259,6 +221,135 @@ export function buildEligibleReminderCandidates(params: {
     if (dueCompare !== 0) return dueCompare;
     return a.invoiceId.localeCompare(b.invoiceId);
   });
+}
+
+function selectCatchUpCandidateForInvoice(params: {
+  workspaceId: string;
+  evaluationDate: string;
+  workspaceTimeZone: string;
+  invoice: InvoiceCandidateRow;
+  enabledRules: ReminderRuleCandidateRow[];
+  history: ReminderHistoryEntry[];
+  clientEmail: string | null;
+}): EligibleReminderCandidate | null {
+  const {
+    workspaceId,
+    evaluationDate,
+    workspaceTimeZone,
+    invoice,
+    enabledRules,
+    history,
+    clientEmail,
+  } = params;
+
+  if (manualEmailSentTodayForInvoice(history, evaluationDate, workspaceTimeZone)) {
+    return null;
+  }
+
+  const dueDate = invoice.due_date.slice(0, 10);
+  const maxSatisfied = getMaxSatisfiedOccurrenceScheduledDate({
+    history,
+    rules: enabledRules.map((rule) => ({
+      id: rule.id,
+      triggerType: rule.trigger_type,
+      offsetDays: Number(rule.offset_days ?? 0),
+    })),
+    dueDate,
+  });
+
+  const eligibleOccurrences: Array<{
+    rule: ReminderRuleCandidateRow;
+    eligibility: ReturnType<typeof evaluateReminderEligibility>;
+  }> = [];
+
+  for (const rule of enabledRules) {
+    const eligibility = evaluateReminderEligibility({
+      evaluationDate,
+      workspaceTimeZone,
+      rule: {
+        id: rule.id,
+        isEnabled: rule.is_enabled,
+        triggerType: rule.trigger_type,
+        offsetDays: Number(rule.offset_days ?? 0),
+        forStatus: rule.for_status,
+      },
+      invoice: {
+        dueDate: invoice.due_date,
+        outstanding: Number(invoice.outstanding),
+        paid: Number(invoice.paid ?? 0),
+        baseStatus: invoice.base_status,
+        archivedAt: invoice.archived_at ?? null,
+        clientArchivedAt: invoice.client_archived_at,
+        clientIsActive: invoice.client_is_active,
+      },
+      history,
+    });
+
+    if (!eligibility.eligible || !eligibility.scheduledDate) {
+      continue;
+    }
+
+    if (maxSatisfied && eligibility.scheduledDate <= maxSatisfied) {
+      continue;
+    }
+
+    eligibleOccurrences.push({ rule, eligibility });
+  }
+
+  if (eligibleOccurrences.length === 0) {
+    return null;
+  }
+
+  const hasAfterDue = eligibleOccurrences.some(
+    (entry) => entry.rule.trigger_type === "after_due"
+  );
+  const filtered = hasAfterDue
+    ? eligibleOccurrences.filter((entry) => entry.rule.trigger_type !== "on_due")
+    : eligibleOccurrences;
+
+  if (filtered.length === 0) {
+    return null;
+  }
+
+  filtered.sort((a, b) => {
+    const dateCompare = b.eligibility.scheduledDate!.localeCompare(
+      a.eligibility.scheduledDate!
+    );
+    if (dateCompare !== 0) return dateCompare;
+    const sortA = a.rule.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const sortB = b.rule.sort_order ?? Number.MAX_SAFE_INTEGER;
+    if (sortA !== sortB) return sortB - sortA;
+    return b.rule.id.localeCompare(a.rule.id);
+  });
+
+  const winner = filtered[0];
+  const { rule, eligibility } = winner;
+
+  return {
+    id: `${invoice.id}:${rule.id}`,
+    invoiceId: invoice.id,
+    invoiceNumber: invoice.invoice_number,
+    clientId: invoice.client_id,
+    clientName: invoice.client_name,
+    clientEmail,
+    dueDate,
+    total: Number(invoice.total ?? 0),
+    paid: Number(invoice.paid ?? 0),
+    outstanding: Number(invoice.outstanding),
+    baseStatus: invoice.base_status,
+    displayStatus: invoice.display_status,
+    currency: invoice.currency,
+    isOverdue: invoice.is_overdue ?? false,
+    ruleId: rule.id,
+    ruleName: rule.name,
+    templateId: rule.template_id,
+    triggerType: rule.trigger_type,
+    offsetDays: Number(rule.offset_days ?? 0),
+    scheduledDate: eligibility.scheduledDate!,
+    daysFromDueDate: eligibility.daysFromDueDate ?? null,
+    ruleLabel: formatRuleWhenText(rule.trigger_type, Number(rule.offset_days ?? 0)),
+    eligibilityReason: eligibility.reason,
+  };
 }
 
 export type GetEligibleRemindersOptions = {
