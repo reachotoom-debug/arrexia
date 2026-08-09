@@ -63,37 +63,46 @@ describe("Business plan catalog", () => {
 });
 
 describe("billing plan card CTA matrix", () => {
-  it("Free shows Upgrade to Starter and Pro", () => {
-    assert.equal(getBillingPlanCardCta("free", "starter").label, "Upgrade to Starter");
-    assert.equal(getBillingPlanCardCta("free", "pro").label, "Upgrade to Pro");
+  it("legacy paid free context routes upgrades to contact", () => {
+    assert.equal(getBillingPlanCardCta("free", "starter").label, "Request Upgrade");
+    assert.equal(getBillingPlanCardCta("free", "starter").canSubmit, false);
+    assert.equal(getBillingPlanCardCta("free", "starter").href, "/contact");
   });
 
-  it("Starter shows Current plan on Starter and Upgrade to Pro", () => {
+  it("Starter shows Current plan on Starter and Contact Sales for Pro", () => {
     assert.equal(getBillingPlanCardCta("starter", "starter").label, "Current plan");
-    assert.equal(getBillingPlanCardCta("starter", "pro").label, "Upgrade to Pro");
+    const proCta = getBillingPlanCardCta("starter", "pro");
+    assert.equal(proCta.label, "Contact Sales");
+    assert.equal(proCta.canSubmit, false);
+    assert.equal(proCta.href, "/contact");
   });
 
-  it("Pro shows disabled Select plan for Starter and Current plan on Pro", () => {
-    assert.equal(getBillingPlanCardCta("pro", "starter").label, "Select plan");
+  it("Pro shows disabled Contact Sales for Starter and Current plan on Pro", () => {
+    const starterCta = getBillingPlanCardCta("pro", "starter");
+    assert.equal(starterCta.label, "Contact Sales");
+    assert.equal(starterCta.canSubmit, false);
     assert.equal(getBillingPlanCardCta("pro", "pro").label, "Current plan");
   });
 
-  it("Free shows Upgrade to Business", () => {
+  it("Free shows Contact Sales for Business", () => {
     const cta = getBillingPlanCardCta("free", "business");
-    assert.equal(cta.label, "Upgrade to Business");
-    assert.equal(cta.canSubmit, true);
+    assert.equal(cta.label, "Request Upgrade");
+    assert.equal(cta.canSubmit, false);
+    assert.equal(cta.href, "/contact");
   });
 
-  it("Starter shows Upgrade to Business", () => {
+  it("Starter shows Contact Sales for Business", () => {
     const cta = getBillingPlanCardCta("starter", "business");
-    assert.equal(cta.label, "Upgrade to Business");
-    assert.equal(cta.canSubmit, true);
+    assert.equal(cta.label, "Contact Sales");
+    assert.equal(cta.canSubmit, false);
+    assert.equal(cta.href, "/contact");
   });
 
-  it("Pro shows Upgrade to Business", () => {
+  it("Pro shows Contact Sales for Business", () => {
     const cta = getBillingPlanCardCta("pro", "business");
-    assert.equal(cta.label, "Upgrade to Business");
-    assert.equal(cta.canSubmit, true);
+    assert.equal(cta.label, "Contact Sales");
+    assert.equal(cta.canSubmit, false);
+    assert.equal(cta.href, "/contact");
   });
 
   it("Business shows Current plan on Business card", () => {
@@ -104,7 +113,7 @@ describe("billing plan card CTA matrix", () => {
 
   it("Business → Pro control is disabled with support message", () => {
     const cta = getBillingPlanCardCta("business", "pro");
-    assert.equal(cta.label, "Select plan");
+    assert.equal(cta.label, "Contact Sales");
     assert.equal(cta.canSubmit, false);
     assert.match(cta.disabledReason ?? "", /support/i);
   });
@@ -112,17 +121,12 @@ describe("billing plan card CTA matrix", () => {
   it("Business → Starter control is disabled", () => {
     const cta = getBillingPlanCardCta("business", "starter");
     assert.equal(cta.canSubmit, false);
-    assert.equal(cta.label, "Select plan");
+    assert.equal(cta.label, "Contact Sales");
   });
 
   it("disabled downgrade never submits", () => {
     const cta = getBillingPlanCardCta("business", "starter");
     assert.equal(cta.canSubmit, false);
-  });
-
-  it("downgrade CTAs use Select plan label", () => {
-    assert.equal(getBillingPlanCardCta("business", "starter").label, "Select plan");
-    assert.equal(getBillingPlanCardCta("pro", "starter").label, "Select plan");
   });
 
   it("billing UI plans are self-service tiers only", () => {
@@ -152,14 +156,14 @@ describe("Business entitlements", () => {
 });
 
 describe("BillingPlansClient CTA wiring", () => {
-  it("uses explicit upgrade labels and per-card CTA helper", () => {
+  it("uses contact sales links instead of self-service plan submission", () => {
     const src = readFileSync(
       "app/[workspaceId]/settings/_components/BillingPlansClient.tsx",
       "utf8"
     );
     assert.match(src, /getBillingPlanCardCta/);
-    assert.match(src, /pendingPlanId/);
-    assert.match(src, /cta\.canSubmit/);
-    assert.doesNotMatch(src, /Select plan/);
+    assert.match(src, /cta\.href/);
+    assert.doesNotMatch(src, /setWorkspacePlanAction/);
+    assert.doesNotMatch(src, /handlePlanChange/);
   });
 });

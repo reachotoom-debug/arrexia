@@ -22,8 +22,8 @@ const COPY: Record<
     description: "Automatic reminders, templates, and rules.",
   },
   billing: {
-    title: "Payments & billing",
-    description: "Workspace plan and billing preferences.",
+    title: "Billing & Subscription",
+    description: "Your Arrexia subscription, usage, and plan options.",
   },
   account: {
     title: "Account",

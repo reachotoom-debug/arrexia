@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import "./testSetup";
+
 import { getBillingPlanCardCta } from "@/lib/billing/billingPlanCardCta";
 import { createArrexiaTrialSubscription } from "@/lib/billing/createPublicTrialSubscription";
 import {
@@ -252,16 +254,17 @@ describe("trial usage metering semantics", () => {
 });
 
 describe("billing CTA semantics", () => {
-  it("trial CTAs select paid plans", () => {
+  it("trial CTAs route to contact instead of self-submit", () => {
     const ctx = { entitlementState: "trial" as const, paidPlan: null };
-    assert.equal(getBillingPlanCardCta(ctx, "starter").label, "Select Starter");
-    assert.equal(getBillingPlanCardCta(ctx, "business").canSubmit, true);
+    assert.equal(getBillingPlanCardCta(ctx, "starter").label, "Request Upgrade");
+    assert.equal(getBillingPlanCardCta(ctx, "business").canSubmit, false);
+    assert.equal(getBillingPlanCardCta(ctx, "business").href, "/contact");
   });
 
   it("paid downgrade CTAs are disabled with support message", () => {
     const ctx = { entitlementState: "paid" as const, paidPlan: "business" as const };
     const cta = getBillingPlanCardCta(ctx, "pro");
-    assert.equal(cta.label, "Select plan");
+    assert.equal(cta.label, "Contact Sales");
     assert.equal(cta.disabled, true);
     assert.match(cta.disabledReason ?? "", /support/i);
   });

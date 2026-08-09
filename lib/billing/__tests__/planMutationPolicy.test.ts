@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  assertCustomerPaidActivationBlocked,
   assertCustomerPlanChangeAllowed,
   classifyPlanTransition,
   needsSubscriptionRepair,
@@ -226,6 +227,15 @@ describe("planMutationPolicy", () => {
   it("rejects free target for customers", () => {
     const unsupported = assertCustomerPlanChangeAllowed("starter", "free", "downgrade");
     assert.equal(unsupported.ok, false);
+  });
+
+  it("blocks customer paid activation until payment provider integration", () => {
+    const blocked = assertCustomerPaidActivationBlocked("starter", "upgrade");
+    assert.equal(blocked.ok, false);
+    if (!blocked.ok) {
+      assert.equal(blocked.code, "PAYMENT_PROVIDER_REQUIRED");
+    }
+    assert.equal(assertCustomerPaidActivationBlocked("starter", "no_op").ok, true);
   });
 
   it("allows founder admin assignment regardless of downgrade direction", () => {

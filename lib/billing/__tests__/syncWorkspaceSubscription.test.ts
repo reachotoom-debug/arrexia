@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import "./testSetup";
+
 import {
   ADMIN_FREE_TRIAL_DAYS,
   buildSubscriptionUpsertPayload,

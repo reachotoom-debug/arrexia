@@ -204,6 +204,13 @@ export function isUpgradeAvailable(plan: WorkspacePlan): boolean {
   return getWorkspacePlanRank(plan) < getWorkspacePlanRank("business");
 }
 
+/** Billing UI plan cards omit member quotas until invite enforcement ships. */
+export function getBillingUiPlanLimits(planId: PlanId): string[] {
+  return getPlanDefinition(planId).limits.filter(
+    (line) => !/\b(member|members|user|users)\b/i.test(line)
+  );
+}
+
 export type PublicPlanPricingDisplay = {
   price: string;
   period: string;

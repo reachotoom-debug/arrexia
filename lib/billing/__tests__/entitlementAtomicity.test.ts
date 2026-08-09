@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
+import "./testSetup";
+
 import { TRIAL_AI_GENERATION_LIMIT, TRIAL_INVOICE_LIMIT_TOTAL } from "@/lib/billing/trialConfig";
 import { resolveWorkspaceEntitlement } from "@/lib/billing/resolveWorkspaceEntitlement";
 import {

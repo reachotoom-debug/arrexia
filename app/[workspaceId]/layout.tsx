@@ -2,6 +2,7 @@ import { requireWorkspace } from "@/lib/auth/server";
 import { userCanAccessAdminPanel } from "@/lib/admin/requireAdmin";
 import { getAdminBasePath } from "@/lib/admin/adminPaths";
 import { getCurrentProfile } from "@/lib/profile/server";
+import { getCommercialSubscriptionPresentation } from "@/lib/billing/commercialSubscriptionPresentation";
 import { getWorkspacePlan } from "@/lib/billing/getWorkspacePlan";
 import { createRoutePerf } from "@/lib/perf/server";
 import { WorkspaceShell } from "./_components/WorkspaceShell";
@@ -30,7 +31,11 @@ export default async function WorkspaceLayout({
   ]);
 
   const profile = profileResult.profile;
-  const plan = planResult.plan;
+  const subscription = getCommercialSubscriptionPresentation({
+    entitlementState: planResult.entitlement.state,
+    paidPlan: planResult.entitlement.paidPlan,
+    trial: planResult.trial,
+  });
 
   perf.finish({ showAdminLink: showAdminLink ? 1 : 0 });
 
@@ -41,7 +46,7 @@ export default async function WorkspaceLayout({
       userEmail={user.email ?? ""}
       userFullName={profile?.full_name ?? null}
       userAvatarUrl={profile?.avatar_url ?? null}
-      plan={plan}
+      subscription={subscription}
       showAdminLink={showAdminLink}
       adminPath={getAdminBasePath()}
     >

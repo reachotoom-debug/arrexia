@@ -27,8 +27,12 @@ export type PlanMutationPolicyErrorCode =
   | "INVALID_PLAN"
   | "DOWNGRADE_REQUIRES_SUPPORT"
   | "UNSUPPORTED_PLAN"
+  | "PAYMENT_PROVIDER_REQUIRED"
   | "NO_WORKSPACE_ACCESS"
   | "INSUFFICIENT_ROLE";
+
+export const CUSTOMER_PAID_ACTIVATION_BLOCKED_MESSAGE =
+  "Online subscription billing is not yet connected. Contact Arrexia to activate or change your paid plan.";
 
 export function getPlanRank(plan: WorkspacePlan): number {
   return getWorkspacePlanRank(plan);
@@ -172,6 +176,22 @@ export function assertCustomerPlanChangeAllowed(
 
   if (!isPaidAssignablePlan(targetPlan)) {
     return { ok: false, code: "UNSUPPORTED_PLAN" };
+  }
+
+  return { ok: true };
+}
+
+/** Blocks customer self-service paid activation until payment provider integration. */
+export function assertCustomerPaidActivationBlocked(
+  targetPlan: WorkspacePlan,
+  transition: PlanTransitionType
+): { ok: true } | { ok: false; code: "PAYMENT_PROVIDER_REQUIRED" } {
+  if (transition === "no_op") {
+    return { ok: true };
+  }
+
+  if (isPaidAssignablePlan(targetPlan)) {
+    return { ok: false, code: "PAYMENT_PROVIDER_REQUIRED" };
   }
 
   return { ok: true };

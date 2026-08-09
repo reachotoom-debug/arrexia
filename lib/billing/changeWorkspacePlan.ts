@@ -13,7 +13,9 @@ import {
 import { getWorkspacePlan } from "./getWorkspacePlan";
 import {
   assertCustomerPlanChangeAllowed,
+  assertCustomerPaidActivationBlocked,
   classifyPlanTransition,
+  CUSTOMER_PAID_ACTIVATION_BLOCKED_MESSAGE,
   isPaidAssignablePlan,
   needsSubscriptionRepair,
   resolveSubscriptionSyncMode,
@@ -60,6 +62,7 @@ export type ChangeWorkspacePlanFailure = {
     | "INVALID_PLAN"
     | "UNSUPPORTED_PLAN"
     | "DOWNGRADE_REQUIRES_SUPPORT"
+    | "PAYMENT_PROVIDER_REQUIRED"
     | "ATOMIC_MUTATION_FAILED"
     | "ACTIVATION_FAILED";
   error: string;
@@ -196,6 +199,15 @@ export async function changeWorkspacePlan(
           failureCode === "DOWNGRADE_REQUIRES_SUPPORT"
             ? "Downgrades are managed by support and cannot be applied immediately."
             : "That plan is not available for self-service activation.",
+      };
+    }
+
+    const paidActivation = assertCustomerPaidActivationBlocked(targetPlan, transition);
+    if (!paidActivation.ok) {
+      return {
+        ok: false,
+        code: "PAYMENT_PROVIDER_REQUIRED",
+        error: CUSTOMER_PAID_ACTIVATION_BLOCKED_MESSAGE,
       };
     }
 

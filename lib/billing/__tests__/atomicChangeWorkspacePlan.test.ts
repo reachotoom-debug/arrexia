@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
+import "./testSetup";
+
 import {
   buildAtomicWorkspacePlanRpcParams,
   executeAtomicWorkspacePlanChange,

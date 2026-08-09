@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, describe, it } from "node:test";
 
+import "./testSetup";
+
 import { changeWorkspacePlan } from "@/lib/billing/changeWorkspacePlan";
 import { getWorkspacePlan } from "@/lib/billing/getWorkspacePlan";
+import { CUSTOMER_PAID_ACTIVATION_BLOCKED_MESSAGE } from "@/lib/billing/planMutationPolicy";
 import { getPlanStorageLimits } from "@/lib/billing/plans";
 import { setSupabaseAdminClientForTests } from "@/lib/supabase/admin";
 
@@ -32,8 +35,18 @@ afterEach(() => {
   setSupabaseAdminClientForTests(null);
 });
 
+function expectCustomerPaidActivationBlocked(
+  result: Awaited<ReturnType<typeof changeWorkspacePlan>>
+) {
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.code, "PAYMENT_PROVIDER_REQUIRED");
+    assert.equal(result.error, CUSTOMER_PAID_ACTIVATION_BLOCKED_MESSAGE);
+  }
+}
+
 describe("changeWorkspacePlan", () => {
-  it("Free → Starter succeeds and activates manual subscription", async () => {
+  it("Free → Starter blocked for customer_settings until payment provider", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "free");
 
@@ -42,6 +55,23 @@ describe("changeWorkspacePlan", () => {
       targetPlan: "starter",
       source: "customer_settings",
       actorUserId: ACTOR_ID,
+      now: NOW,
+    });
+
+    expectCustomerPaidActivationBlocked(result);
+    assert.equal(state.subscriptions.length, 0);
+  });
+
+  it("founder admin Free → Starter succeeds and activates manual subscription", async () => {
+    const state = installMock();
+    seedPlan(state, WORKSPACE_ID, "free");
+
+    const result = await changeWorkspacePlan({
+      workspaceId: WORKSPACE_ID,
+      targetPlan: "starter",
+      source: "founder_admin",
+      actorUserId: ACTOR_ID,
+      allowAdminOverride: true,
       now: NOW,
     });
 
@@ -56,7 +86,7 @@ describe("changeWorkspacePlan", () => {
   });
 
   for (const targetPlan of ["starter", "pro", "business"] as const) {
-    it(`active canonical free trial → ${targetPlan} preserves trial history`, async () => {
+    it(`active canonical free trial → ${targetPlan} blocked for customer_settings`, async () => {
       const state = installMock();
       seedPlan(state, WORKSPACE_ID, "free");
       seedSubscription(state, WORKSPACE_ID, {
@@ -76,20 +106,13 @@ describe("changeWorkspacePlan", () => {
         now: NOW,
       });
 
-      assert.equal(result.ok, true);
-      if (result.ok) {
-        assert.equal(result.previousEffectivePlan, "free");
-        assert.equal(result.newEffectivePlan, targetPlan);
-        assert.equal(result.subscriptionStatus, "active");
-      }
-      assert.equal(state.subscriptions[0]?.status, "active");
-      assert.equal(state.subscriptions[0]?.plan, targetPlan);
-      assert.equal(state.subscriptions[0]?.trial_starts_at, "2026-07-01T00:00:00.000Z");
-      assert.equal(state.subscriptions[0]?.trial_ends_at, FUTURE_TRIAL_END);
+      expectCustomerPaidActivationBlocked(result);
+      assert.equal(state.subscriptions[0]?.status, "trial");
+      assert.equal(state.subscriptions[0]?.plan, "free");
     });
   }
 
-  it("Free → Pro succeeds", async () => {
+  it("Free → Pro blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "free");
 
@@ -101,13 +124,10 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.newEffectivePlan, "pro");
-    }
+    expectCustomerPaidActivationBlocked(result);
   });
 
-  it("expired Starter trial → Starter becomes active", async () => {
+  it("expired Starter trial → Starter blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "starter");
     seedSubscription(state, WORKSPACE_ID, {
@@ -127,17 +147,10 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.previousEffectivePlan, "free");
-      assert.equal(result.newEffectivePlan, "starter");
-      assert.equal(result.transitionType, "reactivation");
-    }
-    assert.equal(state.subscriptions[0]?.status, "active");
-    assert.equal(state.subscriptions[0]?.trial_ends_at, PAST_TRIAL_END);
+    expectCustomerPaidActivationBlocked(result);
   });
 
-  it("expired Starter trial → Pro becomes active", async () => {
+  it("expired Starter trial → Pro blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "starter");
     seedSubscription(state, WORKSPACE_ID, {
@@ -157,13 +170,10 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.newEffectivePlan, "pro");
-    }
+    expectCustomerPaidActivationBlocked(result);
   });
 
-  it("expired Pro trial → Pro becomes active", async () => {
+  it("expired Pro trial → Pro blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "pro");
     seedSubscription(state, WORKSPACE_ID, {
@@ -183,13 +193,10 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.newEffectivePlan, "pro");
-    }
+    expectCustomerPaidActivationBlocked(result);
   });
 
-  it("active Starter trial → Pro preserves remaining trial end", async () => {
+  it("active Starter trial → Pro blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "starter");
     seedSubscription(state, WORKSPACE_ID, {
@@ -209,16 +216,12 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.newEffectivePlan, "pro");
-      assert.equal(result.subscriptionStatus, "active");
-    }
+    expectCustomerPaidActivationBlocked(result);
     assert.equal(state.subscriptions[0]?.trial_ends_at, FUTURE_TRIAL_END);
-    assert.equal(state.subscriptions[0]?.status, "active");
+    assert.equal(state.subscriptions[0]?.status, "trial");
   });
 
-  it("atomic RPC failure leaves both billing tables unchanged", async () => {
+  it("atomic RPC failure is not reached when customer paid activation is blocked", async () => {
     const state = installMock();
     state.atomicRpcShouldFail = true;
     seedPlan(state, WORKSPACE_ID, "free");
@@ -228,6 +231,25 @@ describe("changeWorkspacePlan", () => {
       targetPlan: "starter",
       source: "customer_settings",
       actorUserId: ACTOR_ID,
+      now: NOW,
+    });
+
+    expectCustomerPaidActivationBlocked(result);
+    assert.equal(state.plans[0]?.plan, "free");
+    assert.equal(state.subscriptions.length, 0);
+  });
+
+  it("founder admin atomic RPC failure leaves both billing tables unchanged", async () => {
+    const state = installMock();
+    state.atomicRpcShouldFail = true;
+    seedPlan(state, WORKSPACE_ID, "free");
+
+    const result = await changeWorkspacePlan({
+      workspaceId: WORKSPACE_ID,
+      targetPlan: "starter",
+      source: "founder_admin",
+      actorUserId: ACTOR_ID,
+      allowAdminOverride: true,
       now: NOW,
     });
 
@@ -255,8 +277,9 @@ describe("changeWorkspacePlan", () => {
     const result = await changeWorkspacePlan({
       workspaceId: WORKSPACE_ID,
       targetPlan: "starter",
-      source: "customer_settings",
+      source: "founder_admin",
       actorUserId: ACTOR_ID,
+      allowAdminOverride: true,
       now: NOW,
     });
 
@@ -380,8 +403,9 @@ describe("changeWorkspacePlan", () => {
     const mutation = await changeWorkspacePlan({
       workspaceId: WORKSPACE_ID,
       targetPlan: "pro",
-      source: "customer_settings",
+      source: "founder_admin",
       actorUserId: ACTOR_ID,
+      allowAdminOverride: true,
       now: NOW,
     });
     assert.equal(mutation.ok, true);
@@ -408,8 +432,9 @@ describe("changeWorkspacePlan", () => {
     const mutation = await changeWorkspacePlan({
       workspaceId: WORKSPACE_ID,
       targetPlan: "starter",
-      source: "customer_settings",
+      source: "founder_admin",
       actorUserId: ACTOR_ID,
+      allowAdminOverride: true,
       now: NOW,
     });
     assert.equal(mutation.ok, true);
@@ -419,7 +444,7 @@ describe("changeWorkspacePlan", () => {
     assert.equal(plan.storedPlan, "starter");
   });
 
-  it("Free → Business succeeds", async () => {
+  it("Free → Business blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "free");
 
@@ -431,13 +456,10 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.newEffectivePlan, "business");
-    }
+    expectCustomerPaidActivationBlocked(result);
   });
 
-  it("Starter → Business succeeds", async () => {
+  it("Starter → Business blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "starter");
     seedSubscription(state, WORKSPACE_ID, {
@@ -457,13 +479,10 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.newEffectivePlan, "business");
-    }
+    expectCustomerPaidActivationBlocked(result);
   });
 
-  it("Pro → Business succeeds", async () => {
+  it("Pro → Business blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "pro");
     seedSubscription(state, WORKSPACE_ID, {
@@ -483,13 +502,10 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.newEffectivePlan, "business");
-    }
+    expectCustomerPaidActivationBlocked(result);
   });
 
-  it("expired trial → Business succeeds", async () => {
+  it("expired trial → Business blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "pro");
     seedSubscription(state, WORKSPACE_ID, {
@@ -509,13 +525,10 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.newEffectivePlan, "business");
-    }
+    expectCustomerPaidActivationBlocked(result);
   });
 
-  it("active Starter trial → Business preserves trial end", async () => {
+  it("active Starter trial → Business blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "starter");
     seedSubscription(state, WORKSPACE_ID, {
@@ -535,16 +548,12 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.newEffectivePlan, "business");
-      assert.equal(result.subscriptionStatus, "active");
-    }
+    expectCustomerPaidActivationBlocked(result);
     assert.equal(state.subscriptions[0]?.trial_ends_at, FUTURE_TRIAL_END);
-    assert.equal(state.subscriptions[0]?.status, "active");
+    assert.equal(state.subscriptions[0]?.status, "trial");
   });
 
-  it("active Pro trial → Business preserves trial end", async () => {
+  it("active Pro trial → Business blocked for customer_settings", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "pro");
     seedSubscription(state, WORKSPACE_ID, {
@@ -564,7 +573,7 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, true);
+    expectCustomerPaidActivationBlocked(result);
     assert.equal(state.subscriptions[0]?.trial_ends_at, FUTURE_TRIAL_END);
   });
 
@@ -646,7 +655,7 @@ describe("changeWorkspacePlan", () => {
     }
   });
 
-  it("Business atomic RPC failure cannot return success", async () => {
+  it("Business customer activation blocked before atomic RPC", async () => {
     const state = installMock();
     state.atomicRpcShouldFail = true;
     seedPlan(state, WORKSPACE_ID, "free");
@@ -659,10 +668,7 @@ describe("changeWorkspacePlan", () => {
       now: NOW,
     });
 
-    assert.equal(result.ok, false);
-    if (!result.ok) {
-      assert.equal(result.code, "ATOMIC_MUTATION_FAILED");
-    }
+    expectCustomerPaidActivationBlocked(result);
     assert.equal(state.plans[0]?.plan, "free");
   });
 

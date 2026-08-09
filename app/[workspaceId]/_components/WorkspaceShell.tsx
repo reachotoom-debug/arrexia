@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { LogOut, Menu, Shield } from "lucide-react";
 import { ArrexiaLogo } from "@/components/brand/ArrexiaLogo";
 import { DEFAULT_AVATAR_URL } from "@/lib/constants";
-import { formatPlanLabel, isUpgradeAvailable, type WorkspacePlan } from "@/lib/billing/plans";
+import type { CommercialSubscriptionPresentation } from "@/lib/billing/commercialSubscriptionPresentation";
 import { getWorkspaceNavItems } from "./nav";
 import {
   PageContainer,
@@ -57,7 +57,7 @@ type WorkspaceSidebarPanelProps = {
   userEmail: string;
   userFullName: string | null;
   userAvatarUrl: string | null;
-  plan: WorkspacePlan;
+  subscription: CommercialSubscriptionPresentation;
   showAdminLink: boolean;
   adminPath?: string;
   pathname: string | null;
@@ -71,7 +71,7 @@ function WorkspaceSidebarPanel({
   userEmail,
   userFullName,
   userAvatarUrl,
-  plan,
+  subscription,
   showAdminLink,
   adminPath = "/admin",
   pathname,
@@ -241,9 +241,10 @@ function WorkspaceSidebarPanel({
 
         <div className="mt-2 hidden items-center justify-between text-xs lg:flex">
           <span className="text-slate-500">
-            Plan: <span className="font-medium text-slate-700">{formatPlanLabel(plan)}</span>
+            Plan:{" "}
+            <span className="font-medium text-slate-700">{subscription.sidebarLabel}</span>
           </span>
-          {isUpgradeAvailable(plan) ? (
+          {subscription.showUpgradeLink ? (
             <Link
               href={`/${workspaceId}/settings?section=billing`}
               onClick={afterNav}
@@ -264,7 +265,7 @@ interface WorkspaceShellProps {
   userEmail: string;
   userFullName: string | null;
   userAvatarUrl: string | null;
-  plan: WorkspacePlan;
+  subscription: CommercialSubscriptionPresentation;
   showAdminLink: boolean;
   adminPath?: string;
   children: React.ReactNode;
@@ -276,7 +277,7 @@ export function WorkspaceShell({
   userEmail,
   userFullName,
   userAvatarUrl,
-  plan,
+  subscription,
   showAdminLink,
   adminPath = "/admin",
   children,
@@ -290,7 +291,7 @@ export function WorkspaceShell({
     userEmail,
     userFullName,
     userAvatarUrl,
-    plan,
+    subscription,
     showAdminLink,
     adminPath,
     pathname,

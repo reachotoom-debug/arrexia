@@ -47,8 +47,8 @@ const CARD_GROUPS: { group: string; cards: SettingsCardItem[] }[] = [
     group: "Billing",
     cards: [
       {
-        title: "Payments & billing",
-        description: "Your Arrexia subscription plan.",
+        title: "Billing & Subscription",
+        description: "Your Arrexia subscription, usage, and plan options.",
         href: (w) => `/${w}/settings?section=billing`,
       },
     ],
