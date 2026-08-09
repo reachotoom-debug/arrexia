@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import {
   PLAN_LIMIT_CLIENTS_MESSAGE,
   PLAN_LIMIT_INVOICES_MESSAGE,
-} from "@/lib/billing/assertWithinPlanLimits";
+} from "@/lib/billing/planLimitMessages";
 
 interface PlanLimitBannerProps {
   code: "PLAN_LIMIT_INVOICES" | "PLAN_LIMIT_CLIENTS";

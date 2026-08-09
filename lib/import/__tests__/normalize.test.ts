@@ -3,6 +3,9 @@
  * Unit tests for import normalization utilities
  */
 
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import {
   normalizeDate,
   normalizeMoney,
@@ -10,6 +13,22 @@ import {
   normalizeEmail,
   normalizePhone,
 } from "../normalize";
+
+function expect<T>(actual: T) {
+  return {
+    toBe(expected: T) {
+      assert.equal(actual, expected);
+    },
+    toBeNull() {
+      assert.equal(actual, null);
+    },
+    not: {
+      toMatch(pattern: RegExp) {
+        assert.doesNotMatch(String(actual), pattern);
+      },
+    },
+  };
+}
 
 describe("normalizeDate", () => {
   it("should parse YYYY-MM-DD format", () => {

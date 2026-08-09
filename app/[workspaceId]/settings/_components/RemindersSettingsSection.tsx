@@ -1,5 +1,5 @@
 import { getWorkspacePlan } from "@/lib/billing/getWorkspacePlan";
-import { canManageReminderRules } from "@/lib/billing/reminderRulesAccess";
+import { canManageReminderRulesForEntitlement } from "@/lib/billing/reminderRulesAccess";
 import { loadEmailReadinessForWorkspace } from "@/lib/reminders/emailReadinessGate";
 import { supabaseServer } from "@/lib/supabase/server";
 import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
@@ -45,7 +45,7 @@ export async function RemindersSettingsSection({
       settings={settings}
       templates={templates}
       rules={rules}
-      canManageRules={canManageReminderRules(planResult.plan)}
+      canManageRules={canManageReminderRulesForEntitlement(planResult.entitlement)}
       emailReadyForAutomation={emailReadiness.ready}
       emailSkipReason={emailReadiness.ready ? null : emailReadiness.skipReason}
       workspaceTimeZone={resolveSafeTimeZone(workspaceTimeZone)}

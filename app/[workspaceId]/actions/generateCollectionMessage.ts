@@ -6,6 +6,13 @@ import { generateCollectionMessage } from "@/lib/ai/generateCollectionMessage";
 import { loadAuthoritativeCollectionContext } from "@/lib/ai/loadAuthoritativeCollectionContext";
 import { COLLECTION_MESSAGE_TONES } from "@/lib/ai/types";
 import { supabaseServer } from "@/lib/supabase/server";
+import {
+  reserveAiGenerationSlot,
+  releaseTrialUsageReservation,
+  finalizeTrialUsageReservation,
+  type TrialUsageReservation,
+} from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 
 const GenerateCollectionMessageInputSchema = z.object({
   workspaceId: z.string().uuid(),
@@ -33,6 +40,20 @@ export async function generateCollectionMessageAction(
 
   await requireWorkspace(workspaceId);
 
+  let aiReservation: TrialUsageReservation | null = null;
+  try {
+    aiReservation = await reserveAiGenerationSlot(workspaceId);
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return {
+        ok: false as const,
+        code: "entitlement" as const,
+        userMessage: error.message,
+      };
+    }
+    throw error;
+  }
+
   const supabase = await supabaseServer();
   const contextResult = await loadAuthoritativeCollectionContext({
     supabase,
@@ -41,6 +62,14 @@ export async function generateCollectionMessageAction(
   });
 
   if (!contextResult.ok) {
+    if (aiReservation) {
+      await releaseTrialUsageReservation(
+        workspaceId,
+        aiReservation.resource,
+        aiReservation.reservationId,
+        1
+      );
+    }
     if (contextResult.code === "paid" || contextResult.code === "ineligible") {
       return {
         ok: false as const,
@@ -56,8 +85,23 @@ export async function generateCollectionMessageAction(
     };
   }
 
-  return generateCollectionMessage({
+  const result = await generateCollectionMessage({
     facts: contextResult.facts,
     tone,
   });
+
+  if (!result.ok && aiReservation) {
+    await releaseTrialUsageReservation(
+      workspaceId,
+      aiReservation.resource,
+      aiReservation.reservationId,
+      1
+    );
+  }
+
+  if (result.ok && aiReservation) {
+    await finalizeTrialUsageReservation(workspaceId, aiReservation.reservationId);
+  }
+
+  return result;
 }

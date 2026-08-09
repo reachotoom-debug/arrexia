@@ -19,6 +19,7 @@ import {
   type WorkspacePlan,
 } from "@/lib/billing/plans";
 import type { TrialDisplayInfo } from "@/lib/billing/getWorkspacePlan";
+import type { EntitlementState } from "@/lib/billing/resolveWorkspaceEntitlement";
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 
 export function BillingPlansClient({
@@ -26,11 +27,15 @@ export function BillingPlansClient({
   currentPlan,
   storedPlan,
   trial,
+  entitlementState,
+  paidPlan,
 }: {
   workspaceId: string;
   currentPlan: WorkspacePlan;
   storedPlan: WorkspacePlan;
   trial: TrialDisplayInfo | null;
+  entitlementState: EntitlementState;
+  paidPlan: WorkspacePlan | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -39,8 +44,10 @@ export function BillingPlansClient({
     null
   );
 
+  const billingContext = { entitlementState, paidPlan };
+
   const handlePlanChange = async (plan: SelfServiceBillingPlanId) => {
-    const cta = getBillingPlanCardCta(currentPlan, plan);
+    const cta = getBillingPlanCardCta(billingContext, plan);
     if (!cta.canSubmit) {
       if (cta.disabledReason) {
         toast({
@@ -111,9 +118,7 @@ export function BillingPlansClient({
           </p>
           {trial?.status === "active" ? (
             <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-              <p className="font-medium">
-                {formatPlanLabel(trial.trialPlan)} trial
-              </p>
+              <p className="font-medium">Arrexia free trial</p>
               <p className="mt-0.5 text-blue-800">
                 {trial.daysRemaining === 1
                   ? "1 day remaining"
@@ -128,8 +133,8 @@ export function BillingPlansClient({
             <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               <p className="font-medium">Trial ended</p>
               <p className="mt-0.5">
-                Your {formatPlanLabel(trial.trialPlan)} trial has ended. Current effective
-                plan: {formatPlanLabel(currentPlan)}.
+                Your Arrexia trial has ended. Choose a paid plan below to continue making
+                changes.
                 {trial.trialEndsAt
                   ? ` Ended ${formatDateOnlyField(trial.trialEndsAt)}.`
                   : null}
@@ -159,7 +164,7 @@ export function BillingPlansClient({
               ? planId
               : null;
             const cta = selfServicePlan
-              ? getBillingPlanCardCta(currentPlan, selfServicePlan)
+              ? getBillingPlanCardCta(billingContext, selfServicePlan)
               : {
                   label: "Contact Sales",
                   disabled: true,

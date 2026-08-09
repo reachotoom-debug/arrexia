@@ -11,7 +11,7 @@ import {
 import { countries } from "@/lib/utils/countries";
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { PLAN_LIMIT_CLIENTS_MESSAGE } from "@/lib/billing/assertWithinPlanLimits";
+import { PLAN_LIMIT_CLIENTS_MESSAGE } from "@/lib/billing/planLimitMessages";
 
 interface ClientFormProps {
   mode: "create" | "edit";

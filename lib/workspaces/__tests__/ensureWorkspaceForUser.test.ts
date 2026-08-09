@@ -8,11 +8,17 @@ import {
   buildOrganizationInsertPayload,
   ensureDefaultWorkspacePlan,
   ensureOwnerMembership,
+  ensureStandaloneTrialIfNeeded,
   ensureWorkspaceSettings,
   loadExistingWorkspaceForUser,
   maybePromoteFreePlanToPublicTrial,
   type WorkspaceBootstrapAdmin,
 } from "../ensureWorkspaceForUser";
+import {
+  MS_PER_DAY,
+  TRIAL_DURATION_DAYS,
+} from "@/lib/billing/trialConfig";
+import type { SignupMarketingPlanIntent } from "@/lib/billing/publicTrialPlan";
 
 type MembershipRow = {
   workspace_id: string;
@@ -32,6 +38,7 @@ type WorkspaceRow = {
   name: string;
   organization_id: string | null;
   created_at: string;
+  trial_consumed_at?: string | null;
 };
 
 type SettingsRow = {
@@ -57,6 +64,7 @@ type SubscriptionRow = {
   status: string;
   trial_starts_at: string | null;
   trial_ends_at: string | null;
+  trial_consumed_at?: string | null;
 };
 
 type MockState = {
@@ -120,6 +128,7 @@ class MockQueryBuilder {
   private pendingInsert: Record<string, unknown> | null = null;
   private pendingUpdate: Record<string, unknown> | null = null;
   private headCount = false;
+  private isNullFilters: string[] = [];
 
   constructor(table: string, state: MockState) {
     this.table = table;
@@ -146,6 +155,13 @@ class MockQueryBuilder {
 
   limit(count: number) {
     this.limitCount = count;
+    return this;
+  }
+
+  is(column: string, value: unknown) {
+    if (value === null) {
+      this.isNullFilters.push(column);
+    }
     return this;
   }
 
@@ -303,6 +319,7 @@ class MockQueryBuilder {
           name: String(row.name),
           organization_id: (row.organization_id as string | null) ?? null,
           created_at: new Date().toISOString(),
+          trial_consumed_at: null,
         };
         this.state.workspaces.push(workspace);
         return { data: { id: workspace.id, organization_id: workspace.organization_id }, error: null };
@@ -398,6 +415,7 @@ class MockQueryBuilder {
           status: String(row.status),
           trial_starts_at: (row.trial_starts_at as string | null) ?? null,
           trial_ends_at: (row.trial_ends_at as string | null) ?? null,
+          trial_consumed_at: (row.trial_consumed_at as string | null) ?? null,
         });
         return { data: null, error: null };
       }
@@ -430,6 +448,28 @@ class MockQueryBuilder {
       }
 
       return { data: { workspace_id: target.workspace_id }, error: null };
+    }
+
+    if (this.table === "workspaces") {
+      const target = this.state.workspaces.find((workspace) =>
+        this.filters.every((filter) => filter(workspace as unknown as Record<string, unknown>))
+      );
+
+      if (!target) {
+        return { data: null, error: { message: "workspace not found", code: "PGRST116" } };
+      }
+
+      for (const column of this.isNullFilters) {
+        if ((target as Record<string, unknown>)[column] != null) {
+          return { data: null, error: null };
+        }
+      }
+
+      if (patch.trial_consumed_at !== undefined) {
+        target.trial_consumed_at = (patch.trial_consumed_at as string | null) ?? null;
+      }
+
+      return { data: { id: target.id }, error: null };
     }
 
     return { data: null, error: { message: `Unknown update table ${this.table}`, code: "mock" } };
@@ -654,48 +694,85 @@ describe("ensureWorkspaceSettings", () => {
   });
 });
 
+function assertFreshStandaloneTrialPersistence(
+  state: MockState,
+  workspaceId: string
+): void {
+  assert.equal(state.plans.length, 1);
+  assert.equal(state.plans[0]?.plan, "free");
+  assert.equal(state.plans[0]?.client_limit, 5);
+  assert.equal(state.plans[0]?.invoice_limit_monthly, 5);
+  assert.equal(state.subscriptions.length, 1);
+  assert.equal(state.subscriptions[0]?.plan, "free");
+  assert.equal(state.subscriptions[0]?.status, "trial");
+  assert.ok(state.subscriptions[0]?.trial_starts_at);
+  assert.ok(state.subscriptions[0]?.trial_ends_at);
+  assert.ok(state.subscriptions[0]?.trial_consumed_at);
+  const workspace = state.workspaces.find((row) => row.id === workspaceId);
+  assert.ok(workspace?.trial_consumed_at);
+  assert.equal(
+    state.subscriptions[0]?.trial_consumed_at,
+    workspace?.trial_consumed_at
+  );
+  assert.equal(
+    state.subscriptions[0]?.trial_starts_at,
+    state.subscriptions[0]?.trial_consumed_at
+  );
+  const trialStartMs = Date.parse(state.subscriptions[0]!.trial_starts_at!);
+  const trialEndMs = Date.parse(state.subscriptions[0]!.trial_ends_at!);
+  assert.equal(trialEndMs - trialStartMs, TRIAL_DURATION_DAYS * MS_PER_DAY);
+}
+
 describe("ensureDefaultWorkspacePlan trial intent (R5 P2)", () => {
-  it("assigns starter limits on first plan row when requested", async () => {
-    const userId = "user-starter-plan";
-    const workspaceId = "ws-starter-0000-0000-0000-000000000001";
-    const state = createEmptyState(userId, "starter@example.com");
+  it("always persists free workspace plan shell on first insert", async () => {
+    const userId = "user-free-plan";
+    const workspaceId = "ws-free-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "free@example.com");
     const admin = createMockAdmin(state);
 
-    const result = await ensureDefaultWorkspacePlan(admin, workspaceId, userId, {
-      initialPlan: "starter",
-    });
+    const result = await ensureDefaultWorkspacePlan(admin, workspaceId, userId);
 
     assert.equal(result.planCreated, true);
-    assert.equal(result.plan, "starter");
-    assert.equal(state.plans[0]?.plan, "starter");
-    assert.equal(state.plans[0]?.client_limit, 25);
-    assert.equal(state.plans[0]?.invoice_limit_monthly, 50);
+    assert.equal(result.plan, "free");
+    assert.equal(state.plans[0]?.plan, "free");
+    assert.equal(state.plans[0]?.client_limit, 5);
+    assert.equal(state.plans[0]?.invoice_limit_monthly, 5);
   });
 
-  it("bootstrap with starter creates enforceable subscription metadata", async () => {
+  it("bootstrap creates standalone Arrexia trial subscription metadata", async () => {
     const userId = "user-starter-bootstrap";
     const state = createEmptyState(userId, "starter-bootstrap@example.com");
     const admin = createMockAdmin(state);
 
     await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "starter" });
 
-    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.plans[0]?.plan, "free");
     assert.equal(state.insertCounts.subscriptions, 1);
     assert.equal(state.subscriptions[0]?.status, "trial");
+    assert.equal(state.subscriptions[0]?.plan, "free");
     assert.ok(state.subscriptions[0]?.trial_ends_at);
+    assert.ok(state.subscriptions[0]?.trial_consumed_at);
+    assert.ok(state.workspaces[0]?.trial_consumed_at);
   });
 
-  it("falls back to free when subscription metadata cannot be created", async () => {
+  it("throws when standalone trial subscription cannot be created", async () => {
     const userId = "user-subscription-fail";
     const state = createEmptyState(userId, "fail@example.com");
     state.subscriptionInsertShouldFail = true;
     const admin = createMockAdmin(state);
 
-    const workspaceId = await bootstrapWorkspaceForUser(admin, userId, {
-      initialTrialPlan: "pro",
-    });
+    await assert.rejects(
+      () =>
+        bootstrapWorkspaceForUser(admin, userId, {
+          initialTrialPlan: "pro",
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof WorkspaceBootstrapError);
+        assert.equal(error.stage, "create_default_plan");
+        return true;
+      }
+    );
 
-    assert.ok(workspaceId.startsWith("ws-"));
     assert.equal(state.plans[0]?.plan, "free");
     assert.equal(state.plans[0]?.client_limit, 5);
     assert.equal(state.subscriptions.length, 0);
@@ -713,9 +790,7 @@ describe("ensureDefaultWorkspacePlan trial intent (R5 P2)", () => {
     });
     const admin = createMockAdmin(state);
 
-    const result = await ensureDefaultWorkspacePlan(admin, workspaceId, userId, {
-      initialPlan: "pro",
-    });
+    const result = await ensureDefaultWorkspacePlan(admin, workspaceId, userId);
 
     assert.equal(result.planCreated, false);
     assert.equal(result.plan, "free");
@@ -737,11 +812,11 @@ describe("ensureDefaultWorkspacePlan trial intent (R5 P2)", () => {
 
     assert.equal(first, second);
     assert.equal(state.plans.length, 1);
-    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.plans[0]?.plan, "free");
     assert.equal(state.insertCounts.organizations, 1);
   });
 
-  it("promotes free workspace to starter trial on bootstrap retry with preserved intent", async () => {
+  it("creates standalone trial on bootstrap retry without promoting workspace plan", async () => {
     const userId = "user-starter-recovery";
     const workspaceId = "ws-starter-recovery-0000-0000-000000000001";
     const state = createEmptyState(userId, "recovery@example.com");
@@ -767,12 +842,13 @@ describe("ensureDefaultWorkspacePlan trial intent (R5 P2)", () => {
 
     await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "starter" });
 
-    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.plans[0]?.plan, "free");
     assert.equal(state.insertCounts.subscriptions, 1);
     assert.equal(state.subscriptions[0]?.status, "trial");
+    assert.equal(state.subscriptions[0]?.plan, "free");
   });
 
-  it("promotes free workspace to pro trial on bootstrap retry with preserved intent", async () => {
+  it("ignores pro marketing intent on bootstrap retry", async () => {
     const userId = "user-pro-recovery";
     const workspaceId = "ws-pro-recovery-0000-0000-000000000001";
     const state = createEmptyState(userId, "pro-recovery@example.com");
@@ -798,8 +874,9 @@ describe("ensureDefaultWorkspacePlan trial intent (R5 P2)", () => {
 
     await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "pro" });
 
-    assert.equal(state.plans[0]?.plan, "pro");
-    assert.equal(state.subscriptions[0]?.plan, "pro");
+    assert.equal(state.plans[0]?.plan, "free");
+    assert.equal(state.subscriptions[0]?.plan, "free");
+    assert.equal(state.subscriptions[0]?.status, "trial");
   });
 
   it("does not duplicate an existing active trial subscription on retry", async () => {
@@ -880,7 +957,7 @@ describe("ensureDefaultWorkspacePlan trial intent (R5 P2)", () => {
 });
 
 describe("maybePromoteFreePlanToPublicTrial", () => {
-  it("returns current plan when no trial intent is provided", async () => {
+  it("does not grant trial to grandfathered legacy free workspace", async () => {
     const userId = "user-no-intent";
     const workspaceId = "ws-no-intent-0000-0000-000000000001";
     const state = createEmptyState(userId, "no-intent@example.com");
@@ -889,6 +966,12 @@ describe("maybePromoteFreePlanToPublicTrial", () => {
       plan: "free",
       invoice_limit_monthly: 5,
       client_limit: 5,
+    });
+    state.workspaces.push({
+      id: workspaceId,
+      name: "Legacy Workspace",
+      organization_id: "org-legacy",
+      created_at: "2020-01-01T00:00:00.000Z",
     });
     const admin = createMockAdmin(state);
 
@@ -902,7 +985,7 @@ describe("maybePromoteFreePlanToPublicTrial", () => {
     assert.equal(state.insertCounts.subscriptions, 0);
   });
 
-  it("promotes an existing free plan row to starter with subscription metadata", async () => {
+  it("creates standalone trial subscription without changing workspace plan row", async () => {
     const userId = "user-promote-starter";
     const workspaceId = "ws-promote-starter-0000-0000-000000000001";
     const state = createEmptyState(userId, "promote@example.com");
@@ -912,16 +995,345 @@ describe("maybePromoteFreePlanToPublicTrial", () => {
       invoice_limit_monthly: 5,
       client_limit: 5,
     });
+    state.workspaces.push({
+      id: workspaceId,
+      name: "My Workspace",
+      organization_id: "org-promote",
+      created_at: new Date().toISOString(),
+    });
     const admin = createMockAdmin(state);
 
     const result = await maybePromoteFreePlanToPublicTrial(admin, workspaceId, userId, {
       initialTrialPlan: "starter",
-      planCreated: false,
+      planCreated: true,
       currentPlan: "free",
     });
 
-    assert.equal(result, "starter");
-    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(result, "free");
+    assert.equal(state.plans[0]?.plan, "free");
     assert.equal(state.insertCounts.subscriptions, 1);
+    assert.equal(state.subscriptions[0]?.plan, "free");
+    assert.equal(state.subscriptions[0]?.status, "trial");
+  });
+});
+
+describe("fresh signup standalone trial persistence", () => {
+  for (const ctaPlan of ["starter", "pro", "business"] as SignupMarketingPlanIntent[]) {
+    it(`${ctaPlan} CTA creates generic free standalone trial`, async () => {
+      const userId = `user-cta-${ctaPlan}`;
+      const state = createEmptyState(userId, `${ctaPlan}@example.com`);
+      const admin = createMockAdmin(state);
+
+      const workspaceId = await bootstrapWorkspaceForUser(admin, userId, {
+        initialTrialPlan: ctaPlan,
+      });
+
+      assertFreshStandaloneTrialPersistence(state, workspaceId);
+    });
+  }
+
+  it("generic signup without CTA plan persists free standalone trial", async () => {
+    const userId = "user-generic-signup";
+    const state = createEmptyState(userId, "generic@example.com");
+    const admin = createMockAdmin(state);
+
+    const workspaceId = await bootstrapWorkspaceForUser(admin, userId);
+
+    assertFreshStandaloneTrialPersistence(state, workspaceId);
+  });
+
+  it("bootstrap retry does not extend trial or clear durable consumption marker", async () => {
+    const userId = "user-retry-idempotent";
+    const state = createEmptyState(userId, "retry@example.com");
+    const admin = createMockAdmin(state);
+
+    await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "starter" });
+    const firstStart = state.subscriptions[0]?.trial_starts_at;
+    const firstEnd = state.subscriptions[0]?.trial_ends_at;
+    const firstConsumed = state.subscriptions[0]?.trial_consumed_at;
+    const workspaceConsumed = state.workspaces[0]?.trial_consumed_at;
+
+    await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "pro" });
+
+    assert.equal(state.subscriptions.length, 1);
+    assert.equal(state.subscriptions[0]?.trial_starts_at, firstStart);
+    assert.equal(state.subscriptions[0]?.trial_ends_at, firstEnd);
+    assert.equal(state.subscriptions[0]?.trial_consumed_at, firstConsumed);
+    assert.equal(state.workspaces[0]?.trial_consumed_at, workspaceConsumed);
+    assert.equal(state.plans[0]?.plan, "free");
+    assert.equal(state.subscriptions[0]?.plan, "free");
+  });
+
+  it("legacy starter trial row on retry is not rewritten into a new trial", async () => {
+    const userId = "user-legacy-starter-trial";
+    const workspaceId = "ws-legacy-starter-0000-0000-000000000001";
+    const state = createEmptyState(userId, "legacy@example.com");
+    state.memberships.push({
+      workspace_id: workspaceId,
+      user_id: userId,
+      role: "owner",
+      created_at: new Date().toISOString(),
+    });
+    state.workspaces.push({
+      id: workspaceId,
+      name: "Legacy Workspace",
+      organization_id: "org-legacy",
+      created_at: new Date().toISOString(),
+      trial_consumed_at: null,
+    });
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "starter",
+      invoice_limit_monthly: 50,
+      client_limit: 25,
+    });
+    state.subscriptions.push({
+      workspace_id: workspaceId,
+      plan: "starter",
+      status: "trial",
+      trial_starts_at: "2026-07-01T00:00:00.000Z",
+      trial_ends_at: "2026-07-15T00:00:00.000Z",
+    });
+    const admin = createMockAdmin(state);
+
+    await bootstrapWorkspaceForUser(admin, userId, { initialTrialPlan: "pro" });
+
+    assert.equal(state.plans[0]?.plan, "starter");
+    assert.equal(state.subscriptions.length, 1);
+    assert.equal(state.insertCounts.subscriptions, 0);
+    assert.equal(state.subscriptions[0]?.trial_starts_at, "2026-07-01T00:00:00.000Z");
+  });
+});
+
+describe("ensureStandaloneTrialIfNeeded one-trial recovery invariant", () => {
+  function seedPartialBootstrap(state: MockState, userId: string, workspaceId: string) {
+    state.memberships.push({
+      workspace_id: workspaceId,
+      user_id: userId,
+      role: "owner",
+      created_at: new Date().toISOString(),
+    });
+    state.workspaces.push({
+      id: workspaceId,
+      name: "Recovery Workspace",
+      organization_id: "org-recovery",
+      created_at: new Date().toISOString(),
+      trial_consumed_at: null,
+    });
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      invoice_limit_monthly: 5,
+      client_limit: 5,
+    });
+  }
+
+  it("1 — fresh partially-created workspace can recover initial trial", async () => {
+    const userId = "user-recover-fresh";
+    const workspaceId = "ws-recover-fresh-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "recover-fresh@example.com");
+    seedPartialBootstrap(state, userId, workspaceId);
+    const admin = createMockAdmin(state);
+
+    const result = await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, {
+      planCreated: true,
+    });
+
+    assert.equal(result.created, true);
+    assert.equal(state.subscriptions.length, 1);
+    assert.equal(state.subscriptions[0]?.status, "trial");
+    assert.equal(state.subscriptions[0]?.plan, "free");
+    assert.ok(state.subscriptions[0]?.trial_consumed_at);
+    assert.equal(
+      state.workspaces[0]?.trial_consumed_at,
+      state.subscriptions[0]?.trial_consumed_at
+    );
+  });
+
+  it("2 — bootstrap retry does not extend trial", async () => {
+    const userId = "user-recover-no-extend";
+    const workspaceId = "ws-recover-no-extend-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "no-extend@example.com");
+    seedPartialBootstrap(state, userId, workspaceId);
+    state.subscriptions.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      status: "trial",
+      trial_starts_at: "2026-07-01T00:00:00.000Z",
+      trial_ends_at: "2026-07-15T00:00:00.000Z",
+      trial_consumed_at: "2026-07-01T00:00:00.000Z",
+    });
+    const admin = createMockAdmin(state);
+
+    const result = await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, {
+      planCreated: true,
+    });
+
+    assert.equal(result.created, false);
+    assert.equal(state.subscriptions.length, 1);
+    assert.equal(state.subscriptions[0]?.trial_ends_at, "2026-07-15T00:00:00.000Z");
+  });
+
+  it("3 — already-consumed trial cannot restart", async () => {
+    const userId = "user-consumed";
+    const workspaceId = "ws-consumed-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "consumed@example.com");
+    seedPartialBootstrap(state, userId, workspaceId);
+    state.workspaces[0]!.trial_consumed_at = "2026-06-01T00:00:00.000Z";
+    const admin = createMockAdmin(state);
+
+    const result = await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, {
+      planCreated: true,
+    });
+
+    assert.equal(result.created, false);
+    assert.equal(state.subscriptions.length, 0);
+  });
+
+  it("4 — expired trial cannot restart", async () => {
+    const userId = "user-expired";
+    const workspaceId = "ws-expired-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "expired@example.com");
+    seedPartialBootstrap(state, userId, workspaceId);
+    state.subscriptions.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      status: "trial",
+      trial_starts_at: "2026-06-01T00:00:00.000Z",
+      trial_ends_at: "2026-06-15T00:00:00.000Z",
+      trial_consumed_at: "2026-06-01T00:00:00.000Z",
+    });
+    const admin = createMockAdmin(state);
+
+    const result = await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, {
+      planCreated: true,
+    });
+
+    assert.equal(result.created, false);
+    assert.equal(state.subscriptions.length, 1);
+  });
+
+  it("5 — paid former-trial workspace cannot restart", async () => {
+    const userId = "user-paid-former";
+    const workspaceId = "ws-paid-former-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "paid-former@example.com");
+    seedPartialBootstrap(state, userId, workspaceId);
+    state.workspaces[0]!.trial_consumed_at = "2026-06-01T00:00:00.000Z";
+    state.subscriptions.push({
+      workspace_id: workspaceId,
+      plan: "starter",
+      status: "active",
+      trial_starts_at: null,
+      trial_ends_at: null,
+      trial_consumed_at: "2026-06-01T00:00:00.000Z",
+    });
+    const admin = createMockAdmin(state);
+
+    const result = await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, {
+      planCreated: true,
+    });
+
+    assert.equal(result.created, false);
+    assert.equal(state.insertCounts.subscriptions, 0);
+  });
+
+  it("6 — manipulated signup plan/query cannot restart", async () => {
+    const userId = "user-manipulated";
+    const workspaceId = "ws-manipulated-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "manipulated@example.com");
+    seedPartialBootstrap(state, userId, workspaceId);
+    state.workspaces[0]!.created_at = "2020-01-01T00:00:00.000Z";
+    state.workspaces[0]!.trial_consumed_at = "2020-01-01T00:00:00.000Z";
+    const admin = createMockAdmin(state);
+
+    const result = await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, {
+      planCreated: false,
+    });
+
+    assert.equal(result.created, false);
+    assert.equal(state.subscriptions.length, 0);
+  });
+
+  it("7 — missing subscription row alone cannot restart when durable evidence exists", async () => {
+    const userId = "user-durable-evidence";
+    const workspaceId = "ws-durable-evidence-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "durable@example.com");
+    seedPartialBootstrap(state, userId, workspaceId);
+    state.workspaces[0]!.trial_consumed_at = "2026-05-01T00:00:00.000Z";
+    const admin = createMockAdmin(state);
+
+    const result = await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, {
+      planCreated: true,
+    });
+
+    assert.equal(result.created, false);
+    assert.equal(state.subscriptions.length, 0);
+  });
+
+  it("3b — bootstrap retry does not recreate existing trial row", async () => {
+    const userId = "user-no-recreate";
+    const workspaceId = "ws-no-recreate-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "no-recreate@example.com");
+    seedPartialBootstrap(state, userId, workspaceId);
+    state.subscriptions.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      status: "trial",
+      trial_starts_at: "2026-07-01T00:00:00.000Z",
+      trial_ends_at: "2026-07-15T00:00:00.000Z",
+      trial_consumed_at: "2026-07-01T00:00:00.000Z",
+    });
+    const admin = createMockAdmin(state);
+
+    await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, { planCreated: true });
+    await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, { planCreated: true });
+
+    assert.equal(state.subscriptions.length, 1);
+    assert.equal(state.insertCounts.subscriptions, 0);
+  });
+
+  it("9 — ordinary login on old workspace does not create trial", async () => {
+    const userId = "user-ordinary-login";
+    const workspaceId = "ws-ordinary-login-0000-0000-0000-000000000001";
+    const state = createEmptyState(userId, "login@example.com");
+    state.memberships.push({
+      workspace_id: workspaceId,
+      user_id: userId,
+      role: "owner",
+      created_at: "2020-01-01T00:00:00.000Z",
+    });
+    state.workspaces.push({
+      id: workspaceId,
+      name: "Old Workspace",
+      organization_id: "org-old",
+      created_at: "2020-01-01T00:00:00.000Z",
+      trial_consumed_at: null,
+    });
+    state.plans.push({
+      workspace_id: workspaceId,
+      plan: "free",
+      invoice_limit_monthly: 5,
+      client_limit: 5,
+    });
+    const admin = createMockAdmin(state);
+
+    await bootstrapWorkspaceForUser(admin, userId);
+
+    assert.equal(state.insertCounts.subscriptions, 0);
+    assert.equal(state.subscriptions.length, 0);
+  });
+
+  it("10 — founder admin repair delegates through explicit authorized path", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { dirname, join } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+
+    const repairSource = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../../admin/repairUserWorkspace.ts"),
+      "utf8"
+    );
+    assert.match(repairSource, /repairUserWorkspace/);
+    assert.match(repairSource, /ensureWorkspaceForUser/);
+    assert.doesNotMatch(repairSource, /createArrexiaTrialSubscription/);
   });
 });

@@ -62,14 +62,16 @@ describe("R5 P2 invoice draft default unchanged", () => {
 });
 
 describe("R5 P3 effective plan centralization", () => {
-  it("getWorkspacePlan applies resolveEffectiveWorkspacePlan", () => {
+  it("getWorkspacePlan delegates to centralized entitlement resolver", () => {
     const src = readFileSync("lib/billing/getWorkspacePlan.ts", "utf8");
-    assert.match(src, /resolveEffectiveWorkspacePlan/);
-    assert.match(src, /loadWorkspaceSubscription/);
+    assert.match(src, /getWorkspaceEntitlementForBilling/);
+    assert.match(src, /entitlement:\s*billing\.entitlement/);
   });
 
-  it("assertWithinPlanLimits uses getWorkspacePlan for enforcement", () => {
+  it("assertWithinPlanLimits routes create enforcement through entitlementGuard", () => {
     const src = readFileSync("lib/billing/assertWithinPlanLimits.ts", "utf8");
-    assert.match(src, /getWorkspacePlan/);
+    assert.match(src, /assertInvoiceCreateEntitlement/);
+    assert.match(src, /assertClientCreateEntitlement/);
+    assert.match(src, /entitlementGuard/);
   });
 });

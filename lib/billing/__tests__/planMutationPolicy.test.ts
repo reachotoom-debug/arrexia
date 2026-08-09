@@ -23,6 +23,7 @@ function trialSubscription(
     plan,
     trialStartsAt: "2026-07-12T12:00:00.000Z",
     trialEndsAt,
+    trialConsumedAt: "2026-07-12T12:00:00.000Z",
     currentPeriodStartsAt: null,
     currentPeriodEndsAt: null,
   };
@@ -125,7 +126,7 @@ describe("planMutationPolicy", () => {
       "customer_settings",
       NOW
     );
-    assert.equal(syncMode, "active_trial_plan_change");
+    assert.equal(syncMode, "activate_paid");
   });
 
   it("blocks customer Pro → Starter downgrade", () => {
@@ -136,6 +137,7 @@ describe("planMutationPolicy", () => {
         plan: "pro",
         trialStartsAt: null,
         trialEndsAt: null,
+        trialConsumedAt: null,
         currentPeriodStartsAt: NOW.toISOString(),
         currentPeriodEndsAt: FUTURE_TRIAL_END,
       },
@@ -164,6 +166,7 @@ describe("planMutationPolicy", () => {
         plan: "starter",
         trialStartsAt: null,
         trialEndsAt: null,
+        trialConsumedAt: null,
         currentPeriodStartsAt: NOW.toISOString(),
         currentPeriodEndsAt: FUTURE_TRIAL_END,
       },
@@ -203,6 +206,7 @@ describe("planMutationPolicy", () => {
         plan: "business",
         trialStartsAt: null,
         trialEndsAt: null,
+        trialConsumedAt: null,
         currentPeriodStartsAt: NOW.toISOString(),
         currentPeriodEndsAt: FUTURE_TRIAL_END,
       },
@@ -232,6 +236,7 @@ describe("planMutationPolicy", () => {
         plan: "pro",
         trialStartsAt: null,
         trialEndsAt: null,
+        trialConsumedAt: null,
         currentPeriodStartsAt: NOW.toISOString(),
         currentPeriodEndsAt: FUTURE_TRIAL_END,
       },
@@ -275,6 +280,7 @@ describe("planMutationPolicy", () => {
         plan: "starter",
         trialStartsAt: null,
         trialEndsAt: null,
+        trialConsumedAt: null,
         currentPeriodStartsAt: NOW.toISOString(),
         currentPeriodEndsAt: FUTURE_TRIAL_END,
       },

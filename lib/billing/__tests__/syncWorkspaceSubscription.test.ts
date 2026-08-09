@@ -19,6 +19,7 @@ function expiredTrial(plan: "starter" | "pro"): WorkspaceSubscriptionSnapshot {
     plan,
     trialStartsAt: "2026-07-01T00:00:00.000Z",
     trialEndsAt: "2026-07-10T12:00:00.000Z",
+    trialConsumedAt: "2026-07-01T00:00:00.000Z",
     currentPeriodStartsAt: null,
     currentPeriodEndsAt: null,
   };
@@ -50,6 +51,7 @@ describe("syncWorkspaceSubscription payloads", () => {
       plan: "starter" as const,
       trialStartsAt: "2026-07-12T12:00:00.000Z",
       trialEndsAt: EXISTING_TRIAL_END,
+      trialConsumedAt: "2026-07-12T12:00:00.000Z",
       currentPeriodStartsAt: null,
       currentPeriodEndsAt: null,
     };

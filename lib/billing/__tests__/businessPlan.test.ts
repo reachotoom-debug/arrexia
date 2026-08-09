@@ -24,6 +24,7 @@ function activeSubscription(plan: "starter" | "pro" | "business"): WorkspaceSubs
     plan,
     trialStartsAt: null,
     trialEndsAt: null,
+    trialConsumedAt: null,
     currentPeriodStartsAt: NOW.toISOString(),
     currentPeriodEndsAt: "2027-01-01T00:00:00.000Z",
   };
@@ -72,8 +73,8 @@ describe("billing plan card CTA matrix", () => {
     assert.equal(getBillingPlanCardCta("starter", "pro").label, "Upgrade to Pro");
   });
 
-  it("Pro shows Downgrade unavailable for Starter and Current plan on Pro", () => {
-    assert.equal(getBillingPlanCardCta("pro", "starter").label, "Downgrade unavailable");
+  it("Pro shows disabled Select plan for Starter and Current plan on Pro", () => {
+    assert.equal(getBillingPlanCardCta("pro", "starter").label, "Select plan");
     assert.equal(getBillingPlanCardCta("pro", "pro").label, "Current plan");
   });
 
@@ -103,7 +104,7 @@ describe("billing plan card CTA matrix", () => {
 
   it("Business → Pro control is disabled with support message", () => {
     const cta = getBillingPlanCardCta("business", "pro");
-    assert.equal(cta.label, "Downgrade unavailable");
+    assert.equal(cta.label, "Select plan");
     assert.equal(cta.canSubmit, false);
     assert.match(cta.disabledReason ?? "", /support/i);
   });
@@ -111,7 +112,7 @@ describe("billing plan card CTA matrix", () => {
   it("Business → Starter control is disabled", () => {
     const cta = getBillingPlanCardCta("business", "starter");
     assert.equal(cta.canSubmit, false);
-    assert.equal(cta.label, "Downgrade unavailable");
+    assert.equal(cta.label, "Select plan");
   });
 
   it("disabled downgrade never submits", () => {
@@ -119,13 +120,9 @@ describe("billing plan card CTA matrix", () => {
     assert.equal(cta.canSubmit, false);
   });
 
-  it("does not use generic Select plan labels", () => {
-    for (const current of ["free", "starter", "pro", "business"] as const) {
-      for (const target of ["starter", "pro", "business"] as const) {
-        const cta = getBillingPlanCardCta(current, target);
-        assert.notEqual(cta.label, "Select plan");
-      }
-    }
+  it("downgrade CTAs use Select plan label", () => {
+    assert.equal(getBillingPlanCardCta("business", "starter").label, "Select plan");
+    assert.equal(getBillingPlanCardCta("pro", "starter").label, "Select plan");
   });
 
   it("billing UI plans are self-service tiers only", () => {

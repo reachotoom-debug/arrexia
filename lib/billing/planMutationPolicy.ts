@@ -135,8 +135,7 @@ export function needsSubscriptionRepair(
   if (
     isPaidAssignablePlan(targetPlan) &&
     resolution.entitlementSource === "active_trial" &&
-    isTrialActive(resolution, now) &&
-    resolution.trial?.trialPlan !== targetPlan
+    isTrialActive(resolution, now)
   ) {
     return true;
   }
@@ -199,7 +198,7 @@ export function resolveSubscriptionSyncMode(
     isPaidAssignablePlan(targetPlan) &&
     source === "customer_settings"
   ) {
-    return "active_trial_plan_change";
+    return "activate_paid";
   }
 
   if (isPaidAssignablePlan(targetPlan)) {

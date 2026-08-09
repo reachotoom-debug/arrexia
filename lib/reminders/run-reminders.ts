@@ -18,6 +18,12 @@ import {
 } from "./emailReadinessGate";
 import { getEligibleReminders } from "./getEligibleReminders";
 import { executeEligibleReminderCandidates } from "./executeReminderRun";
+import { assertAutomatedReminderExecutionEntitlement } from "@/lib/billing/entitlementGuard";
+
+export type EntitlementExecutionSkipReason =
+  | "trial_expired"
+  | "not_entitled"
+  | "trial_automation_limit_reached";
 
 export type { ReminderExecutionSummary } from "./executeReminderRun";
 export { executeEligibleReminderCandidates } from "./executeReminderRun";
@@ -34,6 +40,8 @@ export interface ReminderRunResult {
   automationSkipReason?: AutomationGateSkipReason;
   /** Present when email is not ready for automatic sending. */
   emailSkipReason?: EmailSkipReason;
+  /** Present when entitlement blocks automatic execution. */
+  entitlementSkipReason?: EntitlementExecutionSkipReason;
   errors: Array<{ invoiceId: string; ruleId?: string; error: string }>;
 }
 
@@ -45,6 +53,8 @@ export type RunDueRemindersOptions = {
   getEligibleRemindersFn?: typeof getEligibleReminders;
   /** Test hook — defaults to sendReminderForInvoice. */
   sendReminderFn?: Parameters<typeof executeEligibleReminderCandidates>[2];
+  /** Test hook — defaults to assertAutomatedReminderExecutionEntitlement. */
+  assertAutomatedReminderExecutionEntitlementFn?: typeof assertAutomatedReminderExecutionEntitlement;
 };
 
 function emptyRunResult(workspaceId: string): ReminderRunResult {
@@ -94,6 +104,19 @@ export async function runDueRemindersForWorkspace(
       result.emailSkipReason = emailReadiness.skipReason;
       console.log(
         `[runDueRemindersForWorkspace] Skipping workspace ${workspaceId}: ${emailReadinessSkipMessage(emailReadiness.skipReason)}`
+      );
+      return result;
+    }
+
+    const entitlementExecution = await (
+      options.assertAutomatedReminderExecutionEntitlementFn ??
+      assertAutomatedReminderExecutionEntitlement
+    )(workspaceId);
+    if (!entitlementExecution.ok) {
+      result.entitlementSkipReason =
+        entitlementExecution.reason as EntitlementExecutionSkipReason;
+      console.log(
+        `[runDueRemindersForWorkspace] Skipping workspace ${workspaceId}: entitlement blocked (${entitlementExecution.reason})`
       );
       return result;
     }

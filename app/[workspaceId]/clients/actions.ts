@@ -8,6 +8,13 @@ import {
   type ClientFormValues,
 } from "@/lib/clients/schema";
 import { assertClientCreateAllowed, PlanLimitError, PLAN_LIMIT_CLIENTS_MESSAGE } from "@/lib/billing/assertWithinPlanLimits";
+import {
+  entitlementErrorCode,
+  entitlementErrorMessage,
+  isEntitlementOrPlanLimitError,
+} from "@/lib/billing/handleEntitlementError";
+import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 import { type ActionResult, ok, fail } from "@/lib/actions/result";
 import { resolveClientPaymentTermsPersistence } from "@/lib/clients/paymentTermsPersistence";
 
@@ -29,8 +36,8 @@ export async function createClient(
   try {
     await assertClientCreateAllowed(workspaceId);
   } catch (error) {
-    if (error instanceof PlanLimitError && error.code === "PLAN_LIMIT_CLIENTS") {
-      return fail(PLAN_LIMIT_CLIENTS_MESSAGE, "PLAN_LIMIT_CLIENTS");
+    if (isEntitlementOrPlanLimitError(error)) {
+      return fail(entitlementErrorMessage(error), entitlementErrorCode(error));
     }
     throw error;
   }
@@ -110,6 +117,16 @@ export async function updateClient(
   }
 
   const parsed = ClientFormSchema.parse(rawValues);
+
+  try {
+    await assertWorkspaceMutationAllowed(workspaceId, "client_update");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return fail(error.message, error.code);
+    }
+    throw error;
+  }
+
   const supabase = await supabaseServer();
 
   const { payment_terms, payment_terms_days } =
@@ -151,6 +168,15 @@ export async function toggleClientActive(
   const { workspace } = await requireWorkspace(workspaceId);
   const validatedWorkspaceId = workspace.id;
 
+  try {
+    await assertWorkspaceMutationAllowed(workspaceId, "client_update");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      throw new Error(error.message);
+    }
+    throw error;
+  }
+
   const supabase = await supabaseServer();
 
   const { error } = await supabase
@@ -185,6 +211,16 @@ export async function archiveClient(workspaceId: string, clientId: string): Prom
   try {
     const { workspace } = await requireWorkspace(workspaceId);
     const validatedWorkspaceId = workspace.id;
+
+    try {
+      await assertWorkspaceMutationAllowed(workspaceId, "client_delete");
+    } catch (error) {
+      if (error instanceof EntitlementError) {
+        return fail(error.message, error.code);
+      }
+      throw error;
+    }
+
     const supabase = await supabaseServer();
 
     console.log("[archiveClient] updating public.clients", {
@@ -239,6 +275,16 @@ export async function unarchiveClient(workspaceId: string, clientId: string): Pr
   try {
     const { workspace } = await requireWorkspace(workspaceId);
     const validatedWorkspaceId = workspace.id;
+
+    try {
+      await assertWorkspaceMutationAllowed(workspaceId, "client_delete");
+    } catch (error) {
+      if (error instanceof EntitlementError) {
+        return fail(error.message, error.code);
+      }
+      throw error;
+    }
+
     const supabase = await supabaseServer();
 
     console.log("[unarchiveClient] updating public.clients", {

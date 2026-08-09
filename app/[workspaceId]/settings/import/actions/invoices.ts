@@ -26,6 +26,8 @@ import {
   type PreviewResult 
 } from "../_lib/invoicesGroupedFormat";
 import { parseDelimited } from "@/lib/import/parseDelimited";
+import { assertImportEntitlement } from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 
 /**
  * Dev-only logging helper
@@ -1176,6 +1178,22 @@ export async function executeInvoicesImport(
     };
   }
 
+  try {
+    await assertImportEntitlement(workspaceId, {
+      newClients: 0,
+      newInvoices: invoiceGroups.length,
+    });
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return {
+        ok: false,
+        results: [],
+        errors: [error.message],
+      };
+    }
+    throw error;
+  }
+
   // Convert invoice groups to raw rows format (row_type invoice|item)
   const rawRows: any[] = [];
   
@@ -1286,7 +1304,7 @@ export async function executeInvoicesImport(
 
   const ok = rpcData.ok === true && errors.length === 0;
 
-  // Verification queries (dev logs only)
+  // Trial invoice usage is consumed atomically by the invoices INSERT trigger.
   if (ok && rpcData.created) {
     const created = rpcData.created as { clients?: number; invoices?: number; items?: number };
     const invoiceNumbers = invoiceGroups.map(g => g.invoice_number);

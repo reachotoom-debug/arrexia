@@ -22,6 +22,7 @@ function trialSubscription(
     plan,
     trialStartsAt: "2026-07-26T12:00:00.000Z",
     trialEndsAt,
+    trialConsumedAt: "2026-07-26T12:00:00.000Z",
     currentPeriodStartsAt: null,
     currentPeriodEndsAt: null,
   };
@@ -33,6 +34,7 @@ function activeSubscription(plan: "starter" | "pro"): WorkspaceSubscriptionSnaps
     plan,
     trialStartsAt: null,
     trialEndsAt: null,
+    trialConsumedAt: null,
     currentPeriodStartsAt: "2026-01-01T00:00:00.000Z",
     currentPeriodEndsAt: "2027-01-01T00:00:00.000Z",
   };
@@ -48,9 +50,13 @@ type SubscriptionRow = {
 
 function createSubscriptionMock(initial: SubscriptionRow[] = []) {
   const rows = [...initial];
+  const workspaceMarkers = new Map<string, { trial_consumed_at: string | null }>();
   let insertShouldFail = false;
 
-  function buildLookupBuilder(workspaceFilter: string | null) {
+  function buildLookupBuilder(table: string, workspaceFilter: string | null) {
+    let updatePatch: Record<string, unknown> | null = null;
+    let isNullColumn: string | null = null;
+
     return {
       select() {
         return this;
@@ -59,7 +65,27 @@ function createSubscriptionMock(initial: SubscriptionRow[] = []) {
         workspaceFilter = value;
         return this;
       },
+      is(column: string, value: unknown) {
+        if (value === null) {
+          isNullColumn = column;
+        }
+        return this;
+      },
+      update(patch: Record<string, unknown>) {
+        updatePatch = patch;
+        return this;
+      },
       maybeSingle() {
+        if (table === "workspaces") {
+          return Promise.resolve({
+            data: {
+              trial_consumed_at:
+                (workspaceFilter ? workspaceMarkers.get(workspaceFilter)?.trial_consumed_at : null) ??
+                null,
+            },
+            error: null,
+          });
+        }
         const row = rows.find((entry) => entry.workspace_id === workspaceFilter) ?? null;
         return Promise.resolve({ data: row, error: null });
       },
@@ -81,12 +107,25 @@ function createSubscriptionMock(initial: SubscriptionRow[] = []) {
 
         return Promise.resolve({ data: null, error: null });
       },
+      then(onfulfilled?: (value: unknown) => unknown) {
+        if (table === "workspaces" && updatePatch && workspaceFilter) {
+          const current = workspaceMarkers.get(workspaceFilter) ?? { trial_consumed_at: null };
+          if (!isNullColumn || current.trial_consumed_at === null) {
+            workspaceMarkers.set(workspaceFilter, {
+              trial_consumed_at:
+                (updatePatch.trial_consumed_at as string | null | undefined) ??
+                current.trial_consumed_at,
+            });
+          }
+        }
+        return Promise.resolve({ data: null, error: null }).then(onfulfilled);
+      },
     };
   }
 
   const admin = {
-    from(_table: string) {
-      return buildLookupBuilder(null);
+    from(table: string) {
+      return buildLookupBuilder(table, null);
     },
     setInsertShouldFail(value: boolean) {
       insertShouldFail = value;
@@ -99,26 +138,32 @@ function createSubscriptionMock(initial: SubscriptionRow[] = []) {
   return admin;
 }
 
-describe("resolveEffectiveWorkspacePlan (R5 P3)", () => {
-  it("A — active Starter trial grants Starter effective plan", () => {
+describe("resolveEffectiveWorkspacePlan (standalone trial)", () => {
+  it("A — active legacy Starter trial resolves as free effective plan", () => {
     const result = resolveEffectiveWorkspacePlan(
       "starter",
-      trialSubscription("starter", FUTURE_TRIAL_END),
+      {
+        ...trialSubscription("starter", FUTURE_TRIAL_END),
+        trialConsumedAt: "2026-07-26T12:00:00.000Z",
+      },
       NOW
     );
-    assert.equal(result.effectivePlan, "starter");
+    assert.equal(result.effectivePlan, "free");
     assert.equal(result.trial?.status, "active");
     assert.equal(result.entitlementSource, "active_trial");
   });
 
-  it("B — active Pro trial grants Pro effective plan", () => {
+  it("B — active legacy Pro trial resolves as free effective plan", () => {
     const result = resolveEffectiveWorkspacePlan(
       "pro",
-      trialSubscription("pro", FUTURE_TRIAL_END),
+      {
+        ...trialSubscription("pro", FUTURE_TRIAL_END),
+        trialConsumedAt: "2026-07-26T12:00:00.000Z",
+      },
       NOW
     );
-    assert.equal(result.effectivePlan, "pro");
-    assert.equal(result.trial?.trialPlan, "pro");
+    assert.equal(result.effectivePlan, "free");
+    assert.equal(result.trial?.status, "active");
   });
 
   it("C — expired Starter trial falls back to Free", () => {
@@ -210,6 +255,7 @@ describe("resolveEffectiveWorkspacePlan (R5 P3)", () => {
         plan: "starter",
         trialStartsAt: "2026-07-01T00:00:00.000Z",
         trialEndsAt: PAST_TRIAL_END,
+        trialConsumedAt: "2026-07-01T00:00:00.000Z",
         currentPeriodStartsAt: null,
         currentPeriodEndsAt: null,
       },
@@ -220,10 +266,10 @@ describe("resolveEffectiveWorkspacePlan (R5 P3)", () => {
     assert.equal(admin.getRows()[0]?.trial_ends_at, PAST_TRIAL_END);
   });
 
-  it("I — failed subscription metadata creation must not grant indefinite paid entitlement at bootstrap", () => {
+  it("I — failed standalone trial creation must not silently succeed bootstrap", () => {
     const bootstrapSrc = readFileSync("lib/workspaces/ensureWorkspaceForUser.ts", "utf8");
-    assert.match(bootstrapSrc, /if \(!subscriptionResult\.ok\)/);
-    assert.match(bootstrapSrc, /revertWorkspacePlanToFree/);
+    assert.match(bootstrapSrc, /ensureStandaloneTrialIfNeeded/);
+    assert.match(bootstrapSrc, /throwBootstrapError\("create_default_plan"/);
   });
 
   it("J — usage above free limits uses effective free limits while stored plan remains", () => {
@@ -247,9 +293,10 @@ describe("createPublicTrialSubscription", () => {
     );
 
     assert.equal(result.ok, true);
-    assert.equal(result.created, true);
+    if (result.ok) assert.equal(result.created, true);
     assert.equal(admin.getRows().length, 1);
     assert.equal(admin.getRows()[0]?.status, "trial");
+    assert.equal(admin.getRows()[0]?.plan, "free");
     assert.ok(admin.getRows()[0]?.trial_ends_at);
   });
 

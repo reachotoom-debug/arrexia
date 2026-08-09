@@ -3,9 +3,10 @@ import {
   type PlanId,
   type WorkspacePlan,
 } from "./plans";
+import type { EntitlementState } from "./resolveWorkspaceEntitlement";
 
 const DOWNGRADE_MESSAGE =
-  "Downgrades are managed by support and cannot be applied immediately.";
+  "Lower-tier plan changes are managed by support.";
 
 const SELF_SERVICE_BILLING_PLANS = ["starter", "pro", "business"] as const;
 export type SelfServiceBillingPlanId = (typeof SELF_SERVICE_BILLING_PLANS)[number];
@@ -21,10 +22,35 @@ export type BillingPlanCardCta = {
   disabledReason?: string;
 };
 
+export type BillingEntitlementContext = {
+  entitlementState: EntitlementState;
+  paidPlan: WorkspacePlan | null;
+};
+
 export function getBillingPlanCardCta(
-  currentEffectivePlan: WorkspacePlan,
+  context: BillingEntitlementContext | WorkspacePlan,
   targetPlanId: SelfServiceBillingPlanId
 ): BillingPlanCardCta {
+  const entitlementContext: BillingEntitlementContext =
+    typeof context === "string"
+      ? { entitlementState: "paid", paidPlan: context === "free" ? null : context }
+      : context;
+
+  if (
+    entitlementContext.entitlementState === "trial" ||
+    entitlementContext.entitlementState === "trial_expired"
+  ) {
+    const planName = targetPlanId.charAt(0).toUpperCase() + targetPlanId.slice(1);
+    return {
+      label: `Select ${planName}`,
+      disabled: false,
+      canSubmit: true,
+    };
+  }
+
+  const currentEffectivePlan =
+    entitlementContext.paidPlan ??
+    (entitlementContext.entitlementState === "paid" ? "free" : "free");
   const currentRank = getWorkspacePlanRank(currentEffectivePlan);
   const targetRank = getWorkspacePlanRank(targetPlanId);
 
@@ -38,7 +64,7 @@ export function getBillingPlanCardCta(
 
   if (targetRank < currentRank) {
     return {
-      label: "Downgrade unavailable",
+      label: "Select plan",
       disabled: true,
       canSubmit: false,
       disabledReason: DOWNGRADE_MESSAGE,

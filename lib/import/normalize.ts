@@ -81,7 +81,9 @@ export function normalizeMoney(input: string): string {
       if (Math.abs(result) >= 1e6 || (Math.abs(result) < 1e-6 && result !== 0)) {
         // For very large or very small numbers, use toFixed
         const fixed = result.toFixed(Math.max(0, -expNum));
-        normalized = fixed.replace(/\.?0+$/, ""); // Remove trailing zeros
+        normalized = fixed.includes(".")
+          ? fixed.replace(/\.?0+$/, "")
+          : fixed;
       } else {
         normalized = result.toString();
       }
@@ -149,6 +151,8 @@ export function normalizePhone(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
+  const hasPlus = trimmed.startsWith("+");
+
   // Handle scientific notation first (Excel converts large numbers to scientific)
   // Phone numbers can be very large integers (e.g., 1234567890)
   let normalized = trimmed;
@@ -203,8 +207,6 @@ export function normalizePhone(input: string): string | null {
   }
 
   // Extract digits and optional leading +
-  // Preserve leading + for international numbers
-  const hasPlus = normalized.startsWith("+");
   const digits = normalized.replace(/[^\d]/g, "");
   
   if (!digits) return null;

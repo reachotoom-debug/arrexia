@@ -18,32 +18,34 @@ describe("public signup trial plan allowlisting", () => {
     assert.equal(isPublicSignupTrialPlan("pro"), true);
   });
 
-  it("rejects enterprise, business, free, and arbitrary strings", () => {
-    for (const rejected of ["enterprise", "business", "free", "internal", ""]) {
+  it("rejects enterprise, free, and arbitrary strings as marketing intent", () => {
+    for (const rejected of ["enterprise", "free", "internal", ""]) {
       assert.equal(parsePublicSignupTrialPlan(rejected), null);
       assert.equal(isPublicSignupTrialPlan(rejected), false);
     }
   });
 
-  it("resolveBootstrapWorkspacePlan maps allowlisted plans only", () => {
-    assert.equal(resolveBootstrapWorkspacePlan("starter"), "starter");
-    assert.equal(resolveBootstrapWorkspacePlan("pro"), "pro");
+  it("accepts business as marketing intent only", () => {
+    assert.equal(parsePublicSignupTrialPlan("business"), "business");
+  });
+
+  it("resolveBootstrapWorkspacePlan always returns free shell plan", () => {
+    assert.equal(resolveBootstrapWorkspacePlan("starter"), "free");
+    assert.equal(resolveBootstrapWorkspacePlan("pro"), "free");
+    assert.equal(resolveBootstrapWorkspacePlan("business"), "free");
     assert.equal(resolveBootstrapWorkspacePlan(null), "free");
     assert.equal(resolveBootstrapWorkspacePlan(parsePublicSignupTrialPlan("enterprise")), "free");
   });
 });
 
 describe("trialHref marketing CTAs", () => {
-  it("preserves Starter intent", () => {
+  it("preserves marketing attribution params", () => {
     assert.equal(marketingTrialHref("starter"), "/register?plan=starter");
-  });
-
-  it("preserves Pro intent", () => {
     assert.equal(marketingTrialHref("pro"), "/register?plan=pro");
+    assert.equal(marketingTrialHref("business"), "/register?plan=business");
   });
 
-  it("generic and business CTAs omit plan param", () => {
+  it("generic CTA omits plan param", () => {
     assert.equal(marketingTrialHref(), "/register");
-    assert.equal(marketingTrialHref("business"), "/register");
   });
 });

@@ -44,9 +44,11 @@ function reminderRuleScheduleKey(rule: {
 export async function provisionDefaultReminderSetup(params: {
   workspaceId: string;
   plan: WorkspacePlan;
+  standaloneTrial?: boolean;
   admin?: ProvisionAdmin;
 }): Promise<ProvisionDefaultReminderSetupResult> {
   const { workspaceId, plan } = params;
+  const standaloneTrial = params.standaloneTrial === true;
   const admin = params.admin ?? supabaseAdmin();
 
   let templatesCreated = 0;
@@ -177,7 +179,7 @@ export async function provisionDefaultReminderSetup(params: {
         trigger_type: stage.triggerType,
         offset_days: stage.offsetDays,
         for_status: stage.forStatus,
-        is_enabled: getDefaultEnabledForPlan(plan, stage.code),
+        is_enabled: getDefaultEnabledForPlan(plan, stage.code, { standaloneTrial }),
         sort_order: stage.sortOrder,
       })
       .select("id, workspace_id, template_id, is_enabled, trigger_type, offset_days, for_status")
@@ -238,6 +240,7 @@ export async function provisionDefaultReminderSetup(params: {
 export async function provisionDefaultReminderSetupSafe(params: {
   workspaceId: string;
   plan: WorkspacePlan;
+  standaloneTrial?: boolean;
   admin?: ProvisionAdmin;
 }): Promise<ProvisionDefaultReminderSetupResult | null> {
   try {

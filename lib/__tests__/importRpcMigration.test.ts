@@ -136,3 +136,164 @@ describe("import RPC migration signature contracts", () => {
     }
   });
 });
+
+describe("160000 invoice import RPC consolidation", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260808160000_phase2_final_consistency_hardening.sql",
+    "utf8"
+  );
+  const migration150 = readFileSync(
+    "supabase/migrations/20260808150000_entitlement_atomic_enforcement.sql",
+    "utf8"
+  );
+  const invoicesAction = readFileSync(
+    "app/[workspaceId]/settings/import/actions/invoices.ts",
+    "utf8"
+  );
+
+  it("150000 rename is conditional and can leave production without internal implementation", () => {
+    assert.match(
+      migration150,
+      /IF to_regprocedure\('public\.import_invoices_grouped\(uuid,jsonb,boolean\)'\) IS NOT NULL[\s\S]*RENAME TO internal_import_invoices_grouped;/
+    );
+    assert.match(migration, /\$preserve_internal\$/);
+    assert.match(migration, /\$install_canonical_internal\$/);
+  });
+
+  it("creates or preserves internal mutation implementation before legacy drop and public wrapper", () => {
+    const preserveIdx = migration.indexOf("DO $preserve_internal$");
+    const installIdx = migration.indexOf("DO $install_canonical_internal$");
+    const verifyIdx = migration.indexOf("DO $verify_internal_import$");
+    const dropLegacyIdx = migration.indexOf(
+      "DROP FUNCTION IF EXISTS public.import_invoices_grouped(json, uuid, boolean);"
+    );
+    const publicWrapperIdx = migration.indexOf(
+      "CREATE OR REPLACE FUNCTION public.import_invoices_grouped(\n  p_workspace_id uuid,\n  p_rows jsonb,"
+    );
+
+    assert.ok(preserveIdx >= 0);
+    assert.ok(installIdx > preserveIdx);
+    assert.ok(verifyIdx > installIdx);
+    assert.ok(dropLegacyIdx > verifyIdx);
+    assert.ok(publicWrapperIdx > dropLegacyIdx);
+  });
+
+  it("does not grant internal RPC before verifying it exists", () => {
+    const verifyIdx = migration.indexOf("DO $verify_internal_import$");
+    const internalGrantIdx = migration.indexOf(
+      "GRANT EXECUTE ON FUNCTION public.internal_import_invoices_grouped(uuid, jsonb, boolean) TO service_role;"
+    );
+    assert.ok(verifyIdx >= 0);
+    assert.ok(internalGrantIdx > verifyIdx);
+  });
+
+  it("installs canonical internal body only when internal is still missing", () => {
+    assert.match(
+      migration,
+      /DO \$install_canonical_internal\$[\s\S]*IF to_regprocedure\('public\.internal_import_invoices_grouped\(uuid,jsonb,boolean\)'\) IS NOT NULL THEN[\s\S]*RETURN;[\s\S]*CREATE OR REPLACE FUNCTION public\.internal_import_invoices_grouped\(/
+    );
+  });
+
+  it("drops legacy json,uuid,boolean overload without CASCADE", () => {
+    assert.match(
+      migration,
+      /DROP FUNCTION IF EXISTS public\.import_invoices_grouped\(json, uuid, boolean\);/
+    );
+    assert.doesNotMatch(migration, /DROP FUNCTION IF EXISTS public\.import_invoices_grouped\(json, uuid, boolean\) CASCADE/);
+  });
+
+  it("defines exactly one canonical public import_invoices_grouped(uuid,jsonb,boolean)", () => {
+    const matches = migration.match(
+      /CREATE OR REPLACE FUNCTION public\.import_invoices_grouped\(\s*p_workspace_id uuid,\s*p_rows jsonb,\s*p_dry_run boolean/g
+    );
+    assert.ok(matches);
+    assert.equal(matches?.length, 1);
+  });
+
+  it("canonical RPC calls entitlement preflight only on execute (not dry_run)", () => {
+    assert.match(migration, /COALESCE\(p_dry_run, true\) IS NOT TRUE/);
+    assert.match(
+      migration,
+      /PERFORM public\.internal_import_entitlement_preflight\(p_workspace_id, 0, v_new_invoices\);/
+    );
+    assert.match(
+      migration,
+      /RETURN public\.internal_import_invoices_grouped\(p_workspace_id, p_rows, p_dry_run\);/
+    );
+  });
+
+  it("does not embed standalone legacy invoice mutation logic in 160000 public wrapper", () => {
+    const wrapperMatch = migration.match(
+      /CREATE OR REPLACE FUNCTION public\.import_invoices_grouped\(\s*p_workspace_id uuid,\s*p_rows jsonb[\s\S]*?\$\$;/
+    );
+    assert.ok(wrapperMatch, "expected canonical import_invoices_grouped wrapper in 160000");
+    const wrapperBody = wrapperMatch[0];
+    assert.doesNotMatch(wrapperBody, /INSERT INTO public\.invoices/);
+    assert.doesNotMatch(wrapperBody, /UPDATE public\.invoices/);
+  });
+
+  it("preserves mutation implementation in internal_import_invoices_grouped", () => {
+    assert.match(
+      migration,
+      /CREATE OR REPLACE FUNCTION public\.internal_import_invoices_grouped\([\s\S]*INSERT INTO invoices \([\s\S]*ON CONFLICT \(workspace_id, invoice_number\)/
+    );
+    assert.match(migration, /Duplicate invoice_number in file/);
+  });
+
+  it("uses rerunnable IF EXISTS / guarded DO semantics for production upgrade", () => {
+    assert.match(migration, /DROP FUNCTION IF EXISTS public\.import_invoices_grouped\(json, uuid, boolean\);/);
+    assert.match(migration, /IF to_regprocedure\('public\.internal_import_invoices_grouped\(uuid,jsonb,boolean\)'\) IS NOT NULL THEN/);
+    assert.doesNotMatch(migration, /DROP FUNCTION IF EXISTS public\.import_invoices_grouped\(json, uuid, boolean\) CASCADE/);
+  });
+
+  it("restricts canonical and internal import RPCs to service_role", () => {
+    assert.match(
+      migration,
+      /REVOKE EXECUTE ON FUNCTION public\.import_invoices_grouped\(uuid, jsonb, boolean\) FROM PUBLIC;/
+    );
+    assert.match(
+      migration,
+      /REVOKE EXECUTE ON FUNCTION public\.import_invoices_grouped\(uuid, jsonb, boolean\) FROM authenticated;/
+    );
+    assert.match(
+      migration,
+      /GRANT EXECUTE ON FUNCTION public\.import_invoices_grouped\(uuid, jsonb, boolean\) TO service_role;/
+    );
+    assert.match(
+      migration,
+      /REVOKE EXECUTE ON FUNCTION public\.internal_import_invoices_grouped\(uuid, jsonb, boolean\) FROM authenticated;/
+    );
+    assert.match(
+      migration,
+      /GRANT EXECUTE ON FUNCTION public\.internal_import_invoices_grouped\(uuid, jsonb, boolean\) TO service_role;/
+    );
+  });
+
+  it("application uses named parameters matching canonical uuid,jsonb,boolean signature", () => {
+    assert.match(invoicesAction, /p_workspace_id:\s*workspaceId/);
+    assert.match(invoicesAction, /p_rows:\s*(rpcRows|rawRows)/);
+    assert.match(invoicesAction, /p_dry_run:\s*(dryRun|true|false)/);
+    assert.match(
+      invoicesAction,
+      /const rpcName = "import_invoices_grouped"|supabaseAdmin\(\)\.rpc\("import_invoices_grouped"/
+    );
+    assert.match(invoicesAction, /supabaseAdmin\(\)\.rpc\(rpcName,/);
+  });
+
+  it("dry-run preview path sets p_dry_run true", () => {
+    const previewBlock = invoicesAction.slice(
+      invoicesAction.indexOf("export async function previewInvoicesImport"),
+      invoicesAction.indexOf("export async function executeInvoicesImport")
+    );
+    assert.match(previewBlock, /const dryRun = true/);
+    assert.match(previewBlock, /p_dry_run:\s*dryRun/);
+  });
+
+  it("execute path sets p_dry_run false", () => {
+    const executeBlock = invoicesAction.slice(
+      invoicesAction.indexOf("export async function executeInvoicesImport")
+    );
+    assert.match(executeBlock, /const dryRun = false/);
+    assert.match(executeBlock, /p_dry_run:\s*dryRun/);
+  });
+});

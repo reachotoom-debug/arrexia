@@ -6,8 +6,10 @@ export type SyncWorkspaceSubscriptionResult =
   | { ok: true }
   | { ok: false; reason: "missing_table" | "sync_failed"; error?: string };
 
+import { TRIAL_DURATION_DAYS } from "./trialConfig";
+
 export const MANUAL_BILLING_PERIOD_DAYS = 30;
-export const ADMIN_FREE_TRIAL_DAYS = 14;
+export const ADMIN_FREE_TRIAL_DAYS = TRIAL_DURATION_DAYS;
 
 function addDays(date: Date, days: number): Date {
   const next = new Date(date);

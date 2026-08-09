@@ -13,6 +13,8 @@ import {
 } from "@/lib/payments/schema";
 import { logAuditEvent } from "@/lib/audit/log";
 import { logPostgresUniqueViolation } from "@/lib/db/postgres-errors";
+import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 import { revalidateFinancialSurfacesAfterPayment } from "@/lib/payments/revalidateFinancialSurfaces";
 import {
   getPaymentCreationBlockReason,
@@ -116,6 +118,15 @@ export async function createPayment(
   // Guard: workspace_id must be present
   if (!validatedWorkspaceId) {
     return { error: "workspace_id is required" };
+  }
+
+  try {
+    await assertWorkspaceMutationAllowed(workspaceId, "payment_mutation");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return { error: error.message, code: error.code };
+    }
+    throw error;
   }
 
   const parsed = PaymentFormSchema.parse(rawValues);

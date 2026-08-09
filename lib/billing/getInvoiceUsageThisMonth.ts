@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getWorkspacePlan } from "./getWorkspacePlan";
+import { getWorkspaceEntitlementState } from "./getWorkspaceEntitlement";
+import { getRemainingTrialUsage, loadEntitlementUsage } from "./usageMetering";
 
 function getMonthBoundariesUtc() {
   const now = new Date();
@@ -12,6 +13,18 @@ function getMonthBoundariesUtc() {
 }
 
 export async function getInvoiceUsageThisMonth(workspaceId: string) {
+  const entitlement = await getWorkspaceEntitlementState(workspaceId);
+
+  if (entitlement.state === "trial") {
+    const usage = await loadEntitlementUsage(workspaceId);
+    const limit = entitlement.trialInvoiceLimitTotal;
+    return {
+      used: usage.trial_invoices_created,
+      limit,
+      overLimit: limit !== null ? usage.trial_invoices_created >= limit : false,
+    };
+  }
+
   const supabase = supabaseAdmin();
   const { start, end } = getMonthBoundariesUtc();
 
@@ -28,12 +41,19 @@ export async function getInvoiceUsageThisMonth(workspaceId: string) {
   }
 
   const used = data?.length ?? 0;
-  const plan = await getWorkspacePlan(workspaceId);
-  const limit = plan.invoiceLimitMonthly ?? null;
+  const limit = entitlement.invoiceLimitMonthly ?? null;
 
   return {
     used,
     limit,
     overLimit: limit !== null ? used > limit : false,
+  };
+}
+
+export async function getTrialInvoiceUsageTotal(workspaceId: string) {
+  const usage = await loadEntitlementUsage(workspaceId);
+  return {
+    used: usage.trial_invoices_created,
+    remaining: getRemainingTrialUsage(usage, "trial_invoices"),
   };
 }

@@ -26,6 +26,16 @@ import {
   resolveReminderOverdueReferenceDate,
 } from "@/lib/reminders/calendarOverdue";
 import type { Database } from "@/types/supabase/index";
+import {
+  assertAutomatedReminderExecutionEntitlement,
+  assertManualReminderQuotaAvailable,
+  releaseTrialUsageReservation,
+  reserveAutomatedReminderSlot,
+  reserveManualEmailReminderSlot,
+  finalizeTrialUsageReservation,
+  type TrialUsageReservation,
+} from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 
 // Dynamic import for nodemailer
 let nodemailer: typeof import("nodemailer");
@@ -82,7 +92,34 @@ export async function sendReminderForInvoice(
   } = options;
   const supabase = supabaseOverride ?? (await supabaseServer());
 
+  try {
+    if (source === "auto_cron") {
+      const entitlement = await assertAutomatedReminderExecutionEntitlement(workspaceId);
+      if (!entitlement.ok) {
+        return {
+          success: false,
+          status: "skipped",
+          skipReason: entitlement.reason,
+          errorMessage: "Automatic reminders are not allowed for this workspace entitlement state.",
+        };
+      }
+    } else {
+      await assertManualReminderQuotaAvailable(workspaceId);
+    }
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return {
+        success: false,
+        status: "skipped",
+        skipReason: error.code,
+        errorMessage: error.message,
+      };
+    }
+    throw error;
+  }
+
   const sourceLabel: "manual" | "auto" = source === "auto_cron" ? "auto" : "manual";
+
   let ruleBoundReminderTemplateId: string | null = null;
 
   let cachedWorkspaceOrganizationId: string | undefined;
@@ -765,6 +802,34 @@ export async function sendReminderForInvoice(
   const toEmail = client.email!;
 
   const collectionsReplyTo = getEmailIdentity("collections").replyTo;
+  let reminderReservation: TrialUsageReservation | null = null;
+
+  try {
+    if (source === "auto_cron") {
+      const reserved = await reserveAutomatedReminderSlot(workspaceId);
+      if (!reserved.ok) {
+        return {
+          success: false,
+          status: "skipped",
+          skipReason: reserved.reason,
+          errorMessage: "Automatic reminder quota exhausted for this workspace.",
+        };
+      }
+      reminderReservation = reserved.reservation;
+    } else {
+      reminderReservation = await reserveManualEmailReminderSlot(workspaceId);
+    }
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return {
+        success: false,
+        status: "skipped",
+        skipReason: error.code,
+        errorMessage: error.message,
+      };
+    }
+    throw error;
+  }
 
   try {
     if (emailProvider === "resend") {
@@ -826,6 +891,15 @@ export async function sendReminderForInvoice(
     }
   } catch (err) {
     sendError = err instanceof Error ? err : new Error(String(err));
+    if (reminderReservation) {
+      await releaseTrialUsageReservation(
+        workspaceId,
+        reminderReservation.resource,
+        reminderReservation.reservationId,
+        1
+      );
+      reminderReservation = null;
+    }
     console.error("[sendReminderForInvoice] email send error:", {
       message: sendError.message,
       stack: sendError.stack,
@@ -875,6 +949,11 @@ export async function sendReminderForInvoice(
       };
     }
 
+    if (reminderReservation) {
+      await finalizeTrialUsageReservation(workspaceId, reminderReservation.reservationId);
+      reminderReservation = null;
+    }
+
     return {
       success: true,
       status: "sent",
@@ -882,6 +961,15 @@ export async function sendReminderForInvoice(
       reminderId,
       reminderLogId: reminderId,
     };
+  }
+
+  if (reminderReservation) {
+    await releaseTrialUsageReservation(
+      workspaceId,
+      reminderReservation.resource,
+      reminderReservation.reservationId,
+      1
+    );
   }
 
   return {

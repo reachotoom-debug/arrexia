@@ -21,6 +21,10 @@ const CRON_SECRET = "test-cron-secret-fixed";
 const TZ = "Asia/Amman";
 process.env.RESEND_API_KEY = process.env.RESEND_API_KEY ?? "test-resend-key";
 
+const entitledAutomationExecution = {
+  assertAutomatedReminderExecutionEntitlementFn: async () => ({ ok: true as const }),
+};
+
 function headers(init: Record<string, string>) {
   return {
     get(name: string) {
@@ -134,6 +138,7 @@ describe("cron reminder execution (P0)", () => {
     });
 
     await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      ...entitledAutomationExecution,
       supabase: serviceClient as never,
       getEligibleRemindersFn: async (_workspaceId, opts) => {
         receivedSupabase = opts?.supabase;

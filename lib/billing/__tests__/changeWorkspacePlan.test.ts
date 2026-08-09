@@ -55,6 +55,40 @@ describe("changeWorkspacePlan", () => {
     assert.equal(state.subscriptions[0]?.plan, "starter");
   });
 
+  for (const targetPlan of ["starter", "pro", "business"] as const) {
+    it(`active canonical free trial → ${targetPlan} preserves trial history`, async () => {
+      const state = installMock();
+      seedPlan(state, WORKSPACE_ID, "free");
+      seedSubscription(state, WORKSPACE_ID, {
+        plan: "free",
+        status: "trial",
+        trial_starts_at: "2026-07-01T00:00:00.000Z",
+        trial_ends_at: FUTURE_TRIAL_END,
+        current_period_starts_at: null,
+        current_period_ends_at: null,
+      });
+
+      const result = await changeWorkspacePlan({
+        workspaceId: WORKSPACE_ID,
+        targetPlan,
+        source: "customer_settings",
+        actorUserId: ACTOR_ID,
+        now: NOW,
+      });
+
+      assert.equal(result.ok, true);
+      if (result.ok) {
+        assert.equal(result.previousEffectivePlan, "free");
+        assert.equal(result.newEffectivePlan, targetPlan);
+        assert.equal(result.subscriptionStatus, "active");
+      }
+      assert.equal(state.subscriptions[0]?.status, "active");
+      assert.equal(state.subscriptions[0]?.plan, targetPlan);
+      assert.equal(state.subscriptions[0]?.trial_starts_at, "2026-07-01T00:00:00.000Z");
+      assert.equal(state.subscriptions[0]?.trial_ends_at, FUTURE_TRIAL_END);
+    });
+  }
+
   it("Free → Pro succeeds", async () => {
     const state = installMock();
     seedPlan(state, WORKSPACE_ID, "free");
@@ -178,10 +212,10 @@ describe("changeWorkspacePlan", () => {
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.equal(result.newEffectivePlan, "pro");
-      assert.equal(result.subscriptionStatus, "trial");
+      assert.equal(result.subscriptionStatus, "active");
     }
     assert.equal(state.subscriptions[0]?.trial_ends_at, FUTURE_TRIAL_END);
-    assert.equal(state.subscriptions[0]?.status, "trial");
+    assert.equal(state.subscriptions[0]?.status, "active");
   });
 
   it("atomic RPC failure leaves both billing tables unchanged", async () => {
@@ -504,9 +538,10 @@ describe("changeWorkspacePlan", () => {
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.equal(result.newEffectivePlan, "business");
-      assert.equal(result.subscriptionStatus, "trial");
+      assert.equal(result.subscriptionStatus, "active");
     }
     assert.equal(state.subscriptions[0]?.trial_ends_at, FUTURE_TRIAL_END);
+    assert.equal(state.subscriptions[0]?.status, "active");
   });
 
   it("active Pro trial → Business preserves trial end", async () => {

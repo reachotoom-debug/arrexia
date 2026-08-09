@@ -1,15 +1,13 @@
-import { isWorkspacePlan, type WorkspacePlan } from "./plans";
+import type { WorkspacePlan } from "./plans";
+import {
+  resolveWorkspaceEntitlement,
+  type TrialDisplayInfo,
+} from "./resolveWorkspaceEntitlement";
 import type { WorkspaceSubscriptionSnapshot } from "./workspaceSubscription";
 
-export type TrialDisplayStatus = "active" | "expired";
+export type { TrialDisplayInfo };
 
-export type TrialDisplayInfo = {
-  status: TrialDisplayStatus;
-  trialPlan: WorkspacePlan;
-  trialEndsAt: string | null;
-  daysRemaining: number;
-};
-
+/** @deprecated Use EntitlementState from resolveWorkspaceEntitlement */
 export type EffectivePlanEntitlementSource =
   | "legacy_no_subscription"
   | "paid_subscription"
@@ -18,6 +16,7 @@ export type EffectivePlanEntitlementSource =
   | "expired_subscription"
   | "stored_plan";
 
+/** @deprecated Use WorkspaceEntitlement from resolveWorkspaceEntitlement */
 export type EffectivePlanResolution = {
   effectivePlan: WorkspacePlan;
   storedPlan: WorkspacePlan;
@@ -25,139 +24,47 @@ export type EffectivePlanResolution = {
   entitlementSource: EffectivePlanEntitlementSource;
 };
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-function isPaidStoredPlan(plan: WorkspacePlan): boolean {
-  return plan === "starter" || plan === "pro" || plan === "business";
-}
-
-function resolveTrialPlan(
-  storedPlan: WorkspacePlan,
-  subscriptionPlan: WorkspacePlan
-): WorkspacePlan {
-  if (isPaidStoredPlan(storedPlan)) {
-    return storedPlan;
+function mapEntitlementSource(
+  state: ReturnType<typeof resolveWorkspaceEntitlement>["state"]
+): EffectivePlanEntitlementSource {
+  switch (state) {
+    case "trial":
+      return "active_trial";
+    case "trial_expired":
+      return "expired_trial";
+    case "paid":
+      return "paid_subscription";
+    case "legacy_free":
+    default:
+      return "legacy_no_subscription";
   }
-  return subscriptionPlan;
-}
-
-function computeDaysRemaining(trialEndsAt: string, nowMs: number): number {
-  const trialEndMs = Date.parse(trialEndsAt);
-  if (Number.isNaN(trialEndMs)) {
-    return 0;
-  }
-  return Math.max(0, Math.ceil((trialEndMs - nowMs) / MS_PER_DAY));
 }
 
 /**
- * Resolves the entitlement used for limits and feature gates.
- * Stored workspace_plans rows are never mutated by expiration — only effective entitlement changes.
+ * Backward-compatible adapter over resolveWorkspaceEntitlement.
+ * Active standalone trials no longer map to starter/pro/business effective plans.
  */
 export function resolveEffectiveWorkspacePlan(
   storedPlan: WorkspacePlan,
   subscription: WorkspaceSubscriptionSnapshot | null,
   now: Date = new Date()
 ): EffectivePlanResolution {
-  const nowMs = now.getTime();
+  const entitlement = resolveWorkspaceEntitlement({
+    storedPlan,
+    subscription,
+    trialConsumedAt: subscription?.trialConsumedAt ?? null,
+    now,
+  });
 
-  if (!subscription) {
-    return {
-      effectivePlan: storedPlan,
-      storedPlan,
-      trial: null,
-      entitlementSource: "legacy_no_subscription",
-    };
-  }
-
-  if (subscription.status === "active" || subscription.status === "past_due") {
-    const paidPlan = isWorkspacePlan(subscription.plan) ? subscription.plan : storedPlan;
-    return {
-      effectivePlan: paidPlan,
-      storedPlan,
-      trial: null,
-      entitlementSource: "paid_subscription",
-    };
-  }
-
-  if (subscription.status === "trial") {
-    const trialPlan = resolveTrialPlan(storedPlan, subscription.plan);
-
-    if (subscription.trialEndsAt) {
-      const trialEndMs = Date.parse(subscription.trialEndsAt);
-      if (!Number.isNaN(trialEndMs) && trialEndMs > nowMs) {
-        return {
-          effectivePlan: trialPlan,
-          storedPlan,
-          trial: {
-            status: "active",
-            trialPlan,
-            trialEndsAt: subscription.trialEndsAt,
-            daysRemaining: computeDaysRemaining(subscription.trialEndsAt, nowMs),
-          },
-          entitlementSource: "active_trial",
-        };
-      }
-
-      if (isPaidStoredPlan(trialPlan)) {
-        return {
-          effectivePlan: "free",
-          storedPlan,
-          trial: {
-            status: "expired",
-            trialPlan,
-            trialEndsAt: subscription.trialEndsAt,
-            daysRemaining: 0,
-          },
-          entitlementSource: "expired_trial",
-        };
-      }
-
-      return {
-        effectivePlan: "free",
-        storedPlan,
-        trial: {
-          status: "expired",
-          trialPlan: "free",
-          trialEndsAt: subscription.trialEndsAt,
-          daysRemaining: 0,
-        },
-        entitlementSource: "expired_trial",
-      };
-    }
-
-    if (isPaidStoredPlan(storedPlan)) {
-      return {
-        effectivePlan: "free",
-        storedPlan,
-        trial: {
-          status: "expired",
-          trialPlan: storedPlan,
-          trialEndsAt: null,
-          daysRemaining: 0,
-        },
-        entitlementSource: "expired_trial",
-      };
-    }
-  }
-
-  if (subscription.status === "cancelled" || subscription.status === "expired") {
-    return {
-      effectivePlan: "free",
-      storedPlan,
-      trial: {
-        status: "expired",
-        trialPlan: resolveTrialPlan(storedPlan, subscription.plan),
-        trialEndsAt: subscription.trialEndsAt,
-        daysRemaining: 0,
-      },
-      entitlementSource: "expired_subscription",
-    };
-  }
+  const effectivePlan =
+    entitlement.state === "paid" && entitlement.paidPlan
+      ? entitlement.paidPlan
+      : entitlement.plan;
 
   return {
-    effectivePlan: storedPlan,
-    storedPlan,
-    trial: null,
-    entitlementSource: "stored_plan",
+    effectivePlan,
+    storedPlan: entitlement.storedPlan,
+    trial: entitlement.trial,
+    entitlementSource: mapEntitlementSource(entitlement.state),
   };
 }

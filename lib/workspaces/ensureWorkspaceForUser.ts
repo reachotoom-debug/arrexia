@@ -2,11 +2,9 @@ import { assertBootstrapActivationAllowed } from "@/lib/auth/accountActivation";
 import { AUTH_ACCOUNT_NOT_ACTIVATED_MESSAGE } from "@/lib/auth/authErrors";
 import { getPlanStorageLimits, isWorkspacePlan, type WorkspacePlan } from "@/lib/billing/plans";
 import {
-  resolveBootstrapWorkspacePlan,
-  type PublicSignupTrialPlan,
+  type SignupMarketingPlanIntent,
 } from "@/lib/billing/publicTrialPlan";
-import { createPublicTrialSubscription } from "@/lib/billing/createPublicTrialSubscription";
-import { revertWorkspacePlanToFree } from "@/lib/billing/revertWorkspacePlanToFree";
+import { createArrexiaTrialSubscription } from "@/lib/billing/createPublicTrialSubscription";
 import { loadWorkspaceSubscription } from "@/lib/billing/workspaceSubscription";
 import {
   provisionDefaultReminderSetupSafe,
@@ -54,8 +52,8 @@ export class WorkspaceBootstrapError extends Error {
 }
 
 export type WorkspaceBootstrapOptions = {
-  /** Allowlisted starter/pro intent from signup — applied only when creating a new plan row. */
-  initialTrialPlan?: PublicSignupTrialPlan | null;
+  /** Marketing attribution only — does not affect entitlement. */
+  initialTrialPlan?: SignupMarketingPlanIntent | null;
 };
 
 export type DefaultWorkspacePlanResult = {
@@ -191,8 +189,7 @@ export async function ensureWorkspaceSettings(
 export async function ensureDefaultWorkspacePlan(
   admin: WorkspaceBootstrapAdmin,
   workspaceId: string,
-  userId: string,
-  options?: { initialPlan?: WorkspacePlan }
+  userId: string
 ): Promise<DefaultWorkspacePlanResult> {
   const { data: existingPlan, error: lookupError } = await admin
     .from("workspace_plans")
@@ -209,7 +206,7 @@ export async function ensureDefaultWorkspacePlan(
     return { planCreated: false, plan };
   }
 
-  const plan = options?.initialPlan ?? "free";
+  const plan: WorkspacePlan = "free";
   const defaultLimits = getPlanStorageLimits(plan);
   const { error: insertError } = await admin.from("workspace_plans").insert({
     workspace_id: workspaceId,
@@ -248,51 +245,71 @@ export async function ensureDefaultWorkspacePlan(
 }
 
 /**
- * Applies preserved signup trial intent on bootstrap retry when a partial failure
- * left the workspace on Free without subscription metadata.
+ * Ensures the standalone Arrexia trial exists once without restarting on retries.
  */
+export async function ensureStandaloneTrialIfNeeded(
+  admin: WorkspaceBootstrapAdmin,
+  workspaceId: string,
+  userId: string,
+  options?: { planCreated?: boolean }
+): Promise<{ created: boolean }> {
+  const [subscription, workspaceResult] = await Promise.all([
+    loadWorkspaceSubscription(workspaceId, admin),
+    admin
+      .from("workspaces")
+      .select("created_at, trial_consumed_at")
+      .eq("id", workspaceId)
+      .maybeSingle(),
+  ]);
+
+  const workspaceTrialConsumedAt =
+    (workspaceResult.data?.trial_consumed_at as string | null | undefined) ?? null;
+
+  if (
+    workspaceTrialConsumedAt ||
+    subscription?.trialConsumedAt ||
+    subscription?.trialStartsAt
+  ) {
+    return { created: false };
+  }
+
+  if (!options?.planCreated) {
+    const createdAt = workspaceResult.data?.created_at
+      ? Date.parse(String(workspaceResult.data.created_at))
+      : NaN;
+    const recoveryWindowMs = 30 * 60 * 1000;
+    const withinRecoveryWindow =
+      Number.isFinite(createdAt) && Date.now() - createdAt <= recoveryWindowMs;
+
+    if (!withinRecoveryWindow) {
+      return { created: false };
+    }
+  }
+
+  const result = await createArrexiaTrialSubscription(workspaceId, admin);
+  if (!result.ok && result.reason !== "trial_already_consumed") {
+    throwBootstrapError("create_default_plan", userId, null, result.reason);
+  }
+
+  return { created: result.ok && result.created };
+}
+
+/** @deprecated Standalone trial no longer depends on signup plan intent. */
 export async function maybePromoteFreePlanToPublicTrial(
   admin: WorkspaceBootstrapAdmin,
   workspaceId: string,
   userId: string,
-  options: {
-    initialTrialPlan?: PublicSignupTrialPlan | null;
+  _options: {
+    initialTrialPlan?: SignupMarketingPlanIntent | null;
     planCreated: boolean;
     currentPlan: WorkspacePlan;
   }
 ): Promise<WorkspacePlan> {
-  const intendedTrial = options.initialTrialPlan;
-  if (!intendedTrial || options.planCreated || options.currentPlan !== "free") {
-    return options.currentPlan;
-  }
-
-  const subscription = await loadWorkspaceSubscription(workspaceId, admin);
-  if (subscription) {
-    return options.currentPlan;
-  }
-
-  const limits = getPlanStorageLimits(intendedTrial);
-  const { error: updateError } = await admin
-    .from("workspace_plans")
-    .update({
-      plan: intendedTrial,
-      invoice_limit_monthly: limits.invoice_limit_monthly,
-      client_limit: limits.client_limit,
-    })
-    .eq("workspace_id", workspaceId)
-    .eq("plan", "free");
-
-  if (updateError) {
-    throwBootstrapError("create_default_plan", userId, updateError.code, updateError.message);
-  }
-
-  const subscriptionResult = await createPublicTrialSubscription(workspaceId, intendedTrial, admin);
-  if (!subscriptionResult.ok) {
-    await revertWorkspacePlanToFree(admin, workspaceId);
-    return "free";
-  }
-
-  return intendedTrial;
+  void _options;
+  await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, {
+    planCreated: _options.planCreated,
+  });
+  return "free";
 }
 
 export async function ensureOwnerMembership(
@@ -329,36 +346,17 @@ async function finalizeWorkspaceBootstrap(
   admin: WorkspaceBootstrapAdmin,
   userId: string,
   workspaceId: string,
-  options?: WorkspaceBootstrapOptions
+  _options?: WorkspaceBootstrapOptions
 ): Promise<string> {
+  void _options;
   await reloadWorkspace(admin, userId, workspaceId);
   await ensureWorkspaceSettings(admin, workspaceId, userId);
   await ensureWorkspaceEmailSettings(admin, workspaceId);
 
-  const initialPlan = resolveBootstrapWorkspacePlan(options?.initialTrialPlan);
-  const { planCreated, plan: bootstrappedPlan } = await ensureDefaultWorkspacePlan(
-    admin,
-    workspaceId,
-    userId,
-    {
-      initialPlan,
-    }
-  );
-  let plan = bootstrappedPlan;
-
-  if (planCreated && (plan === "starter" || plan === "pro")) {
-    const subscriptionResult = await createPublicTrialSubscription(workspaceId, plan, admin);
-    if (!subscriptionResult.ok) {
-      await revertWorkspacePlanToFree(admin, workspaceId);
-      plan = "free";
-    }
-  } else {
-    plan = await maybePromoteFreePlanToPublicTrial(admin, workspaceId, userId, {
-      initialTrialPlan: options?.initialTrialPlan,
-      planCreated,
-      currentPlan: plan,
-    });
-  }
+  const planResult = await ensureDefaultWorkspacePlan(admin, workspaceId, userId);
+  const trialResult = await ensureStandaloneTrialIfNeeded(admin, workspaceId, userId, {
+    planCreated: planResult.planCreated,
+  });
 
   const { data: planRow, error: planLookupError } = await admin
     .from("workspace_plans")
@@ -374,14 +372,16 @@ async function finalizeWorkspaceBootstrap(
       internal: planLookupError.message,
     });
   } else {
-    const resolvedPlan = isWorkspacePlan(planRow?.plan) ? planRow.plan : plan;
+    const resolvedPlan = isWorkspacePlan(planRow?.plan) ? planRow.plan : "free";
     await provisionDefaultReminderSetupSafe({
       workspaceId,
       plan: resolvedPlan,
+      standaloneTrial: true,
       admin,
     });
   }
 
+  void trialResult;
   return workspaceId;
 }
 

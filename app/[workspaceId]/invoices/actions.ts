@@ -15,6 +15,8 @@ import {
 } from "@/lib/invoices/paymentTerms";
 import { logAuditEvent } from "@/lib/audit/log";
 import { assertInvoiceCreateAllowed } from "@/lib/billing/assertWithinPlanLimits";
+import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 import { redirect } from "next/navigation";
 import { logPostgresUniqueViolation } from "@/lib/db/postgres-errors";
 import { normalizeDateOnlyString } from "@/lib/datetime/formatDateTime";
@@ -78,6 +80,12 @@ export async function createInvoice(
     const err = error as { digest?: string; code?: string } | null;
     const digest = String(err?.digest || "");
     if (digest.includes("NEXT_REDIRECT")) throw error;
+    if (error instanceof EntitlementError) {
+      if (error.code === "TRIAL_INVOICE_LIMIT_REACHED" || error.code === "PLAN_LIMIT_INVOICES") {
+        redirect(`/${workspaceId}/invoices?limit=${error.code}`);
+      }
+      return { ok: false, error: error.message, code: error.code };
+    }
     if (err?.code === "PLAN_LIMIT_INVOICES") {
       redirect(`/${workspaceId}/invoices?limit=PLAN_LIMIT_INVOICES`);
     }
@@ -301,6 +309,15 @@ export async function updateInvoice(
   const { workspace } = await requireWorkspace(workspaceId);
   const validatedWorkspaceId = workspace.id;
 
+  try {
+    await assertWorkspaceMutationAllowed(workspaceId, "invoice_update");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return { error: error.message, code: error.code };
+    }
+    throw error;
+  }
+
   const parsed = InvoiceFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
 
@@ -468,6 +485,15 @@ export async function deleteInvoice(workspaceId: string, invoiceId: string) {
   const { user } = await requireUser();
   await requireWorkspace(workspaceId);
 
+  try {
+    await assertWorkspaceMutationAllowed(workspaceId, "invoice_delete");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      throw new Error(error.message);
+    }
+    throw error;
+  }
+
   const supabase = await supabaseServer();
 
   // Load invoice details before archiving for audit log
@@ -519,6 +545,16 @@ export async function archiveInvoice(
   const { user } = await requireUser();
   const { workspace } = await requireWorkspace(workspaceId);
   const validatedWorkspaceId = workspace.id;
+
+  try {
+    await assertWorkspaceMutationAllowed(workspaceId, "invoice_delete");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
+  }
+
   const supabase = await supabaseServer();
 
   const { error, data } = await supabase
@@ -584,6 +620,16 @@ export async function unarchiveInvoice(
   const { user } = await requireUser();
   const { workspace } = await requireWorkspace(workspaceId);
   const validatedWorkspaceId = workspace.id;
+
+  try {
+    await assertWorkspaceMutationAllowed(workspaceId, "invoice_update");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
+  }
+
   const supabase = await supabaseServer();
 
   const { error, data } = await supabase

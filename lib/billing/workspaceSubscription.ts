@@ -14,6 +14,7 @@ export type WorkspaceSubscriptionSnapshot = {
   plan: WorkspacePlan;
   trialStartsAt: string | null;
   trialEndsAt: string | null;
+  trialConsumedAt: string | null;
   currentPeriodStartsAt: string | null;
   currentPeriodEndsAt: string | null;
 };
@@ -25,6 +26,7 @@ function mapSubscriptionRow(row: {
   plan: string;
   trial_starts_at: string | null;
   trial_ends_at: string | null;
+  trial_consumed_at?: string | null;
   current_period_starts_at: string | null;
   current_period_ends_at: string | null;
 }): WorkspaceSubscriptionSnapshot {
@@ -36,6 +38,7 @@ function mapSubscriptionRow(row: {
     plan,
     trialStartsAt: row.trial_starts_at,
     trialEndsAt: row.trial_ends_at,
+    trialConsumedAt: row.trial_consumed_at ?? row.trial_starts_at ?? null,
     currentPeriodStartsAt: row.current_period_starts_at,
     currentPeriodEndsAt: row.current_period_ends_at,
   };
@@ -48,7 +51,7 @@ export async function loadWorkspaceSubscription(
   const { data, error } = await admin
     .from("workspace_subscriptions")
     .select(
-      "status, plan, trial_starts_at, trial_ends_at, current_period_starts_at, current_period_ends_at"
+      "status, plan, trial_starts_at, trial_ends_at, trial_consumed_at, current_period_starts_at, current_period_ends_at"
     )
     .eq("workspace_id", workspaceId)
     .maybeSingle();

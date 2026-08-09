@@ -1,33 +1,43 @@
 import type { WorkspacePlan } from "./plans";
 
-/** Public self-serve trial tiers selectable from marketing CTAs. */
-export const PUBLIC_SIGNUP_TRIAL_PLANS = ["starter", "pro"] as const;
+/** Marketing attribution only — must NOT affect entitlement. */
+export type SignupMarketingPlanIntent = "starter" | "pro" | "business";
 
-export type PublicSignupTrialPlan = (typeof PUBLIC_SIGNUP_TRIAL_PLANS)[number];
+const MARKETING_INTENTS = new Set<string>(["starter", "pro", "business"]);
 
-export const PUBLIC_TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
-
-export function isPublicSignupTrialPlan(value: string): value is PublicSignupTrialPlan {
-  return PUBLIC_SIGNUP_TRIAL_PLANS.includes(value as PublicSignupTrialPlan);
-}
-
-/**
- * Allowlist parser for ?plan= query params.
- * Rejects enterprise, business, free, internal names, and arbitrary strings.
- */
-export function parsePublicSignupTrialPlan(
+export function parseSignupMarketingPlanIntent(
   raw: string | null | undefined
-): PublicSignupTrialPlan | null {
+): SignupMarketingPlanIntent | null {
   if (!raw) return null;
   const normalized = raw.trim().toLowerCase();
-  return isPublicSignupTrialPlan(normalized) ? normalized : null;
+  return MARKETING_INTENTS.has(normalized)
+    ? (normalized as SignupMarketingPlanIntent)
+    : null;
 }
 
+/** All public signups bootstrap the same standalone Arrexia trial stored plan shell. */
 export function resolveBootstrapWorkspacePlan(
-  trialPlan: PublicSignupTrialPlan | null | undefined
+  _marketingIntent?: SignupMarketingPlanIntent | null
 ): WorkspacePlan {
-  if (trialPlan === "starter" || trialPlan === "pro") {
-    return trialPlan;
-  }
+  void _marketingIntent;
   return "free";
 }
+
+/** @deprecated Marketing-only parser. Does not grant plan-specific trial entitlement. */
+export function parsePublicSignupTrialPlan(
+  raw: string | null | undefined
+): SignupMarketingPlanIntent | null {
+  return parseSignupMarketingPlanIntent(raw);
+}
+
+/** @deprecated Use SignupMarketingPlanIntent */
+export type PublicSignupTrialPlan = SignupMarketingPlanIntent;
+
+/** @deprecated Trial duration lives in trialConfig.ts */
+export { TRIAL_DURATION_DAYS, computeTrialDurationMs } from "./trialConfig";
+
+export function isPublicSignupTrialPlan(value: string): value is SignupMarketingPlanIntent {
+  return MARKETING_INTENTS.has(value);
+}
+
+export const PUBLIC_SIGNUP_TRIAL_PLANS = ["starter", "pro"] as const;

@@ -23,6 +23,10 @@ const WORKSPACE_ID = "ws-cron";
 const TZ = "America/Los_Angeles";
 process.env.RESEND_API_KEY = process.env.RESEND_API_KEY ?? "test-resend-key";
 
+const entitledAutomationExecution = {
+  assertAutomatedReminderExecutionEntitlementFn: async () => ({ ok: true as const }),
+};
+
 function usableTemplate(id: string) {
   return { id, workspace_id: WORKSPACE_ID, is_enabled: true };
 }
@@ -498,6 +502,7 @@ describe("R2F master automation gate (runDueRemindersForWorkspace)", () => {
     let sendCount = 0;
 
     const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      ...entitledAutomationExecution,
       supabase: createAutomationRunnerSupabase({ autoSendReminders: true }) as never,
       getEligibleRemindersFn: async () => evaluate({}),
       sendReminderFn: async (opts) => {
@@ -558,15 +563,17 @@ describe("R2F master automation gate (runDueRemindersForWorkspace)", () => {
     assert.doesNotMatch(eligibleSrc, /automationGate|auto_send_reminders/);
   });
 
-  it("G — manual send path has no automation gate", () => {
+  it("G — manual send path checks entitlement for auto_cron only", () => {
     const sendSrc = readFileSync("lib/reminders/send.ts", "utf8");
     assert.doesNotMatch(sendSrc, /automationGate|auto_send_reminders/);
+    assert.match(sendSrc, /assertAutomatedReminderExecutionEntitlement/);
   });
 
   it("H — disabled rule never sends via cron runner", async () => {
     let sendCount = 0;
 
     const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      ...entitledAutomationExecution,
       supabase: createAutomationRunnerSupabase({ autoSendReminders: true }) as never,
       getEligibleRemindersFn: async () =>
         evaluate({
@@ -588,10 +595,11 @@ describe("R2F master automation gate (runDueRemindersForWorkspace)", () => {
     assert.equal(result.candidatesEligible, 0);
   });
 
-  it("I — enabled custom rule runs when automation is ON (plan-agnostic cron)", async () => {
+  it("I — enabled custom rule runs when automation and entitlement allow", async () => {
     let sentRuleId: string | undefined;
 
     const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      ...entitledAutomationExecution,
       supabase: createAutomationRunnerSupabase({ autoSendReminders: true }) as never,
       getEligibleRemindersFn: async () =>
         evaluate({
@@ -635,6 +643,7 @@ describe("R2F master automation gate (runDueRemindersForWorkspace)", () => {
     const runnerSrc = readFileSync("lib/reminders/run-reminders.ts", "utf8");
     assert.match(runnerSrc, /loadAutomationGateForWorkspace/);
     assert.match(runnerSrc, /loadEmailReadinessForWorkspace/);
+    assert.match(runnerSrc, /assertAutomatedReminderExecutionEntitlement/);
   });
 
   it("L — automation save upsert does not include legacy timing/channel fields", () => {
@@ -677,6 +686,7 @@ describe("R2G email readiness gate (runDueRemindersForWorkspace)", () => {
     let eligibleCalled = false;
 
     const result = await runDueRemindersForWorkspace(WORKSPACE_ID, {
+      ...entitledAutomationExecution,
       supabase: createAutomationRunnerSupabase({
         autoSendReminders: true,
         hasEmailSettings: true,

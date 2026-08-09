@@ -17,7 +17,9 @@ import {
 } from "@/lib/reminders/schema";
 import { MAX_AVATAR_FILE_SIZE_BYTES, ALLOWED_AVATAR_MIME_TYPES, DEFAULT_AVATAR_URL } from "@/lib/constants";
 import { changeWorkspacePlan, parseAssignableWorkspacePlan } from "@/lib/billing/changeWorkspacePlan";
-import { assertReminderRulesManageAllowed } from "@/lib/billing/reminderRulesAccess";
+import { assertReminderRulesManageAllowed } from "@/lib/billing/reminderRulesAccess.server";
+import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 import { sendEmail } from "@/lib/email/sendEmail";
 import { getEmailIdentity } from "@/lib/email/identities";
 import { renderTestEmail } from "@/lib/email/templates";
@@ -364,6 +366,19 @@ export async function saveReminderSettings(
     await requireWorkspace(workspaceId);
 
     const parsed = reminderSettingsSchema.parse(values);
+
+    if (parsed.enableAutomatic) {
+      try {
+        await assertWorkspaceMutationAllowed(workspaceId, "reminder_automation_enable");
+        await assertReminderRulesManageAllowed(workspaceId);
+      } catch (error) {
+        if (error instanceof EntitlementError) {
+          return { success: false, error: error.message };
+        }
+        throw error;
+      }
+    }
+
     const supabase = await supabaseServer();
 
     const { error } = await supabase

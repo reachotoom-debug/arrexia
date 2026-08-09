@@ -68,7 +68,7 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     contactSalesOnly: false,
     selectableInBilling: true,
     mostPopular: false,
-    publicCtaLabel: "Get started free",
+    publicCtaLabel: "Start Free Trial",
     limits: [
       "Up to 25 active clients",
       "Up to 50 invoices / month",
@@ -88,7 +88,7 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     contactSalesOnly: false,
     selectableInBilling: true,
     mostPopular: true,
-    publicCtaLabel: "Get started free",
+    publicCtaLabel: "Start Free Trial",
     limits: [
       "Up to 250 active clients",
       "Up to 500 invoices / month",
@@ -108,12 +108,12 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
     contactSalesOnly: false,
     selectableInBilling: true,
     mostPopular: false,
-    publicCtaLabel: "Get started free",
+    publicCtaLabel: "Start Free Trial",
     limits: [
-      "Team permissions",
-      "Custom domain",
-      "API access",
-      "Higher usage limits",
+      "Unlimited clients and invoices",
+      "Full collections workflows",
+      "Automated reminders",
+      "Priority support",
     ],
     invoiceLimitMonthly: null,
     clientLimit: null,
@@ -301,7 +301,7 @@ export {
 } from "@/lib/email/publicAddresses";
 
 export function trialHref(plan?: "starter" | "pro" | "business") {
-  if (plan === "starter" || plan === "pro") {
+  if (plan === "starter" || plan === "pro" || plan === "business") {
     return `/register?plan=${plan}`;
   }
   return "/register";

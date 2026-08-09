@@ -6,9 +6,9 @@ import {
   isWorkspacePlan,
   type WorkspacePlan,
 } from "./plans";
-import { resolveEffectiveWorkspacePlan } from "./resolveEffectiveWorkspacePlan";
-import type { TrialDisplayInfo } from "./resolveEffectiveWorkspacePlan";
-import { loadWorkspaceSubscription } from "./workspaceSubscription";
+import { getWorkspaceEntitlementForBilling } from "./getWorkspaceEntitlement";
+import type { TrialDisplayInfo } from "./resolveWorkspaceEntitlement";
+import type { WorkspaceEntitlement } from "./resolveWorkspaceEntitlement";
 
 export type { WorkspacePlan };
 export type { TrialDisplayInfo };
@@ -16,13 +16,13 @@ export type { TrialDisplayInfo };
 const DEFAULT_PLAN: WorkspacePlan = "free";
 
 export type WorkspacePlanResult = {
-  /** Effective entitlement used for limits and feature gates. */
+  /** Effective paid plan when active; `free` during trial/expired. */
   plan: WorkspacePlan;
-  /** Row stored in workspace_plans (unchanged by trial expiration). */
   storedPlan: WorkspacePlan;
   invoiceLimitMonthly: number | null;
   clientLimit: number | null;
   trial: TrialDisplayInfo | null;
+  entitlement: WorkspaceEntitlement;
 };
 
 async function loadStoredWorkspacePlan(
@@ -73,21 +73,15 @@ async function loadStoredWorkspacePlan(
 }
 
 export async function getWorkspacePlan(workspaceId: string): Promise<WorkspacePlanResult> {
-  const supabase = supabaseAdmin();
-
-  const [storedPlan, subscription] = await Promise.all([
-    loadStoredWorkspacePlan(workspaceId, supabase),
-    loadWorkspaceSubscription(workspaceId, supabase),
-  ]);
-
-  const resolution = resolveEffectiveWorkspacePlan(storedPlan, subscription);
-  const definitionLimits = getPlanStorageLimits(resolution.effectivePlan);
+  await loadStoredWorkspacePlan(workspaceId, supabaseAdmin());
+  const billing = await getWorkspaceEntitlementForBilling(workspaceId);
 
   return {
-    plan: resolution.effectivePlan,
-    storedPlan: resolution.storedPlan,
-    invoiceLimitMonthly: definitionLimits.invoice_limit_monthly,
-    clientLimit: definitionLimits.client_limit,
-    trial: resolution.trial,
+    plan: billing.plan,
+    storedPlan: billing.storedPlan,
+    invoiceLimitMonthly: billing.invoiceLimitMonthly,
+    clientLimit: billing.clientLimit,
+    trial: billing.trial,
+    entitlement: billing.entitlement,
   };
 }

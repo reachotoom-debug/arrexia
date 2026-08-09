@@ -9,6 +9,8 @@ export async function BillingPlans({ workspaceId }: { workspaceId: string }) {
       currentPlan={current.plan}
       storedPlan={current.storedPlan}
       trial={current.trial}
+      entitlementState={current.entitlement.state}
+      paidPlan={current.entitlement.paidPlan}
     />
   );
 }

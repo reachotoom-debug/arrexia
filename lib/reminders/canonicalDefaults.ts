@@ -108,19 +108,15 @@ export function getCanonicalStageByCode(code: CanonicalTemplateCode): CanonicalR
   return stage;
 }
 
-/** Starter / free trial: Automation Lite — three enabled stages. */
+/** Standalone Arrexia trial and paid tiers enable all canonical stages by default. */
 const STARTER_ENABLED_CODES = new Set<CanonicalTemplateCode>(["pre_due", "due_day", "plus_7"]);
 
-/**
- * Default is_enabled for a newly provisioned canonical rule.
- * Free uses the same Automation Lite defaults as starter (legacy trial tier).
- * Applies only when creating a missing rule — existing rules are never updated.
- */
 export function getDefaultEnabledForPlan(
   plan: WorkspacePlan,
-  code: CanonicalTemplateCode
+  code: CanonicalTemplateCode,
+  options?: { standaloneTrial?: boolean }
 ): boolean {
-  if (plan === "pro" || plan === "business") {
+  if (options?.standaloneTrial || plan === "pro" || plan === "business") {
     return true;
   }
   return STARTER_ENABLED_CODES.has(code);
