@@ -874,6 +874,16 @@ describe("import invoice quota convergence", () => {
     assert.match(invoicesAction, /executeInvoicesImport[\s\S]*const dryRun = false/);
   });
 
+  it("integrity migration counts net-new invoices for import preflight", () => {
+    const migrationIntegrity = readFileSync(
+      "supabase/migrations/20260810120000_fix_import_invoices_grouped_integrity.sql",
+      "utf8"
+    );
+    assert.match(migrationIntegrity, /AND NOT EXISTS \([\s\S]*FROM public\.invoices i[\s\S]*i\.archived_at IS NULL/);
+    assert.match(invoicesAction, /netNewInvoices/);
+    assert.match(invoicesAction, /newInvoices: netNewInvoices/);
+  });
+
   it("invoice UPDATE path in app preview does not imply INSERT trigger consumption", () => {
     assert.match(invoicesAction, /action = "update"/);
     assert.match(migration160, /IF TG_OP <> 'INSERT' THEN[\s\S]*RETURN NEW/);

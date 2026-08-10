@@ -1178,10 +1178,33 @@ export async function executeInvoicesImport(
     };
   }
 
+  const invoiceNumbers = invoiceGroups.map((group) => group.invoice_number);
+  const { data: existingInvoices, error: existingInvoicesError } = await supabase
+    .from("invoices")
+    .select("invoice_number")
+    .eq("workspace_id", workspaceId)
+    .is("archived_at", null)
+    .in("invoice_number", invoiceNumbers);
+
+  if (existingInvoicesError) {
+    return {
+      ok: false,
+      results: [],
+      errors: [`Failed to check existing invoices: ${existingInvoicesError.message}`],
+    };
+  }
+
+  const existingInvoiceNumbers = new Set(
+    (existingInvoices ?? []).map((row) => row.invoice_number)
+  );
+  const netNewInvoices = invoiceGroups.filter(
+    (group) => !existingInvoiceNumbers.has(group.invoice_number)
+  ).length;
+
   try {
     await assertImportEntitlement(workspaceId, {
       newClients: 0,
-      newInvoices: invoiceGroups.length,
+      newInvoices: netNewInvoices,
     });
   } catch (error) {
     if (error instanceof EntitlementError) {
@@ -1307,10 +1330,10 @@ export async function executeInvoicesImport(
   // Trial invoice usage is consumed atomically by the invoices INSERT trigger.
   if (ok && rpcData.created) {
     const created = rpcData.created as { clients?: number; invoices?: number; items?: number };
-    const invoiceNumbers = invoiceGroups.map(g => g.invoice_number);
-    
+
     console.log(`[executeInvoicesImport] Import completed`, {
       workspaceId,
+      netNewInvoices,
       created: {
         clients: created.clients || 0,
         invoices: created.invoices || 0,
@@ -1318,7 +1341,7 @@ export async function executeInvoicesImport(
       },
     });
 
-    // Verify imported invoices appear in invoices_view
+    // Verify imported invoices appear in invoices_view with expected totals/item counts
     if (invoiceNumbers.length > 0) {
       const { data: importedInvoices, error: verifyError } = await supabase
         .from("invoices_view")
@@ -1332,19 +1355,83 @@ export async function executeInvoicesImport(
           invoiceNumbers,
           error: verifyError.message,
         });
-      } else {
-        console.log(`[executeInvoicesImport] Verification: ${importedInvoices?.length || 0} invoices found in invoices_view`, {
-          workspaceId,
-          invoiceNumbers,
-          found: importedInvoices?.map(iv => ({
-            invoice_number: iv.invoice_number,
-            total: iv.total,
-            paid: iv.paid,
-            outstanding: iv.outstanding,
-            display_status: iv.display_status,
-          })),
-        });
+        return {
+          ok: false,
+          results: [],
+          errors: [`Import verification failed: ${verifyError.message}`],
+        };
       }
+
+      const previewTotalsByNumber = new Map(
+        invoiceGroups.map((group) => [
+          group.invoice_number,
+          group.items.reduce((sum, item) => sum + item.amount, 0),
+        ])
+      );
+
+      for (const group of invoiceGroups) {
+        const imported = importedInvoices?.find(
+          (row) => row.invoice_number === group.invoice_number
+        );
+        const expectedTotal = previewTotalsByNumber.get(group.invoice_number) ?? 0;
+
+        if (!imported) {
+          const errorMsg = `Import verification failed: invoice ${group.invoice_number} not found after import`;
+          console.error(`[executeInvoicesImport] ${errorMsg}`);
+          return {
+            ok: false,
+            results: [],
+            errors: [errorMsg],
+          };
+        }
+
+        if (Math.abs(Number(imported.total) - expectedTotal) > 0.01) {
+          const errorMsg =
+            `Import verification failed: invoice ${group.invoice_number} total ${imported.total} does not match preview total ${expectedTotal.toFixed(2)}`;
+          console.error(`[executeInvoicesImport] ${errorMsg}`);
+          return {
+            ok: false,
+            results: [],
+            errors: [errorMsg],
+          };
+        }
+
+        const { count: itemCount, error: itemCountError } = await supabase
+          .from("invoice_items")
+          .select("*", { count: "exact", head: true })
+          .eq("invoice_id", imported.id);
+
+        if (itemCountError) {
+          return {
+            ok: false,
+            results: [],
+            errors: [`Import verification failed: ${itemCountError.message}`],
+          };
+        }
+
+        if (itemCount !== group.items.length) {
+          const errorMsg =
+            `Import verification failed: invoice ${group.invoice_number} has ${itemCount ?? 0} item(s), expected ${group.items.length}`;
+          console.error(`[executeInvoicesImport] ${errorMsg}`);
+          return {
+            ok: false,
+            results: [],
+            errors: [errorMsg],
+          };
+        }
+      }
+
+      console.log(`[executeInvoicesImport] Verification: ${importedInvoices?.length || 0} invoices matched preview totals`, {
+        workspaceId,
+        invoiceNumbers,
+        found: importedInvoices?.map((iv) => ({
+          invoice_number: iv.invoice_number,
+          total: iv.total,
+          paid: iv.paid,
+          outstanding: iv.outstanding,
+          display_status: iv.display_status,
+        })),
+      });
     }
 
     // Runtime assert: Check for invoices with NULL workspace_id in this workspace
