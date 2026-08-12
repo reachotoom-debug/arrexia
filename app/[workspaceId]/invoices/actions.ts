@@ -21,6 +21,10 @@ import { redirect } from "next/navigation";
 import { logPostgresUniqueViolation } from "@/lib/db/postgres-errors";
 import { normalizeDateOnlyString } from "@/lib/datetime/formatDateTime";
 import { isInvoiceFullyPaid } from "@/lib/invoices/invoiceFinancialState";
+import {
+  createCreateInvoiceInstrumentation,
+  isNextRedirectError,
+} from "@/lib/invoices/createInvoiceInstrumentation";
 
 const INV_PREFIX = "INV-";
 const DEFAULT_PAD_WIDTH = 4;
@@ -66,24 +70,40 @@ export async function getNextInvoiceNumber(workspaceId: string): Promise<string>
 
 export async function createInvoice(
   workspaceId: string,
-  rawValues: InvoiceFormValues
+  rawValues: InvoiceFormValues,
+  options?: { requestId?: string }
 ) {
-  // Validate user and workspace access at the start
-  const { user } = await requireUser();
-  const { workspace } = await requireWorkspace(workspaceId);
+  const timer = createCreateInvoiceInstrumentation(workspaceId, options?.requestId);
+  timer.mark("START");
+
+  let user: Awaited<ReturnType<typeof requireUser>>["user"];
+  let workspace: Awaited<ReturnType<typeof requireWorkspace>>["workspace"];
+  timer.mark("AUTH_START");
+  try {
+    ({ user } = await requireUser());
+    ({ workspace } = await requireWorkspace(workspaceId));
+    timer.mark("AUTH_END");
+  } catch (error: unknown) {
+    timer.markError("AUTH_END", error);
+    throw error;
+  }
+
   const validatedWorkspaceId = workspace.id;
   const organizationId = workspace.organization_id;
 
+  timer.mark("ENTITLEMENT_START");
   try {
     await assertInvoiceCreateAllowed(workspaceId);
+    timer.mark("ENTITLEMENT_END");
   } catch (error: unknown) {
+    timer.markError("ENTITLEMENT_END", error);
     const err = error as { digest?: string; code?: string } | null;
-    const digest = String(err?.digest || "");
-    if (digest.includes("NEXT_REDIRECT")) throw error;
+    if (isNextRedirectError(error)) throw error;
     if (error instanceof EntitlementError) {
       if (error.code === "TRIAL_INVOICE_LIMIT_REACHED" || error.code === "PLAN_LIMIT_INVOICES") {
         redirect(`/${workspaceId}/invoices?limit=${error.code}`);
       }
+      timer.mark("END");
       return { ok: false, error: error.message, code: error.code };
     }
     if (err?.code === "PLAN_LIMIT_INVOICES") {
@@ -94,30 +114,46 @@ export async function createInvoice(
 
   const parsed = InvoiceFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
+  timer.mark("VALIDATION_END");
 
   // Enforce invoice number uniqueness per workspace at application layer as well.
   // This keeps behavior deterministic even if DB/index drift happens.
   const normalizedInvoiceNumber = parsed.invoiceNumber.trim();
   if (!normalizedInvoiceNumber) {
+    timer.mark("END");
     return {
       ok: false,
       fieldErrors: { invoice_number: "Invoice number is required." },
     };
   }
 
-  const { data: existingInvoiceWithNumber, error: existingInvoiceError } = await supabase
-    .from("invoices")
-    .select("id")
-    .eq("workspace_id", workspaceId)
-    .eq("invoice_number", normalizedInvoiceNumber)
-    .limit(1)
-    .maybeSingle();
+  timer.mark("NUMBER_CHECK_START");
+  let existingInvoiceWithNumber: { id: string } | null = null;
+  let existingInvoiceError: { message: string } | null = null;
+  try {
+    const result = await supabase
+      .from("invoices")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("invoice_number", normalizedInvoiceNumber)
+      .limit(1)
+      .maybeSingle();
+    existingInvoiceWithNumber = result.data;
+    existingInvoiceError = result.error;
+    timer.mark("NUMBER_CHECK_END");
+  } catch (error: unknown) {
+    timer.markError("NUMBER_CHECK_END", error);
+    throw error;
+  }
 
   if (existingInvoiceError) {
-    throw new Error(`Failed to validate invoice number uniqueness: ${existingInvoiceError.message}`);
+    throw new Error(
+      `Failed to validate invoice number uniqueness: ${existingInvoiceError.message}`
+    );
   }
 
   if (existingInvoiceWithNumber) {
+    timer.mark("END");
     return {
       ok: false,
       fieldErrors: { invoice_number: "Invoice number already exists in this workspace." },
@@ -127,64 +163,76 @@ export async function createInvoice(
   // Step 1: Fetch client & workspace defaults for payment terms
   let clientDefaultDays: number | null = null;
   let workspaceDefaultDays: number | null = null;
+  let defaultCurrency = "USD";
+  let effectiveDays = 0;
+  let dueDate: string | null = null;
 
-  if (parsed.clientId) {
-    const { data: clientRow } = await supabase
-      .from("clients")
-      .select("payment_terms_days, archived_at, is_active")
-      .eq("id", parsed.clientId)
+  timer.mark("CLIENT_CHECK_START");
+  try {
+    if (parsed.clientId) {
+      const { data: clientRow } = await supabase
+        .from("clients")
+        .select("payment_terms_days, archived_at, is_active")
+        .eq("id", parsed.clientId)
+        .eq("workspace_id", workspaceId)
+        .single();
+
+      // Client State Model: Prevent creating invoices for archived or inactive clients
+      // Archived: archived_at IS NOT NULL
+      // Inactive: is_active = false AND archived_at IS NULL
+      if (clientRow?.archived_at) {
+        throw new Error("Cannot create invoice for archived client");
+      }
+
+      if (clientRow?.is_active === false) {
+        throw new Error("Cannot create invoice for inactive client");
+      }
+
+      clientDefaultDays = clientRow?.payment_terms_days ?? null;
+    }
+
+    // Fetch workspace defaults (if workspace table has default_payment_terms_days)
+    // Note: workspaces table may not have this field, so we use maybeSingle and handle gracefully
+    const { data: workspaceRow } = await supabase
+      .from("workspaces")
+      .select("*")
+      .eq("id", workspaceId)
+      .maybeSingle();
+
+    // Check if workspace has default_payment_terms_days (may not exist in schema)
+    const workspaceRowRecord = workspaceRow as Record<string, unknown> | null;
+    workspaceDefaultDays =
+      (workspaceRowRecord?.default_payment_terms_days as number | null | undefined) ??
+      null;
+
+    // Fetch workspace settings for default currency
+    // IMPORTANT: Only affects new invoices. Existing invoices keep their original currency.
+    const { data: settingsRow } = await supabase
+      .from("settings")
+      .select("default_currency")
       .eq("workspace_id", workspaceId)
-      .single();
-    
-    // Client State Model: Prevent creating invoices for archived or inactive clients
-    // Archived: archived_at IS NOT NULL
-    // Inactive: is_active = false AND archived_at IS NULL
-    if (clientRow?.archived_at) {
-      throw new Error("Cannot create invoice for archived client");
+      .maybeSingle();
+    defaultCurrency =
+      (settingsRow as { default_currency?: string } | null)?.default_currency || "USD";
+
+    // Step 2: Resolve effective payment terms days
+    effectiveDays = resolvePaymentTermsDays(
+      parsed.paymentTerms as PaymentTermsCode,
+      parsed.paymentTermsDays ?? null,
+      clientDefaultDays,
+      workspaceDefaultDays
+    );
+
+    // Step 3: Compute due date from issueDate + effectiveDays (server-side authoritative)
+    dueDate = computeDueDate(parsed.issueDate, effectiveDays);
+    if (!dueDate) {
+      throw new Error(`Invalid issue date: ${parsed.issueDate}`);
     }
-    
-    if (clientRow?.is_active === false) {
-      throw new Error("Cannot create invoice for inactive client");
-    }
-    
-    clientDefaultDays = clientRow?.payment_terms_days ?? null;
-  }
 
-  // Fetch workspace defaults (if workspace table has default_payment_terms_days)
-  // Note: workspaces table may not have this field, so we use maybeSingle and handle gracefully
-  const { data: workspaceRow } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("id", workspaceId)
-    .maybeSingle();
-  
-  // Check if workspace has default_payment_terms_days (may not exist in schema)
-  const workspaceRowRecord = workspaceRow as Record<string, unknown> | null;
-  workspaceDefaultDays =
-    (workspaceRowRecord?.default_payment_terms_days as number | null | undefined) ??
-    null;
-
-  // Fetch workspace settings for default currency
-  // IMPORTANT: Only affects new invoices. Existing invoices keep their original currency.
-  const { data: settingsRow } = await supabase
-    .from("settings")
-    .select("default_currency")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
-  const defaultCurrency = (settingsRow as { default_currency?: string } | null)?.default_currency || "USD";
-
-  // Step 2: Resolve effective payment terms days
-  const effectiveDays = resolvePaymentTermsDays(
-    parsed.paymentTerms as PaymentTermsCode,
-    parsed.paymentTermsDays ?? null,
-    clientDefaultDays,
-    workspaceDefaultDays
-  );
-
-  // Step 3: Compute due date from issueDate + effectiveDays (server-side authoritative)
-  const dueDate = computeDueDate(parsed.issueDate, effectiveDays);
-  if (!dueDate) {
-    throw new Error(`Invalid issue date: ${parsed.issueDate}`);
+    timer.mark("CLIENT_CHECK_END");
+  } catch (error: unknown) {
+    timer.markError("CLIENT_CHECK_END", error);
+    throw error;
   }
 
   // Step 4: Calculate invoice money values using the shared helper
@@ -196,6 +244,7 @@ export async function createInvoice(
     discountPercent: Number(parsed.discountPercent ?? 0),
     taxPercent: Number(parsed.taxPercent ?? 0),
   });
+  timer.mark("MONEY_CALC_END");
 
   // Step 5: Atomically create invoice header and line items (single DB transaction)
   if (!validatedWorkspaceId) {
@@ -212,9 +261,11 @@ export async function createInvoice(
     position: index + 1,
   }));
 
-  const { data: rpcData, error: rpcError } = await supabase.rpc(
-    "rpc_create_invoice_with_items",
-    {
+  timer.mark("RPC_START");
+  let rpcData: unknown;
+  let rpcError: { message?: string; code?: string } | null = null;
+  try {
+    const rpcResult = await supabase.rpc("rpc_create_invoice_with_items", {
       p_workspace_id: validatedWorkspaceId,
       p_client_id: parsed.clientId,
       p_invoice_number: normalizedInvoiceNumber,
@@ -233,12 +284,18 @@ export async function createInvoice(
       p_tax_amount: money.taxAmount,
       p_amount: money.total,
       p_items: itemsJson,
-    }
-  );
+    });
+    rpcData = rpcResult.data;
+    rpcError = rpcResult.error;
+    timer.mark("RPC_END");
+  } catch (error: unknown) {
+    timer.markError("RPC_END", error);
+    throw error;
+  }
 
   if (rpcError) {
     console.error("[createInvoice] rpc_create_invoice_with_items failed:", rpcError);
-    const code = (rpcError as { code?: string } | null)?.code;
+    const code = rpcError.code;
     if (
       code === "23505" ||
       (rpcError.message ?? "").includes("invoices_workspace_invoice_number_unique")
@@ -248,6 +305,7 @@ export async function createInvoice(
         organizationId,
         invoiceNumber: normalizedInvoiceNumber,
       });
+      timer.mark("END");
       return {
         ok: false,
         fieldErrors: {
@@ -281,21 +339,37 @@ export async function createInvoice(
   // These are computed automatically by invoices_view
 
   // 3) Log audit event with user.id and workspace_id
-  await logAuditEvent({
-    workspaceId: validatedWorkspaceId,
-    userId: user.id,
-    entityType: "invoice",
-    entityId: invoiceId,
-    action: "created",
-    metadata: {
-      invoice_number: parsed.invoiceNumber,
-      total: money.total,
-      client_id: parsed.clientId,
-      status: parsed.status,
-    },
-  });
+  timer.mark("AUDIT_START");
+  try {
+    await logAuditEvent({
+      workspaceId: validatedWorkspaceId,
+      userId: user.id,
+      entityType: "invoice",
+      entityId: invoiceId,
+      action: "created",
+      metadata: {
+        invoice_number: parsed.invoiceNumber,
+        total: money.total,
+        client_id: parsed.clientId,
+        status: parsed.status,
+      },
+    });
+    timer.mark("AUDIT_END");
+  } catch (error: unknown) {
+    timer.markError("AUDIT_END", error);
+    throw error;
+  }
 
-  revalidatePath(`/${workspaceId}/invoices`);
+  timer.mark("REVALIDATE_START");
+  try {
+    revalidatePath(`/${workspaceId}/invoices`);
+    timer.mark("REVALIDATE_END");
+  } catch (error: unknown) {
+    timer.markError("REVALIDATE_END", error);
+    throw error;
+  }
+
+  timer.mark("END");
   return invoiceId;
 }
 

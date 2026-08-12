@@ -1,8 +1,13 @@
 import { redirect } from "next/navigation";
+import { randomUUID } from "node:crypto";
 import { supabaseServer } from "@/lib/supabase/server";
 import { InvoiceForm } from "../_components/InvoiceForm";
 import { type InvoiceFormValues } from "@/lib/invoices/schema";
 import { createInvoice, getNextInvoiceNumber } from "../actions";
+import {
+  createCreateInvoiceActionInstrumentation,
+  isNextRedirectError,
+} from "@/lib/invoices/createInvoiceInstrumentation";
 import { loadWorkspaceSettings } from "@/lib/settings/loadSettings";
 import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
 import { resolveWorkspaceBusinessDate } from "@/lib/invoices/workspaceInvoiceAging";
@@ -59,11 +64,30 @@ export default async function NewInvoicePage({
 
   async function handleCreate(values: InvoiceFormValues) {
     "use server";
-    const result = await createInvoice(workspaceId, values);
-    if (result && typeof result === "object" && "fieldErrors" in result) {
-      return result;
+    const requestId = randomUUID();
+    const actionTimer = createCreateInvoiceActionInstrumentation(workspaceId, requestId);
+    actionTimer.mark("START");
+
+    try {
+      actionTimer.mark("CREATE_START");
+      const result = await createInvoice(workspaceId, values, { requestId });
+      actionTimer.mark("CREATE_END");
+
+      if (result && typeof result === "object" && "fieldErrors" in result) {
+        actionTimer.mark("END");
+        return result;
+      }
+
+      actionTimer.mark("REDIRECT_START");
+      redirect(`/${workspaceId}/invoices/${result}`);
+    } catch (error: unknown) {
+      if (isNextRedirectError(error)) {
+        actionTimer.mark("REDIRECT_START");
+        throw error;
+      }
+      actionTimer.markError("CREATE_END", error);
+      throw error;
     }
-    redirect(`/${workspaceId}/invoices/${result}`);
   }
 
   return (
