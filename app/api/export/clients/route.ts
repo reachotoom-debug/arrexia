@@ -129,6 +129,7 @@ export async function GET(req: NextRequest) {
       "Name",
       "Company",
       "Email",
+      "Phone",
       "WhatsApp",
       "Status",
       "Created At",
@@ -140,7 +141,8 @@ export async function GET(req: NextRequest) {
       Name: client.name || "",
       Company: client.company || "",
       Email: client.email || "",
-      WhatsApp: client.whatsapp_phone || client.whatsapp || "",
+      Phone: client.whatsapp || "",
+      WhatsApp: client.whatsapp_phone || "",
       Status: client.archived_at ? "Archived" : client.is_active ? "Active" : "Inactive",
       "Created At": formatTimestampForExport(client.created_at),
       "Archived At": formatTimestampForExport(client.archived_at),
@@ -149,7 +151,7 @@ export async function GET(req: NextRequest) {
     // Generate CSV
     const csv = toCsv(headers, rows, {
       dateFields: ["Created At", "Archived At"],
-      textFields: ["WhatsApp"], // Preserve phone format, prevent scientific notation
+      textFields: ["Phone", "WhatsApp"],
     });
 
     // Generate filename

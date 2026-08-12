@@ -1,11 +1,5 @@
 /**
- * Resolve the client phone used for WhatsApp click-to-chat.
- * Convention: import-normalized `whatsapp_phone` takes precedence over manual `whatsapp`.
+ * Resolve explicit WhatsApp destination for click-to-chat.
+ * V1 contract: clients.whatsapp_phone ONLY — Phone (clients.whatsapp) is never used.
  */
-export function resolveClientWhatsAppPhone(
-  whatsappPhone: string | null | undefined,
-  whatsapp: string | null | undefined
-): string | null {
-  const phone = whatsappPhone?.trim() || whatsapp?.trim() || null;
-  return phone || null;
-}
+export { resolveClientWhatsAppPhone } from "@/lib/clients/clientContact";

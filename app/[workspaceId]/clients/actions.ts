@@ -59,7 +59,8 @@ export async function createClient(
     is_active: isActive, // true when status is "active", false when "inactive"
     archived_at: null, // Explicitly set to null for new clients
     email: parsed.email ?? null,
-    whatsapp: parsed.phone ?? null, // Map phone to whatsapp column
+    whatsapp: parsed.phone?.trim() ? parsed.phone.trim() : null,
+    whatsapp_phone: parsed.whatsapp?.trim() ? parsed.whatsapp.trim() : null,
     company: parsed.company ?? null,
     country: parsed.country,
     payment_terms,
@@ -137,7 +138,8 @@ export async function updateClient(
     .update({
       name: parsed.name,
       email: parsed.email ?? null,
-      whatsapp: parsed.phone ?? null,
+      whatsapp: parsed.phone?.trim() ? parsed.phone.trim() : null,
+      whatsapp_phone: parsed.whatsapp?.trim() ? parsed.whatsapp.trim() : null,
       company: parsed.company ?? null,
       country: parsed.country,
       payment_terms,

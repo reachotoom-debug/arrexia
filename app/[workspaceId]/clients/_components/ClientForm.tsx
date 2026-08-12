@@ -56,6 +56,7 @@ export function ClientForm({
       name: initialData?.name ?? "",
       email: initialData?.email ?? "",
       phone: initialData?.phone ?? "",
+      whatsapp: initialData?.whatsapp ?? "",
       company: initialData?.company ?? "",
       country: initialData?.country ?? "United States",
       paymentTerms: initialData?.paymentTerms ?? "30",
@@ -215,10 +216,10 @@ export function ClientForm({
             )}
           </div>
 
-          {/* Phone/WhatsApp */}
+          {/* Phone */}
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
-              Phone / WhatsApp
+              Phone
             </label>
             <input
               type="text"
@@ -226,10 +227,29 @@ export function ClientForm({
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g. +1 555 123 4567"
             />
-            <p className="mt-1 text-xs text-slate-500">e.g. +1 555 123 4567</p>
+            <p className="mt-1 text-xs text-slate-500">General contact number</p>
             {errors.phone && (
               <p className="mt-1 text-xs text-red-600">
                 {errors.phone.message}
+              </p>
+            )}
+          </div>
+
+          {/* WhatsApp */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              WhatsApp
+            </label>
+            <input
+              type="text"
+              {...register("whatsapp")}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. +962 79 123 4567"
+            />
+            <p className="mt-1 text-xs text-slate-500">WhatsApp-enabled number for collections</p>
+            {errors.whatsapp && (
+              <p className="mt-1 text-xs text-red-600">
+                {errors.whatsapp.message}
               </p>
             )}
           </div>

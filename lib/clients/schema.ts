@@ -7,7 +7,8 @@ export const ClientFormSchema = z.object({
     .email("Invalid email address")
     .optional()
     .nullable(),
-  phone: z.string().optional().nullable(), // phone / WhatsApp
+  phone: z.string().optional().nullable(),
+  whatsapp: z.string().optional().nullable(),
   company: z.string().optional().nullable(),
   country: z.string().min(1, "Country is required"),
   paymentTerms: z.string().min(1, "Payment terms are required"),

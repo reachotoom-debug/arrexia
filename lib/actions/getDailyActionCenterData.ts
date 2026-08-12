@@ -42,7 +42,7 @@ function mapInvoiceRow(
     clientId,
     clientName: raw.client_name ?? null,
     clientEmail: contact?.email ?? null,
-    clientPhone: resolveClientWhatsAppPhone(contact?.whatsappPhone, contact?.whatsapp),
+    clientPhone: resolveClientWhatsAppPhone(contact?.whatsappPhone),
     clientCountry: contact?.country ?? null,
     dueDate: raw.due_date ?? null,
     outstanding: Number(raw.outstanding ?? 0),

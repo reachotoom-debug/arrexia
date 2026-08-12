@@ -20,6 +20,7 @@ import { SortableHeader } from "@/components/shared/sortable-header";
 
 import { StatusBadge } from "@/components/ui/StatusBadge";
 
+import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 import { resolveClientStatus } from "@/lib/clients/state";
 import { HorizontalScrollArea } from "@/components/table/HorizontalScrollArea";
 import { DataTableShell } from "@/components/layout/DataTableShell";
@@ -42,6 +43,8 @@ interface Client {
   email: string | null;
 
   whatsapp: string | null;
+
+  whatsapp_phone: string | null;
 
   country: string | null;
 
@@ -248,9 +251,19 @@ export function ClientsTable({ clients, workspaceId, searchParams }: ClientsTabl
                     </td>
 
                     <td className="hidden md:table-cell px-3 py-3 text-slate-500">
-
-                      {client.whatsapp ?? "—"}
-
+                      {(() => {
+                        const phone = getClientPhone(client);
+                        const whatsapp = getClientWhatsApp(client);
+                        if (!phone && !whatsapp) return "—";
+                        return (
+                          <div className="space-y-0.5">
+                            {phone ? <div>{phone}</div> : null}
+                            {whatsapp ? (
+                              <div className="text-xs text-slate-400">WA: {whatsapp}</div>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     <td className={`hidden lg:table-cell ${TABLE_CELL_TEXT_COL} px-3 py-3 text-slate-500 break-words`}>

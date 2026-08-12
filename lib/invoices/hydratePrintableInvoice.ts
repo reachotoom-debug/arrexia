@@ -1,4 +1,5 @@
 import { buildInvoiceBranding } from "@/app/[workspaceId]/invoices/_utils/branding";
+import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 import type { Database } from "@/types/supabase/index";
 import { PAYMENT_TERMS_OPTIONS } from "@/lib/invoices/paymentTerms";
 import type { PrintableInvoice } from "./invoice-pdf-shared";
@@ -100,7 +101,8 @@ export function hydratePrintableInvoice(input: {
   } = input;
 
   const branding = buildInvoiceBranding(settings);
-  const rawPhone = client?.whatsapp_phone || client?.whatsapp || null;
+  const clientPhone = getClientPhone(client);
+  const clientWhatsApp = getClientWhatsApp(client);
   const total = coerceMoney(invoice.amount);
 
   let amountPaid: number;
@@ -125,7 +127,8 @@ export function hydratePrintableInvoice(input: {
     clientName: client?.name || "Client",
     clientEmail: client?.email || null,
     clientCompany: client?.company || null,
-    clientPhone: rawPhone?.trim() || null,
+    clientPhone,
+    clientWhatsApp,
     clientCountry: client?.country || null,
     currency: invoice.currency || branding.currencyCode,
     fallbackCurrency: branding.currencyCode,

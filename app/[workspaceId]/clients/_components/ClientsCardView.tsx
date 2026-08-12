@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/invoices/utils";
+import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 import { resolveClientStatus } from "@/lib/clients/state";
 import { getPaymentTermsLabel } from "@/lib/utils/payment-terms";
 import { Eye, Pencil } from "lucide-react";
@@ -16,6 +17,7 @@ interface Client {
   company: string | null;
   email: string | null;
   whatsapp: string | null;
+  whatsapp_phone: string | null;
   country: string | null;
   payment_terms: number | null;
   status: string;
@@ -84,8 +86,14 @@ export function ClientsCardView({ clients, workspaceId, searchParams }: ClientsC
                 ? "text-emerald-600"
                 : "text-slate-900";
 
+          const contactParts = [
+            getClientPhone(client),
+            getClientWhatsApp(client)
+              ? `WA: ${getClientWhatsApp(client)}`
+              : null,
+          ].filter(Boolean) as string[];
           const phoneTermsParts = [
-            client.whatsapp?.trim() || null,
+            ...contactParts,
             client.payment_terms ? getPaymentTermsLabel(client.payment_terms) : null,
           ].filter(Boolean) as string[];
 

@@ -269,8 +269,8 @@ export function ImportClientsSection({ workspaceId }: ImportClientsSectionProps)
   return (
     <ImportCard
       title="Import Clients (CSV/TSV)"
-      description="Upload a CSV or TSV file with client data. Only 'Name' is required. Accepts header aliases (Client Name, Customer, etc.). Missing columns are treated as empty. Phone/WhatsApp numbers are auto-normalized."
-      importantNote="Columns: Name (required), Email, Company, Country, Phone, WhatsApp, Payment Terms Days, Status"
+      description="Upload a CSV or TSV file with client data. Only 'Name' is required. Phone and WhatsApp are separate columns. For Excel, use TSV and store phone columns as Text to avoid scientific notation."
+      importantNote="Columns: Name (required), Email, Company, Country, Phone, WhatsApp, Payment Terms Days, Status. Phone and WhatsApp map to distinct client fields."
       fileInputId="clients-file-input"
       onFileSelect={handleFileSelect}
       onDownloadSampleTSV={downloadSampleTSV}

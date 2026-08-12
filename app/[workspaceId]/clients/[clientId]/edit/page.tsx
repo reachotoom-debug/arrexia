@@ -4,6 +4,7 @@ import { ClientForm } from "../../_components/ClientForm";
 import { type ClientFormValues } from "@/lib/clients/schema";
 import { updateClient } from "../../actions";
 import { type ActionResult } from "@/lib/actions/result";
+import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 import {
   resolveClientFormPaymentTerms,
   resolveClientFormStatus,
@@ -43,7 +44,8 @@ export default async function EditClientPage({
   const initialData: ClientFormValues = {
     name: client.name,
     email: client.email ?? "",
-    phone: client.whatsapp ?? "",
+    phone: getClientPhone(client) ?? "",
+    whatsapp: getClientWhatsApp(client) ?? "",
     company: client.company ?? "",
     country: client.country ?? "United States",
     paymentTerms: resolveClientFormPaymentTerms(client),

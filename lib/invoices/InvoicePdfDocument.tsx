@@ -475,7 +475,8 @@ export function InvoicePdfDocument({
   const billLines: string[] = [];
   if (invoice.clientCompany?.trim()) billLines.push(invoice.clientCompany.trim());
   if (invoice.clientEmail?.trim()) billLines.push(invoice.clientEmail.trim());
-  if (invoice.clientPhone?.trim()) billLines.push(invoice.clientPhone.trim());
+  if (invoice.clientPhone?.trim()) billLines.push(`Phone: ${invoice.clientPhone.trim()}`);
+  if (invoice.clientWhatsApp?.trim()) billLines.push(`WhatsApp: ${invoice.clientWhatsApp.trim()}`);
   if (invoice.clientCountry?.trim()) billLines.push(invoice.clientCountry.trim());
 
   const thankYouBody = resolveThankYouBody(invoice.thankYouMessage);

@@ -13,6 +13,7 @@ interface Client {
   company: string | null;
   email: string | null;
   whatsapp: string | null;
+  whatsapp_phone: string | null;
   country: string | null;
   payment_terms: number | null;
   status: string; // Legacy field, not used for UI status

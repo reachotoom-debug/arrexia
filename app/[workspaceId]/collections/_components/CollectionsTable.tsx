@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/ui/state";
 import { WhatsAppCollectionLink } from "@/components/collections/WhatsAppCollectionLink";
 import { AiCollectionAssistDialog } from "@/components/collections/AiCollectionAssistDialog";
 import { resolveClientWhatsAppPhone } from "@/lib/whatsapp/resolveClientWhatsAppPhone";
+import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 
 interface Client {
   id: string;
@@ -262,19 +263,24 @@ export function CollectionsTable({
                     <StatusBadge type="invoice" status={inv.status} />
                   </td>
                   <td className={clsx("hidden md:table-cell", TABLE_TD, "text-sm text-slate-700", TABLE_CELL_TEXT_COL)}>
-                    {client?.whatsapp_phone || client?.whatsapp ? (
-                      <div className="break-words text-slate-600">{client?.whatsapp_phone || client?.whatsapp}</div>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
+                    {(() => {
+                      const phone = getClientPhone(client ?? undefined);
+                      const whatsapp = getClientWhatsApp(client ?? undefined);
+                      if (!phone && !whatsapp) {
+                        return <span className="text-slate-400">—</span>;
+                      }
+                      return (
+                        <div className="space-y-0.5 break-words text-slate-600">
+                          {phone ? <div>{phone}</div> : null}
+                          {whatsapp ? <div className="text-xs text-slate-400">WA: {whatsapp}</div> : null}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className={`${TABLE_TD} whitespace-nowrap`}>
                     <div className="flex flex-wrap items-center gap-2">
                       <WhatsAppCollectionLink
-                        phone={resolveClientWhatsAppPhone(
-                          client?.whatsapp_phone,
-                          client?.whatsapp
-                        )}
+                        phone={resolveClientWhatsAppPhone(client?.whatsapp_phone)}
                         clientCountry={client?.country ?? null}
                         clientName={client?.name ?? null}
                         businessName={businessName}
@@ -288,10 +294,7 @@ export function CollectionsTable({
                       <AiCollectionAssistDialog
                         workspaceId={workspaceId}
                         invoiceId={inv.id}
-                        clientPhone={resolveClientWhatsAppPhone(
-                          client?.whatsapp_phone,
-                          client?.whatsapp
-                        )}
+                        clientPhone={resolveClientWhatsAppPhone(client?.whatsapp_phone)}
                         clientCountry={client?.country ?? null}
                         variant="button"
                       />

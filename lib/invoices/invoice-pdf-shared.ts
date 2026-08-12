@@ -31,6 +31,7 @@ export interface PrintableInvoice {
   clientEmail?: string | null;
   clientCompany?: string | null;
   clientPhone?: string | null;
+  clientWhatsApp?: string | null;
   clientCountry?: string | null;
   currency: string;
   fallbackCurrency?: string | null;

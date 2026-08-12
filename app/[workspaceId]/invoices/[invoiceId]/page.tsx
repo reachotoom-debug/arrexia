@@ -11,6 +11,7 @@ import { DownloadInvoicePdfButton } from "./_components/DownloadInvoicePdfButton
 import { ArchivedBanner } from "@/components/ui/archived-banner";
 import { InvoiceArchiveButton } from "./_components/InvoiceArchiveButton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 import { buildInvoiceBranding } from "../_utils/branding";
 import { getInvoiceSenderDisplay } from "../_utils/invoiceSenderDisplay";
 import { coerceMoney } from "../_utils/invoiceMoney";
@@ -191,9 +192,8 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
   const billToEmail = client?.email ?? null;
   const billToCompany = client?.company ?? null;
   const billToCountry = client?.country ?? null;
-  // Fallback: prefer whatsapp_phone (normalized), else whatsapp (raw), else null
-  const rawPhone = client?.whatsapp_phone || client?.whatsapp || null;
-  const billToPhone = rawPhone?.trim() || null;
+  const billToPhone = getClientPhone(client);
+  const billToWhatsApp = getClientWhatsApp(client);
 
   // Use invoice.currency with settings fallback for all monetary displays
   const currency = invoice.currency || settings?.default_currency || "USD";
@@ -473,7 +473,10 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
               <p className="text-sm text-slate-500">{billToEmail}</p>
             )}
             {billToPhone && (
-              <p className="text-sm text-slate-500">{billToPhone}</p>
+              <p className="text-sm text-slate-500">Phone: {billToPhone}</p>
+            )}
+            {billToWhatsApp && (
+              <p className="text-sm text-slate-500">WhatsApp: {billToWhatsApp}</p>
             )}
             {billToCountry && (
               <p className="text-sm text-slate-500">{billToCountry}</p>

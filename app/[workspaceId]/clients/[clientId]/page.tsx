@@ -9,6 +9,7 @@ import { InactiveBanner } from "@/components/ui/inactive-banner";
 import { ToggleClientActive } from "./_components/ToggleClientActive";
 import { getClientState, resolveClientStatus } from "@/lib/clients/state";
 import { countsTowardClientCollectibleOutstanding } from "@/lib/receivables/operationalEligibility";
+import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 import { ClientInvoicesTable } from "./_components/ClientInvoicesTable";
 
 interface ClientPageProps {
@@ -201,9 +202,15 @@ export default async function ClientPage({ params }: ClientPageProps) {
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-500">Phone / WhatsApp</dt>
+            <dt className="text-xs text-slate-500">Phone</dt>
             <dd className="text-sm text-slate-900 mt-1">
-              {client.whatsapp ?? "—"}
+              {getClientPhone(client) ?? "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">WhatsApp</dt>
+            <dd className="text-sm text-slate-900 mt-1">
+              {getClientWhatsApp(client) ?? "—"}
             </dd>
           </div>
           <div>
