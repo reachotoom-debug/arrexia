@@ -22,7 +22,6 @@ import {
   reserveEntitlementUsage,
 } from "./usageMetering";
 import type { TrialUsageResource } from "./trialConfig";
-import { assertClientCreateAllowed, assertInvoiceCreateAllowed } from "./assertWithinPlanLimits";
 
 export type MutationCapability =
   | "workspace_mutation"
@@ -101,7 +100,11 @@ export async function assertClientCreateEntitlement(workspaceId: string): Promis
     return;
   }
 
-  await assertClientCreateAllowed(workspaceId);
+  const activeClients = await countActiveClientsForPlan(workspaceId);
+  const limit = entitlement.clientLimit;
+  if (limit !== null && activeClients >= limit) {
+    throw new EntitlementError("PLAN_LIMIT_CLIENTS", TRIAL_CLIENT_LIMIT_MESSAGE);
+  }
 }
 
 export async function assertInvoiceCreateEntitlement(workspaceId: string): Promise<void> {
@@ -116,7 +119,13 @@ export async function assertInvoiceCreateEntitlement(workspaceId: string): Promi
     return;
   }
 
-  await assertInvoiceCreateAllowed(workspaceId);
+  if (entitlement.invoiceLimitMonthly !== null) {
+    const { getInvoiceUsageThisMonth } = await import("./getInvoiceUsageThisMonth");
+    const invoiceUsage = await getInvoiceUsageThisMonth(workspaceId);
+    if (invoiceUsage.used >= (invoiceUsage.limit ?? 0)) {
+      throw new EntitlementError("PLAN_LIMIT_INVOICES", TRIAL_INVOICE_LIMIT_MESSAGE);
+    }
+  }
 }
 
 export async function recordTrialInvoiceCreated(workspaceId: string): Promise<void> {
