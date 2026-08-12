@@ -8,10 +8,12 @@ import {
   ClientFormSchema,
   type ClientFormValues,
 } from "@/lib/clients/schema";
-import { countries } from "@/lib/utils/countries";
+import { normalizeClientContactNumberForStorage } from "@/lib/clients/clientPhoneInput";
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { PLAN_LIMIT_CLIENTS_MESSAGE } from "@/lib/billing/planLimitMessages";
+import { SearchableCountrySelect } from "./SearchableCountrySelect";
+import { ClientContactNumberInput } from "./ClientContactNumberInput";
 
 interface ClientFormProps {
   mode: "create" | "edit";
@@ -66,6 +68,9 @@ export function ClientForm({
   });
 
   const paymentTerms = watch("paymentTerms");
+  const country = watch("country");
+  const phoneValue = watch("phone") ?? "";
+  const whatsappValue = watch("whatsapp") ?? "";
 
   // Check if initial payment terms is custom
   useEffect(() => {
@@ -91,8 +96,14 @@ export function ClientForm({
   };
 
   const submitHandler = async (values: ClientFormValues) => {
+    const normalizedValues: ClientFormValues = {
+      ...values,
+      phone: normalizeClientContactNumberForStorage(values.phone, values.country) ?? "",
+      whatsapp: normalizeClientContactNumberForStorage(values.whatsapp, values.country) ?? "",
+    };
+
     try {
-      const result = await onSubmit(values);
+      const result = await onSubmit(normalizedValues);
       
       if (result.ok) {
         // Success: redirect if redirectTo is provided
@@ -218,40 +229,30 @@ export function ClientForm({
 
           {/* Phone */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Phone
-            </label>
-            <input
-              type="text"
-              {...register("phone")}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. +1 555 123 4567"
+            <ClientContactNumberInput
+              id="client-phone"
+              label="Phone"
+              hint="General contact number. Use local digits or start with + for another country."
+              country={country}
+              storedValue={phoneValue}
+              onStoredValueChange={(value) => setValue("phone", value, { shouldDirty: true })}
+              error={errors.phone?.message}
+              placeholder="e.g. 555 123 4567"
             />
-            <p className="mt-1 text-xs text-slate-500">General contact number</p>
-            {errors.phone && (
-              <p className="mt-1 text-xs text-red-600">
-                {errors.phone.message}
-              </p>
-            )}
           </div>
 
           {/* WhatsApp */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              WhatsApp
-            </label>
-            <input
-              type="text"
-              {...register("whatsapp")}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. +962 79 123 4567"
+            <ClientContactNumberInput
+              id="client-whatsapp"
+              label="WhatsApp"
+              hint="WhatsApp-enabled number for collections. Stored separately from Phone."
+              country={country}
+              storedValue={whatsappValue}
+              onStoredValueChange={(value) => setValue("whatsapp", value, { shouldDirty: true })}
+              error={errors.whatsapp?.message}
+              placeholder="e.g. 79 123 4567"
             />
-            <p className="mt-1 text-xs text-slate-500">WhatsApp-enabled number for collections</p>
-            {errors.whatsapp && (
-              <p className="mt-1 text-xs text-red-600">
-                {errors.whatsapp.message}
-              </p>
-            )}
           </div>
 
           {/* Company */}
@@ -275,25 +276,12 @@ export function ClientForm({
 
           {/* Country */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Country <span className="text-red-500">*</span>
-            </label>
-            <select
-              {...register("country")}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {countries.map((country) => (
-                <option key={country.code} value={country.name}>
-                  {country.flag} {country.name}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-slate-500">Select country</p>
-            {errors.country && (
-              <p className="mt-1 text-xs text-red-600">
-                {errors.country.message}
-              </p>
-            )}
+            <SearchableCountrySelect
+              value={country}
+              onChange={(nextCountry) => setValue("country", nextCountry, { shouldDirty: true })}
+              error={errors.country?.message}
+              required
+            />
           </div>
 
           {/* Payment Terms */}
