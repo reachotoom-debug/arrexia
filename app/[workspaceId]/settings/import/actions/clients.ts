@@ -21,9 +21,19 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireWorkspace } from "@/lib/auth/server";
 import { assertImportEntitlement } from "@/lib/billing/entitlementGuard";
 import { EntitlementError } from "@/lib/billing/entitlementErrors";
+import {
+  MAX_CLIENT_IMPORT_ROWS,
+  CLIENT_IMPORT_ROW_LIMIT_MESSAGE,
+  buildWorkspaceClientIndexes,
+  detectInFileClientDuplicates,
+  normalizeClientImportEmail,
+  normalizeClientImportPhone,
+  parseClientImportPaymentTermsDays,
+  parseClientImportStatus,
+  resolveClientImportIdentity,
+  type ClientImportRowData,
+} from "@/lib/import/clientImportContract";
 import Papa from "papaparse";
-// CLIENTS_HEADER_COUNT available if needed for strict validation
-// import { CLIENTS_HEADER_COUNT } from "../_spec/clients";
 
 /**
  * Header alias mapping: normalized header -> canonical field name
@@ -103,17 +113,7 @@ export type PreviewRow = {
   action: "insert" | "update" | "skip" | "fail";
   reason?: string;
   warnings?: string[];
-  data: {
-    name: string;
-    email: string | null;
-    phone: string | null;
-    whatsapp_phone: string | null;
-    company_name: string | null;
-    country: string | null;
-    payment_terms_days: number | null;
-    status: string | null;
-    archived_at: string | null;
-  };
+  data: ClientImportRowData;
 };
 
 /**
@@ -127,14 +127,6 @@ export type PreviewResult = {
   normalizedRows?: Array<Record<string, string>>; // Store normalized rows for cleaned file download
   delimiter?: string; // Detected delimiter (for download format)
 };
-
-/**
- * Check if email is valid
- */
-function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email.trim());
-}
 
 /**
  * Normalize header name (trim, lowercase, remove spaces/underscores/slashes)
@@ -154,55 +146,18 @@ function mapHeaderToCanonical(normalized: string): string | null {
   return HEADER_ALIASES[normalized] || null;
 }
 
-/**
- * Parse payment terms string to extract days (e.g., "30 days" -> 30, "Net 15" -> 15)
- */
-function parsePaymentTermsDays(value: string): number | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  
-  // Try direct numeric
-  const numericOnly = parseInt(trimmed, 10);
-  if (!isNaN(numericOnly) && numericOnly > 0) {
-    return numericOnly;
-  }
-  
-  // Try "30 days", "Net 30", "30 Days", etc.
-  const match = trimmed.match(/(\d+)\s*(?:days?|net)?/i) || 
-                trimmed.match(/net\s*(\d+)/i);
-  if (match && match[1]) {
-    const days = parseInt(match[1], 10);
-    if (!isNaN(days) && days > 0) {
-      return days;
-    }
-  }
-  
-  return null;
-}
-
-/**
- * Parse status value to normalize (Active/Inactive, true/false, yes/no)
- */
-function parseStatus(value: string): string | null {
-  if (!value) return null;
-  const lower = value.trim().toLowerCase();
-  
-  // Active values
-  if (["active", "true", "yes", "1", "enabled"].includes(lower)) {
-    return "active";
-  }
-  
-  // Inactive values
-  if (["inactive", "false", "no", "0", "disabled"].includes(lower)) {
-    return "inactive";
-  }
-  
-  // Archived values
-  if (["archived"].includes(lower)) {
-    return "archived";
-  }
-  
-  return null;
+function emptyClientRowData(): ClientImportRowData {
+  return {
+    name: "",
+    email: null,
+    phone: null,
+    whatsapp: null,
+    company: null,
+    country: null,
+    payment_terms_days: null,
+    status: null,
+    archived_at: null,
+  };
 }
 
 /**
@@ -382,11 +337,20 @@ export async function previewClientsImport(
 
   const results: PreviewRow[] = [];
   const dataRows = parsedData.data as Array<Record<string, string>>;
-  
-  // Track column count errors (for TSV validation)
+
+  const nonEmptyRowCount = dataRows.filter((row) => !isEmptyRow(row, headerMap)).length;
+  if (nonEmptyRowCount > MAX_CLIENT_IMPORT_ROWS) {
+    errors.push(CLIENT_IMPORT_ROW_LIMIT_MESSAGE);
+    return {
+      header_ok: true,
+      ok: false,
+      errors,
+      rows: [],
+    };
+  }
+
   const columnCountErrors: string[] = [];
 
-  // Helper to get field value by normalized name
   const getField = (row: Record<string, string>, normalizedName: string): string => {
     for (const [rawHeader, mapped] of headerMap.entries()) {
       if (mapped === normalizedName) {
@@ -395,307 +359,228 @@ export async function previewClientsImport(
     }
     return "";
   };
-  
 
-  // Get raw lines for column count validation (skip header)
-  const rawLines = fileText.split(/\r?\n/).slice(1).filter(line => line.trim() !== "");
+  const rawLines = fileText.split(/\r?\n/).slice(1).filter((line) => line.trim() !== "");
 
-  // Process each row
+  const { data: workspaceClients, error: clientsLoadError } = await supabase
+    .from("clients")
+    .select("id, email, whatsapp, whatsapp_phone, archived_at")
+    .eq("workspace_id", workspaceId);
+
+  if (clientsLoadError) {
+    errors.push(`Failed to load workspace clients: ${clientsLoadError.message}`);
+    return {
+      header_ok: true,
+      ok: false,
+      errors,
+      rows: [],
+    };
+  }
+
+  const indexes = buildWorkspaceClientIndexes(workspaceClients ?? []);
+
+  type ParsedImportRow = {
+    lineNumber: number;
+    rowId: string;
+    rowIndex: number;
+    data: ClientImportRowData;
+  };
+
+  const parsedRows: ParsedImportRow[] = [];
+
   for (let originalRowIndex = 0; originalRowIndex < dataRows.length; originalRowIndex++) {
     const row = dataRows[originalRowIndex];
-    const csvRowNumber = originalRowIndex + 2; // +2 for 1-based index + header row
-    
-    // Column count validation: check if row has correct number of columns
-    // Use the raw line to count actual columns (before Papa.parse normalizes)
+    const csvRowNumber = originalRowIndex + 2;
+    const rowId = `row-${originalRowIndex + 1}`;
+
     if (rawLines[originalRowIndex]) {
       const rawLine = rawLines[originalRowIndex];
       const rawColumnCount = rawLine.split(detectedDelimiter).length;
-      
       if (rawColumnCount !== headerCount) {
-        const hint = detectedDelimiter === "\t" 
-          ? "TSV requires TAB-separated values; check for spaces or missing tabs."
-          : "CSV requires comma-separated values; check for extra or missing commas.";
-        
+        const hint =
+          detectedDelimiter === "\t"
+            ? "TSV requires TAB-separated values; check for spaces or missing tabs."
+            : "CSV requires comma-separated values; check for extra or missing commas.";
         columnCountErrors.push(
           `Row ${csvRowNumber} has ${rawColumnCount} columns, expected ${headerCount}. ${hint}`
         );
       }
     }
-    const rowId = `row-${originalRowIndex + 1}`;
 
-    // Check if row is empty - mark as skip, not fail
     if (isEmptyRow(row, headerMap)) {
       results.push({
         rowId,
         rowIndex: originalRowIndex + 1,
         action: "skip",
         reason: "Empty row",
-        data: {
-          name: "",
-          email: null,
-          phone: null,
-          whatsapp_phone: null,
-          company_name: null,
-          country: null,
-          payment_terms_days: null,
-          status: null,
-          archived_at: null,
-        },
+        data: emptyClientRowData(),
       });
       continue;
     }
 
-    // Extract fields using canonical field names from header map
     const name = getField(row, "name");
     const companyRaw = getField(row, "company");
     const emailRaw = getField(row, "email");
     const phoneRaw = getField(row, "phone");
     const whatsappRaw = getField(row, "whatsapp");
     const countryRaw = getField(row, "country");
-    const paymentTermsDaysRaw = getField(row, "payment_terms_days") || getField(row, "payment_terms");
+    const paymentTermsDaysRaw =
+      getField(row, "payment_terms_days") || getField(row, "payment_terms");
     const statusRaw = getField(row, "status") || getField(row, "is_active");
     const archivedAtRaw = getField(row, "archived_at");
 
-    // Validate name (required)
+    const rowData: ClientImportRowData = {
+      name,
+      email: null,
+      phone: null,
+      whatsapp: null,
+      company: companyRaw || null,
+      country: countryRaw || null,
+      payment_terms_days: null,
+      status: null,
+      archived_at: archivedAtRaw || null,
+    };
+
     if (!name) {
       results.push({
         rowId,
         rowIndex: originalRowIndex + 1,
         action: "fail",
         reason: "Name is required",
-        data: {
-          name: "",
-          email: emailRaw || null,
-          phone: phoneRaw || null,
-          whatsapp_phone: null,
-          company_name: companyRaw || null,
-          country: countryRaw || null,
-          payment_terms_days: null,
-          status: statusRaw || null,
-          archived_at: null,
-        },
+        data: rowData,
       });
       continue;
     }
 
-    // Validate email if present
-    let email: string | null = null;
     if (emailRaw) {
-      if (!isValidEmail(emailRaw)) {
+      const normalizedEmail = normalizeClientImportEmail(emailRaw);
+      if (!normalizedEmail) {
         results.push({
           rowId,
           rowIndex: originalRowIndex + 1,
           action: "fail",
           reason: `Invalid email: ${emailRaw}`,
-          data: {
-            name,
-            email: emailRaw,
-            phone: phoneRaw || null,
-            whatsapp_phone: null,
-            company_name: companyRaw || null,
-            country: countryRaw || null,
-            payment_terms_days: null,
-            status: statusRaw || null,
-            archived_at: null,
-          },
+          data: { ...rowData, email: emailRaw },
         });
         continue;
       }
-      email = emailRaw.toLowerCase().trim();
+      rowData.email = normalizedEmail;
     }
 
-    // Parse phone (normalize scientific notation like WhatsApp)
-    let phone: string | null = null;
     if (phoneRaw) {
-      let normalized = phoneRaw.trim();
-      // Handle scientific notation (e.g., 1.234E+10 -> 12340000000)
-      if (/^[\d.]+[eE][+-]?\d+$/.test(normalized)) {
-        const num = parseFloat(normalized);
-        if (!isNaN(num)) {
-          normalized = num.toFixed(0);
-        }
-      }
-      phone = normalized || null;
+      rowData.phone = normalizeClientImportPhone(phoneRaw);
     }
 
-    // Parse and normalize whatsapp_phone
-    let whatsapp_phone: string | null = null;
     if (whatsappRaw) {
-      let normalized = whatsappRaw.trim();
-      // Handle scientific notation (e.g., 9.6278E+11 -> 962780000000)
-      if (/^[\d.]+[eE][+-]?\d+$/.test(normalized)) {
-        const num = parseFloat(normalized);
-        if (!isNaN(num)) {
-          normalized = num.toFixed(0);
-        }
-      }
-      // Keep leading + if present
-      whatsapp_phone = normalized || null;
+      rowData.whatsapp = normalizeClientImportPhone(whatsappRaw);
     }
 
-    // Parse country
-    const country: string | null = countryRaw?.trim() || null;
-    
-    // Parse payment terms days
-    const payment_terms_days = parsePaymentTermsDays(paymentTermsDaysRaw);
-
-    // Parse status (using the helper function for Active/Inactive, true/false, etc.)
-    const status: string | null = parseStatus(statusRaw);
-    
-    // Parse archived_at
-    let archived_at: string | null = null;
-    if (archivedAtRaw) {
-      archived_at = archivedAtRaw.trim(); // Keep as string, RPC will parse
-    }
-
-    const company_name = companyRaw?.trim() || null;
-
-    // Determine action based on duplicate detection (email OR whatsapp_phone)
-    let action: "insert" | "update" | "fail" = "insert";
-    let reason: string | undefined;
-    const warnings: string[] = [];
-
-    // Check for existing clients by email (workspace-scoped, case-insensitive, non-archived)
-    if (email) {
-      const { data: allClientsWithEmail, error: queryError } = await supabase
-        .from("clients")
-        .select("id, email")
-        .eq("workspace_id", workspaceId)
-        .is("archived_at", null)
-        .not("email", "is", null);
-      
-      if (queryError) {
+    if (paymentTermsDaysRaw) {
+      rowData.payment_terms_days = parseClientImportPaymentTermsDays(paymentTermsDaysRaw);
+      if (rowData.payment_terms_days === null) {
         results.push({
           rowId,
           rowIndex: originalRowIndex + 1,
           action: "fail",
-          reason: `Database error checking duplicates: ${queryError.message}`,
-          data: {
-            name,
-            email,
-            phone,
-            whatsapp_phone,
-            company_name,
-            country,
-            payment_terms_days,
-            status,
-            archived_at,
-          },
+          reason: `Invalid payment terms: ${paymentTermsDaysRaw}`,
+          data: rowData,
         });
         continue;
       }
+    }
 
-      const existingByEmail = allClientsWithEmail?.filter((c: any) => 
-        c.email?.toLowerCase() === email
-      ) || [];
-
-      if (existingByEmail.length > 1) {
-        // Multiple matches - fail (data quality issue)
+    if (statusRaw) {
+      const parsedStatus = parseClientImportStatus(statusRaw);
+      if (!parsedStatus) {
         results.push({
           rowId,
           rowIndex: originalRowIndex + 1,
           action: "fail",
-          reason: "Multiple existing clients found with this email; clean up first",
-          data: {
-            name,
-            email,
-            phone,
-            whatsapp_phone,
-            company_name,
-            country,
-            payment_terms_days,
-            status,
-            archived_at,
-          },
-        });
-        continue;
-      } else if (existingByEmail.length === 1) {
-        action = "update";
-      }
-    }
-
-    // If no match by email, check by whatsapp_phone
-    if (action === "insert" && whatsapp_phone) {
-      const { data: clientsByWhatsApp, error: queryError } = await supabase
-        .from("clients")
-        .select("id, whatsapp_phone")
-        .eq("workspace_id", workspaceId)
-        .is("archived_at", null)
-        .eq("whatsapp_phone", whatsapp_phone);
-
-      if (queryError) {
-        results.push({
-          rowId,
-          rowIndex: originalRowIndex + 1,
-          action: "fail",
-          reason: `Database error checking duplicates: ${queryError.message}`,
-          data: {
-            name,
-            email,
-            phone,
-            whatsapp_phone,
-            company_name,
-            country,
-            payment_terms_days,
-            status,
-            archived_at,
-          },
+          reason: `Invalid status: ${statusRaw} (use Active, Inactive, or Archived)`,
+          data: rowData,
         });
         continue;
       }
-
-      if (clientsByWhatsApp && clientsByWhatsApp.length > 0) {
-        action = "update";
-      }
+      rowData.status = parsedStatus;
     }
 
-    // If no email and no whatsapp_phone, warn but allow insert
-    if (!email && !whatsapp_phone) {
-      warnings.push("No email or WhatsApp; cannot dedupe");
-    }
-
-    results.push({
+    parsedRows.push({
+      lineNumber: csvRowNumber,
       rowId,
       rowIndex: originalRowIndex + 1,
-      action,
-      reason,
-      warnings: warnings.length > 0 ? warnings : undefined,
-      data: {
-        name,
-        email,
-        phone,
-        whatsapp_phone,
-        company_name,
-        country,
-        payment_terms_days,
-        status,
-        archived_at,
-      },
+      data: rowData,
     });
   }
 
-  // Add column count errors to the errors array
+  const inFileDuplicateErrors = detectInFileClientDuplicates(
+    parsedRows.map((row) => ({
+      lineNumber: row.lineNumber,
+      email: row.data.email,
+      whatsapp: row.data.whatsapp,
+      phone: row.data.phone,
+    }))
+  );
+
+  for (const parsed of parsedRows) {
+    const duplicateReason = inFileDuplicateErrors.get(parsed.lineNumber);
+    if (duplicateReason) {
+      results.push({
+        rowId: parsed.rowId,
+        rowIndex: parsed.rowIndex,
+        action: "fail",
+        reason: duplicateReason,
+        data: parsed.data,
+      });
+      continue;
+    }
+
+    const identity = resolveClientImportIdentity({
+      email: parsed.data.email,
+      whatsapp: parsed.data.whatsapp,
+      phone: parsed.data.phone,
+      indexes,
+    });
+
+    if (identity.kind === "fail") {
+      results.push({
+        rowId: parsed.rowId,
+        rowIndex: parsed.rowIndex,
+        action: "fail",
+        reason: identity.reason,
+        data: parsed.data,
+      });
+      continue;
+    }
+
+    const rowWarnings: string[] = [];
+    if (!parsed.data.email && !parsed.data.whatsapp && !parsed.data.phone) {
+      rowWarnings.push("No email or WhatsApp; cannot dedupe on re-import");
+    }
+
+    results.push({
+      rowId: parsed.rowId,
+      rowIndex: parsed.rowIndex,
+      action: identity.kind === "update" ? "update" : "insert",
+      warnings: rowWarnings.length > 0 ? rowWarnings : undefined,
+      data: parsed.data,
+    });
+  }
+
   if (columnCountErrors.length > 0) {
-    // Limit to first 10 errors to avoid overwhelming the UI
     const limitedErrors = columnCountErrors.slice(0, 10);
     errors.push(...limitedErrors);
     if (columnCountErrors.length > 10) {
       errors.push(`... and ${columnCountErrors.length - 10} more column count errors`);
     }
   }
-  
-  // Add warnings to errors (prefixed for display)
-  if (warnings.length > 0) {
-    errors.push(...warnings.map(w => `Warning: ${w}`));
-  }
-  
-  const ok = errors.length === 0 && 
-             columnCountErrors.length === 0 && 
-             results.every((r) => r.action !== "fail");
 
-  // Store normalized rows (using original headers as keys)
+  const ok =
+    errors.length === 0 &&
+    columnCountErrors.length === 0 &&
+    results.every((r) => r.action !== "fail");
+
   const normalizedRows: Array<Record<string, string>> = [];
-  if (parsedData && parsedData.data) {
+  if (parsedData?.data) {
     parsedData.data.forEach((row: Record<string, string>) => {
       const normalizedRow: Record<string, string> = {};
       for (const rawHeader of rawHeaders) {
@@ -739,7 +624,6 @@ export async function executeClientsImport(
   errors: string[];
 }> {
   await requireWorkspace(workspaceId);
-  const supabase = await supabaseServer();
 
   // Reject if any row.action === "fail"
   const failedRows = rows.filter((r) => r.action === "fail");
@@ -797,31 +681,27 @@ export async function executeClientsImport(
   }
 
   // Prepare JSONB rows for RPC call
-  // Include rowId (string) for stable matching with preview results
   const rowsJsonb = rowsToProcess.map((row) => ({
     rowId: row.rowId,
     action: row.action,
     name: row.data.name,
     email: row.data.email,
     phone: row.data.phone,
-    whatsapp_phone: row.data.whatsapp_phone,
-    company_name: row.data.company_name,
+    whatsapp_phone: row.data.whatsapp,
+    company_name: row.data.company,
     country: row.data.country,
-    payment_terms: row.data.payment_terms_days, // RPC expects payment_terms (numeric days)
+    payment_terms: row.data.payment_terms_days,
     status: row.data.status,
     archived_at: row.data.archived_at,
   }));
 
-  // Call Postgres RPC rpc_import_clients
   const { data, error } = await supabaseAdmin().rpc("rpc_import_clients", {
     p_workspace_id: workspaceId,
     p_rows: rowsJsonb,
   });
 
-  // Only treat RPC call failure as error (not per-row failures)
   if (error) {
     console.error("[executeClientsImport] RPC call error:", error);
-    // This is a real RPC failure (workspace not found, etc.)
     return {
       ok: false,
       results: rows.map((row) => ({
@@ -835,7 +715,6 @@ export async function executeClientsImport(
     };
   }
 
-  // RPC succeeded - data contains results for all rows (some may have status='failed')
   if (!data || !Array.isArray(data)) {
     console.error("[executeClientsImport] RPC returned invalid data:", data);
     return {
@@ -851,32 +730,53 @@ export async function executeClientsImport(
     };
   }
 
-  // RPC succeeded - revalidate paths to update UI immediately
-  revalidatePath(`/${workspaceId}/clients`);
-  revalidatePath(`/${workspaceId}/invoices`);
-  revalidatePath(`/${workspaceId}/dashboard`);
+  if (
+    data.length === 1 &&
+    data[0]?.status === "failed" &&
+    data[0]?.rowId === "0"
+  ) {
+    const batchError =
+      (data[0]?.error as string | undefined) || "Client import validation failed";
+    return {
+      ok: false,
+      results: rows.map((row) => ({
+        rowId: row.rowId,
+        rowIndex: row.rowIndex,
+        client_id: null,
+        status: "failed" as const,
+        error_message: batchError,
+      })),
+      errors: [batchError],
+    };
+  }
 
-  // Map RPC results back to row IDs
-  // RPC returns JSONB array: [{ rowId, status: 'ok'|'failed', action, client_id, error }]
-  // RPC returns a result for EVERY input row (even failed ones)
-  const resultMap = new Map<string, { client_id: string | null; status: "ok" | "failed"; error_message: string | null }>();
-  
-  data.forEach((result: any) => {
-    const rowId = result.rowId as string;
-    if (rowId) {
-      // Map RPC status ('ok'|'failed') to our status type
-      const rpcStatus = result.status as string;
-      const mappedStatus = (rpcStatus === "ok" ? "ok" : "failed") as "ok" | "failed";
-      
-      resultMap.set(rowId, {
-        client_id: result.client_id as string | null,
-        status: mappedStatus,
-        error_message: result.error as string | null,
-      });
+  const resultMap = new Map<
+    string,
+    {
+      client_id: string | null;
+      status: "ok" | "failed";
+      error_message: string | null;
     }
+  >();
+
+  data.forEach((result: Record<string, unknown>) => {
+    const rowId = result.rowId as string;
+    if (!rowId) return;
+
+    const rpcStatus = result.status as string;
+    const mappedStatus = (rpcStatus === "ok" ? "ok" : "failed") as "ok" | "failed";
+    const clientId =
+      (result.client_id as string | null | undefined) ??
+      (result.entity_id as string | null | undefined) ??
+      null;
+
+    resultMap.set(rowId, {
+      client_id: clientId,
+      status: mappedStatus,
+      error_message: (result.error as string | null | undefined) ?? null,
+    });
   });
 
-  // Return row-level results for all rows
   const results = rows.map((row) => {
     if (row.action === "skip") {
       return {
@@ -899,7 +799,6 @@ export async function executeClientsImport(
       };
     }
 
-    // No RPC result for this rowId - explicit error
     return {
       rowId: row.rowId,
       rowIndex: row.rowIndex,
@@ -911,10 +810,16 @@ export async function executeClientsImport(
 
   const ok = results.every((r) => r.status === "ok");
 
+  if (ok) {
+    revalidatePath(`/${workspaceId}/clients`);
+    revalidatePath(`/${workspaceId}/invoices`);
+    revalidatePath(`/${workspaceId}/dashboard`);
+  }
+
   return {
     ok,
     results,
-    errors: [],
+    errors: ok ? [] : ["One or more rows failed to import"],
   };
 }
 

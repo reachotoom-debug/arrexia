@@ -132,9 +132,8 @@ export function ImportClientsSection({ workspaceId }: ImportClientsSectionProps)
   // - no row.action === "fail"
   // - at least one row.action === "insert" OR "update"
   const canExecute = preview
-    ? preview.header_ok &&
-      preview.errors.length === 0 &&
-      !preview.rows.some((r) => r.action === "fail") &&
+    ? preview.ok &&
+      preview.header_ok &&
       preview.rows.some((r) => r.action === "insert" || r.action === "update")
     : false;
 
@@ -199,6 +198,12 @@ export function ImportClientsSection({ workspaceId }: ImportClientsSectionProps)
   const executeResultsTable = executeResults ? (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-slate-900">Import Results</h3>
+      {executeResults.every((r) => r.status === "ok") && preview?.rows ? (
+        <p className="text-sm text-green-700">
+          Created: {preview.rows.filter((r) => r.action === "insert").length} · Updated:{" "}
+          {preview.rows.filter((r) => r.action === "update").length} · Failed: 0
+        </p>
+      ) : null}
       <div className="border border-slate-200 rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
