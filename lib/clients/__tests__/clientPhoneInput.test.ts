@@ -40,6 +40,27 @@ describe("clientPhoneInput UX helpers", () => {
     );
   });
 
+  it("L — production Jordan Phone local normalizes without double country code", () => {
+    assert.equal(
+      normalizeClientContactNumberForStorage("77561145", "Jordan"),
+      "+96277561145"
+    );
+  });
+
+  it("L — production Jordan WhatsApp local normalizes without double country code", () => {
+    assert.equal(
+      normalizeClientContactNumberForStorage("779610078", "Jordan"),
+      "+962779610078"
+    );
+  });
+
+  it("L — already international Jordan number is preserved", () => {
+    assert.equal(
+      normalizeClientContactNumberForStorage("+962779610078", "Jordan"),
+      "+962779610078"
+    );
+  });
+
   it("normalizes explicit international for storage", () => {
     assert.equal(
       normalizeClientContactNumberForStorage("+962791234567", "Jordan"),

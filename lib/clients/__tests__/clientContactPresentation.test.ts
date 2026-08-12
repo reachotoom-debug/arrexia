@@ -93,8 +93,11 @@ describe("client form independent fields", () => {
   it("E — edit form loads both contact fields", () => {
     const formSrc = readFileSync("app/[workspaceId]/clients/_components/ClientForm.tsx", "utf8");
     const editSrc = readFileSync("app/[workspaceId]/clients/[clientId]/edit/page.tsx", "utf8");
-    assert.match(formSrc, /register\("phone"\)/);
-    assert.match(formSrc, /register\("whatsapp"\)/);
+    assert.match(formSrc, /ClientContactNumberInput/);
+    assert.match(formSrc, /id="client-phone"/);
+    assert.match(formSrc, /id="client-whatsapp"/);
+    assert.match(formSrc, /storedValue=\{phoneValue\}/);
+    assert.match(formSrc, /storedValue=\{whatsappValue\}/);
     assert.match(editSrc, /getClientPhone/);
     assert.match(editSrc, /getClientWhatsApp/);
   });

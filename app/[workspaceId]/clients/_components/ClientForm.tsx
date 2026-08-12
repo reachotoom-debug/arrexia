@@ -9,6 +9,7 @@ import {
   type ClientFormValues,
 } from "@/lib/clients/schema";
 import { normalizeClientContactNumberForStorage } from "@/lib/clients/clientPhoneInput";
+import type { ClientMutationResult } from "@/lib/clients/clientActionResult";
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { PLAN_LIMIT_CLIENTS_MESSAGE } from "@/lib/billing/planLimitMessages";
@@ -18,7 +19,7 @@ import { ClientContactNumberInput } from "./ClientContactNumberInput";
 interface ClientFormProps {
   mode: "create" | "edit";
   initialData?: ClientFormValues;
-  onSubmit: (values: ClientFormValues) => Promise<{ ok: boolean; redirectTo?: string; message?: string; code?: string }>;
+  onSubmit: (values: ClientFormValues) => Promise<ClientMutationResult>;
   workspaceId: string;
   cancelUrl?: string;
 }
@@ -51,6 +52,7 @@ export function ClientForm({
     handleSubmit,
     watch,
     setValue,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<ClientFormValues>({
     resolver: zodResolver(ClientFormSchema),
@@ -117,6 +119,16 @@ export function ClientForm({
           });
         }
         console.log("[ClientForm] submit successful", { mode: isEdit ? "edit" : "create" });
+      } else if (result.fieldErrors?.whatsapp) {
+        setError("whatsapp", {
+          type: "server",
+          message: result.fieldErrors.whatsapp,
+        });
+      } else if (result.fieldErrors?.email) {
+        setError("email", {
+          type: "server",
+          message: result.fieldErrors.email,
+        });
       } else {
         const description =
           result.code === "PLAN_LIMIT_CLIENTS"

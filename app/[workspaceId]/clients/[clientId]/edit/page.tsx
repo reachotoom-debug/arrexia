@@ -3,7 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { ClientForm } from "../../_components/ClientForm";
 import { type ClientFormValues } from "@/lib/clients/schema";
 import { updateClient } from "../../actions";
-import { type ActionResult } from "@/lib/actions/result";
+import type { ClientMutationResult } from "@/lib/clients/clientActionResult";
 import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 import {
   resolveClientFormPaymentTerms,
@@ -53,7 +53,7 @@ export default async function EditClientPage({
     notes: client.notes ?? "",
   };
 
-  async function handleUpdate(values: ClientFormValues): Promise<ActionResult> {
+  async function handleUpdate(values: ClientFormValues): Promise<ClientMutationResult> {
     "use server";
     return await updateClient(workspaceId, clientId, values);
   }

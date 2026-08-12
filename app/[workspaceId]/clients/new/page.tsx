@@ -1,7 +1,7 @@
 import { ClientForm } from "../_components/ClientForm";
 import { type ClientFormValues } from "@/lib/clients/schema";
 import { createClient } from "../actions";
-import { type ActionResult } from "@/lib/actions/result";
+import type { ClientMutationResult } from "@/lib/clients/clientActionResult";
 
 interface NewClientPageProps {
   params: Promise<{ workspaceId: string }>;
@@ -12,7 +12,7 @@ export default async function NewClientPage({
 }: NewClientPageProps) {
   const { workspaceId } = await params;
 
-  async function handleCreate(values: ClientFormValues): Promise<ActionResult> {
+  async function handleCreate(values: ClientFormValues): Promise<ClientMutationResult> {
     "use server";
     return await createClient(workspaceId, values);
   }

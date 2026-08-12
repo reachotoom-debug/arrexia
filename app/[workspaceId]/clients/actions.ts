@@ -17,11 +17,19 @@ import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
 import { EntitlementError } from "@/lib/billing/entitlementErrors";
 import { type ActionResult, ok, fail } from "@/lib/actions/result";
 import { resolveClientPaymentTermsPersistence } from "@/lib/clients/paymentTermsPersistence";
+import {
+  mapClientPersistenceError,
+} from "@/lib/clients/clientPersistenceErrors";
+import {
+  clientFieldErrorResult,
+  type ClientMutationResult,
+} from "@/lib/clients/clientActionResult";
+import { logPostgresUniqueViolation } from "@/lib/db/postgres-errors";
 
 export async function createClient(
   workspaceId: string,
   rawValues: ClientFormValues
-) {
+): Promise<ClientMutationResult> {
   const { workspace } = await requireWorkspace(workspaceId);
   const validatedWorkspaceId = workspace.id;
 
@@ -77,8 +85,17 @@ export async function createClient(
     .single();
 
   if (error) {
-    const errorDetails = error.details ? ` Details: ${error.details}` : "";
-    const errorMessage = `[createClient] ${error.code || "UNKNOWN"}: ${error.message}${errorDetails}`;
+    logPostgresUniqueViolation("createClient", error, { workspaceId });
+    const mapped = mapClientPersistenceError(error);
+    if (mapped.kind === "fieldErrors") {
+      console.error("[createClient] unique constraint violation:", {
+        code: error.code,
+        fieldErrors: mapped.fieldErrors,
+        workspaceId,
+      });
+      return clientFieldErrorResult(mapped.fieldErrors);
+    }
+
     console.error("[createClient] insert failed:", {
       code: error.code,
       message: error.message,
@@ -87,7 +104,7 @@ export async function createClient(
       workspaceId,
       payload: insertPayload,
     });
-    return fail(errorMessage, error.code);
+    return fail(`Failed to create client: ${error.message}`, error.code);
   }
 
   if (!data) {
@@ -108,7 +125,7 @@ export async function updateClient(
   workspaceId: string,
   clientId: string,
   rawValues: ClientFormValues
-) {
+): Promise<ClientMutationResult> {
   const { workspace } = await requireWorkspace(workspaceId);
   const validatedWorkspaceId = workspace.id;
 
@@ -152,6 +169,18 @@ export async function updateClient(
     .eq("workspace_id", validatedWorkspaceId);
 
   if (error) {
+    logPostgresUniqueViolation("updateClient", error, { workspaceId, clientId });
+    const mapped = mapClientPersistenceError(error);
+    if (mapped.kind === "fieldErrors") {
+      console.error("[updateClient] unique constraint violation:", {
+        code: error.code,
+        fieldErrors: mapped.fieldErrors,
+        workspaceId,
+        clientId,
+      });
+      return clientFieldErrorResult(mapped.fieldErrors);
+    }
+
     console.error("[updateClient] update failed:", error);
     return fail(`Failed to update client: ${error.message}`, error.code);
   }
