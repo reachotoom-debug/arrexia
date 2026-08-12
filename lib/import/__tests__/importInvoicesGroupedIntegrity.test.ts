@@ -151,6 +151,21 @@ describe("executeInvoicesImport entitlement + verification", () => {
   });
 });
 
+describe("invoice import preview warning wiring", () => {
+  const actionsSrc = readFileSync(INVOICES_ACTION_PATH, "utf8");
+
+  it("uses non-blocking preview warnings for derived status and amount mismatch", () => {
+    assert.match(actionsSrc, /resolveImportedInvoiceStatus/);
+    assert.match(actionsSrc, /validationWarnings\.push\(statusResolution\.warning\)/);
+    assert.match(actionsSrc, /buildInvoiceLineAmountMismatchWarning/);
+    assert.match(actionsSrc, /validation_warnings: validationWarnings/);
+    assert.match(
+      actionsSrc,
+      /previewRows\.every\(\(r\) => r\.validation_errors\.length === 0\)/
+    );
+  });
+});
+
 describe("import invoices grouped production verification gate", () => {
   const verificationSql = readFileSync(PRODUCTION_VERIFICATION_SQL_PATH, "utf8");
 
@@ -209,6 +224,20 @@ describe("import invoices grouped production verification gate", () => {
     assert.match(verificationSql, /TEST_H_PAYMENT/);
     assert.match(verificationSql, /TEST_I_NET_NEW/);
     assert.match(verificationSql, /TEST_J_TENANT/);
+  });
+
+  it("covers overpaid re-import regression TEST_K", () => {
+    assert.match(verificationSql, /TEST_K_OVERPAID/);
+    const testSection = verificationSql.slice(
+      verificationSql.indexOf("-- TEST K — OVERPAID RE-IMPORT"),
+      verificationSql.indexOf("-- TEST E — BATCH ATOMICITY")
+    );
+    assert.match(testSection, /unit_price','1000'/);
+    assert.match(testSection, /unit_price','500'/);
+    assert.match(testSection, /800/);
+    assert.match(testSection, /display_status/);
+    assert.match(testSection, /FROM public\.invoices_view/);
+    assert.doesNotMatch(testSection, /DELETE FROM public\.payments/);
   });
 
   it("creates entitlement fixtures before protected client inserts", () => {

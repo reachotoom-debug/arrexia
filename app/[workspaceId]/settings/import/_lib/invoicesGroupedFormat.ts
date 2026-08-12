@@ -92,6 +92,7 @@ export type PreviewRow = {
   items_count: number;
   computed_total: number;
   validation_errors: string[];
+  validation_warnings: string[];
   action?: "insert" | "update"; // Determined after client resolution
 };
 

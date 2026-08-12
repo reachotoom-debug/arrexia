@@ -455,6 +455,7 @@ DECLARE
   v_amount numeric;
   v_total_paid numeric;
   v_outstanding numeric;
+  v_display_status text;
   v_invoice_count integer;
   v_net_new integer;
   v_item_detail text;
@@ -467,6 +468,7 @@ DECLARE
   v_inv_atomic_fail text := v_prefix || '-ATOMIC-FAIL';
   v_inv_retry text := v_prefix || '-RETRY-OK';
   v_inv_pay text := v_prefix || '-PAY';
+  v_inv_overpaid text := v_prefix || '-OVERPAID';
   v_inv_exist text := v_prefix || '-EXIST';
   v_inv_new1 text := v_prefix || '-NEW1';
   v_inv_new2 text := v_prefix || '-NEW2';
@@ -763,6 +765,71 @@ BEGIN
     RAISE EXCEPTION 'VERIFY_FAILED TEST_H_PAYMENT: payment row was altered or removed';
   END IF;
   RAISE NOTICE 'TEST_H_PAYMENT: PASS';
+
+  -- --------------------------------------------------------------------------
+  -- TEST K — OVERPAID RE-IMPORT (total below paid; payments preserved)
+  -- --------------------------------------------------------------------------
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type','invoice','invoice_number', v_inv_overpaid,'client_email', v_prefix || '-client-a@verify.local','client_name', v_prefix || ' Client A','issue_date','2026-07-01','due_date','2026-08-01','currency','USD','status','sent'),
+    jsonb_build_object('row_type','item','invoice_number', v_inv_overpaid,'item_description','Overpaid seed line','quantity','1','unit_price','1000')
+  );
+  PERFORM public.internal_import_invoices_grouped(v_ws_a, v_rows, false);
+
+  SELECT id INTO v_invoice_id FROM public.invoices WHERE workspace_id = v_ws_a AND invoice_number = v_inv_overpaid;
+
+  INSERT INTO public.payments (
+    workspace_id,
+    organization_id,
+    invoice_id,
+    client_id,
+    amount,
+    currency,
+    payment_date,
+    method,
+    status,
+    transaction_id
+  )
+  SELECT
+    i.workspace_id,
+    v_org_id,
+    i.id,
+    i.client_id,
+    800,
+    'USD',
+    CURRENT_DATE,
+    'manual',
+    'completed',
+    v_prefix || '-PAY-OVERPAID-1'
+  FROM public.invoices i
+  WHERE i.id = v_invoice_id;
+
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type','invoice','invoice_number', v_inv_overpaid,'client_email', v_prefix || '-client-a@verify.local','client_name', v_prefix || ' Client A','issue_date','2026-07-01','due_date','2026-08-01','currency','USD','status','sent'),
+    jsonb_build_object('row_type','item','invoice_number', v_inv_overpaid,'item_description','Overpaid reduced line','quantity','1','unit_price','500')
+  );
+  PERFORM public.internal_import_invoices_grouped(v_ws_a, v_rows, false);
+
+  SELECT paid, total, outstanding, display_status
+  INTO v_total_paid, v_amount, v_outstanding, v_display_status
+  FROM public.invoices_view
+  WHERE id = v_invoice_id;
+
+  IF v_total_paid <> 800 THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: expected view paid 800, got %', v_total_paid;
+  END IF;
+  IF v_amount <> 500 OR v_outstanding <> 0 THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: expected view total 500 outstanding 0, got total=% outstanding=%', v_amount, v_outstanding;
+  END IF;
+  IF v_display_status <> 'paid' THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: expected display_status paid, got %', v_display_status;
+  END IF;
+  IF (SELECT count(*) FROM public.payments WHERE invoice_id = v_invoice_id AND archived_at IS NULL) <> 1 THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: payment row was altered or removed';
+  END IF;
+  IF (SELECT amount FROM public.payments WHERE invoice_id = v_invoice_id AND archived_at IS NULL LIMIT 1) <> 800 THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: payment amount changed';
+  END IF;
+  RAISE NOTICE 'TEST_K_OVERPAID: PASS';
 
   -- --------------------------------------------------------------------------
   -- TEST E — BATCH ATOMICITY (soft failure rolls back entire batch)

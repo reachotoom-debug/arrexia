@@ -177,7 +177,7 @@ export function ImportInvoicesSection({ workspaceId }: ImportInvoicesSectionProp
       preview.invoiceGroups.length > 0
     : false;
 
-  // Hint banner for failed rows (client not found)
+  // Hint banner for failed rows (client not found) — blocking errors only
   const hintBanner = preview?.rows && preview.rows.some((r) => r.validation_errors.length > 0) ? (
     <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
       <div className="flex items-start justify-between">
@@ -283,12 +283,23 @@ export function ImportInvoicesSection({ workspaceId }: ImportInvoicesSectionProp
                     </span>
                   </TableCell>
                   <TableCell className="text-xs text-slate-600">
-                    {row.validation_errors.length > 0 ? (
-                      <ul className="list-disc list-inside text-red-600">
-                        {row.validation_errors.map((err, idx) => (
-                          <li key={idx}>{err}</li>
-                        ))}
-                      </ul>
+                    {row.validation_errors.length > 0 || row.validation_warnings.length > 0 ? (
+                      <div className="space-y-1">
+                        {row.validation_errors.length > 0 ? (
+                          <ul className="list-disc list-inside text-red-600">
+                            {row.validation_errors.map((err, idx) => (
+                              <li key={`err-${idx}`}>{err}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {row.validation_warnings.length > 0 ? (
+                          <ul className="list-disc list-inside text-amber-700">
+                            {row.validation_warnings.map((warn, idx) => (
+                              <li key={`warn-${idx}`}>{warn}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
                     ) : (
                       "-"
                     )}
@@ -353,8 +364,8 @@ export function ImportInvoicesSection({ workspaceId }: ImportInvoicesSectionProp
   return (
     <ImportCard
       title="Import Invoices (Grouped CSV/TSV)"
-      description="Upload a TSV (recommended) or CSV file in grouped format. Each invoice has 1 header row (Row Type=invoice) + 1 or more item rows (Row Type=item). Invoice Number is required for all rows. Dates: YYYY-MM-DD or M/D/YYYY. Currency defaults to workspace default if blank."
-      importantNote={`${INVOICE_HEADER_COUNT} columns required: Row Type, Invoice Number, Client Name, Client Email, Issue Date, Due Date, Currency, Status, PO Number, Notes, Item Description, Quantity, Unit Price, Amount`}
+      description="Upload a grouped TSV (recommended for Excel/Google Sheets) or CSV file. Each invoice starts with one Row Type=invoice row, followed by one or more Row Type=item rows for that invoice. Item rows only need the invoice number plus line fields (description, quantity, unit price). Clients must already exist in this workspace. For best results, import up to 500 rows per file."
+      importantNote={`${INVOICE_HEADER_COUNT} columns required: Row Type, Invoice Number, Client Name, Client Email, Issue Date, Due Date, Currency, Status, PO Number, Notes, Item Description, Quantity, Unit Price, Amount. Imported invoice numbers are preserved; gaps are allowed and do not consume invoice allowance. Arrexia suggests the next number after the highest existing INV-* number.`}
       fileInputId="invoices-file-input"
       onFileSelect={handleFileSelect}
       onDownloadSampleTSV={handleDownloadSampleTSV}

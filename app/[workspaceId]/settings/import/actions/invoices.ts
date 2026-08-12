@@ -28,6 +28,10 @@ import {
 import { parseDelimited } from "@/lib/import/parseDelimited";
 import { assertImportEntitlement } from "@/lib/billing/entitlementGuard";
 import { EntitlementError } from "@/lib/billing/entitlementErrors";
+import {
+  buildInvoiceLineAmountMismatchWarning,
+  resolveImportedInvoiceStatus,
+} from "@/lib/import/invoiceImportPreviewWarnings";
 
 /**
  * Dev-only logging helper
@@ -841,6 +845,7 @@ export async function previewInvoicesImport(
     const headerRow = group.headerRow;
     const rowId = `line:${group.headerLineNumber}`;
     const validationErrors: string[] = [];
+    const validationWarnings: string[] = [];
 
 
     // Extract invoice-level fields from header row (canonical format)
@@ -901,23 +906,14 @@ export async function previewInvoicesImport(
       }
     }
 
-    // Validate status: Accept Draft/Sent/Void (case-insensitive) -> map to draft/sent/void
-    // Ignore Paid/Partially Paid/Overdue (system-derived)
-    const statusLower = statusRaw ? statusRaw.toLowerCase().trim() : "";
-    const validStatuses = ["draft", "sent", "void"];
-    const systemStatuses = ["paid", "partially paid", "overdue"];
-    
-    let baseStatus: "draft" | "sent" | "void" = "sent"; // Default
-    
-    if (statusRaw) {
-      if (validStatuses.includes(statusLower)) {
-        baseStatus = statusLower as "draft" | "sent" | "void";
-      } else if (systemStatuses.includes(statusLower)) {
-        // Ignore system-derived statuses, use default
-        baseStatus = "sent";
-      } else {
-        validationErrors.push(`Invalid Status: ${statusRaw} (must be Draft, Sent, or Void)`);
-      }
+    // Validate status: Accept Draft/Sent/Void; warn when derived statuses normalize to sent
+    const statusResolution = resolveImportedInvoiceStatus(statusRaw);
+    const baseStatus = statusResolution.baseStatus;
+    if (statusResolution.warning) {
+      validationWarnings.push(statusResolution.warning);
+    }
+    if (statusResolution.error) {
+      validationErrors.push(statusResolution.error);
     }
 
     // Currency is already set above (defaults to USD if blank, normalized to uppercase)
@@ -961,17 +957,19 @@ export async function previewInvoicesImport(
       // Compute amount from quantity * unit_price (ignore provided amount column)
       const computedAmount = quantity * unitPrice;
 
-      // If Amount column is present, validate it matches computed amount within 0.01 tolerance (warning only)
+      // If Amount column is present, warn when it differs from computed amount (non-blocking)
       if (amountRaw) {
         const providedAmount = parseNumber(amountRaw, false, true); // Allow zero for validation
         if (providedAmount !== null) {
-          const difference = Math.abs(providedAmount - computedAmount);
-          if (difference > 0.01) {
-            // Warning only - don't block execution
-            validationErrors.push(
-              `Line ${lineNumber} (Invoice ${invoiceNumber}): Amount (${providedAmount}) does not match quantity × unit_price (${computedAmount.toFixed(2)}). ` +
-              `System will use computed value: ${computedAmount.toFixed(2)}`
-            );
+          const mismatchWarning = buildInvoiceLineAmountMismatchWarning({
+            providedAmount,
+            computedAmount,
+            lineNumber,
+            invoiceNumber,
+            currency,
+          });
+          if (mismatchWarning) {
+            validationWarnings.push(mismatchWarning);
           }
         }
       }
@@ -1093,6 +1091,7 @@ export async function previewInvoicesImport(
       items_count: items.length,
       computed_total: computedTotal,
       validation_errors: validationErrors,
+      validation_warnings: validationWarnings,
       action,
     });
   }
