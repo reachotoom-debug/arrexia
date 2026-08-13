@@ -11,9 +11,10 @@ export interface ImportCardProps {
   fileInputId: string;
   acceptExtensions?: string;
   onFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
-  onDownloadSampleTSV: () => void;
-  onDownloadSampleCSV: () => void;
+  onDownloadSampleTSV: () => void | Promise<void>;
+  onDownloadSampleCSV: () => void | Promise<void>;
   isLoading: boolean;
+  isDownloadingSample?: boolean;
   isExecuting: boolean;
   error: string | null;
   previewErrors: string[];
@@ -54,6 +55,7 @@ export function ImportCard({
   onDownloadSampleTSV,
   onDownloadSampleCSV,
   isLoading,
+  isDownloadingSample = false,
   isExecuting,
   error,
   previewErrors,
@@ -87,7 +89,7 @@ export function ImportCard({
               type="file"
               accept={acceptExtensions}
               onChange={onFileSelect}
-              disabled={isLoading || isExecuting}
+              disabled={isLoading || isExecuting || isDownloadingSample}
               className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <p className="mt-2 text-sm text-slate-600">
@@ -99,19 +101,19 @@ export function ImportCard({
               type="button"
               variant="outline"
               onClick={onDownloadSampleTSV}
-              disabled={isLoading || isExecuting}
+              disabled={isLoading || isExecuting || isDownloadingSample}
               className="whitespace-nowrap"
             >
-              Download Sample TSV (Recommended)
+              {isDownloadingSample ? "Downloading..." : "Download Sample TSV (Recommended)"}
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={onDownloadSampleCSV}
-              disabled={isLoading || isExecuting}
+              disabled={isLoading || isExecuting || isDownloadingSample}
               className="whitespace-nowrap"
             >
-              Download Sample CSV
+              {isDownloadingSample ? "Downloading..." : "Download Sample CSV"}
             </Button>
           </div>
         </div>

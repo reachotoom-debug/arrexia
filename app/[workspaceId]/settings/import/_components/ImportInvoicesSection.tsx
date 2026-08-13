@@ -19,24 +19,10 @@ import {
   buildInvoicesSampleCsvWithClients,
   type PreviewResult 
 } from "../_lib/invoicesGroupedFormat";
+import { downloadSampleFile, runSampleDownloadTask } from "../_lib/sampleFiles";
 
 interface ImportInvoicesSectionProps {
   workspaceId: string;
-}
-
-/**
- * Download helper - creates and triggers a file download
- */
-function triggerDownload(content: string, filename: string, mimeType: string) {
-  const blob = new Blob([content], { type: `${mimeType};charset=utf-8;` });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", filename);
-  link.style.visibility = "hidden";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
 }
 
 export function ImportInvoicesSection({ workspaceId }: ImportInvoicesSectionProps) {
@@ -44,6 +30,7 @@ export function ImportInvoicesSection({ workspaceId }: ImportInvoicesSectionProp
   const [fileSelected, setFileSelected] = useState(false);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDownloadingSample, setIsDownloadingSample] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [executeResults, setExecuteResults] = useState<Array<{
@@ -54,37 +41,64 @@ export function ImportInvoicesSection({ workspaceId }: ImportInvoicesSectionProp
     error: string | null;
   }> | null>(null);
 
-  /**
-   * Download sample TSV with workspace clients (RECOMMENDED)
-   * Uses real workspace clients so the sample works out of the box
-   */
-  const handleDownloadSampleTSV = async () => {
-    try {
-      const clients = await getWorkspaceClientsForSample(workspaceId);
-      const tsv = buildInvoicesSampleTsvWithClients(clients);
-      triggerDownload(tsv, "invoices_sample.tsv", "text/tab-separated-values");
-    } catch (err) {
-      console.error("Failed to generate sample TSV:", err);
-      // Fallback to static sample
-      const tsv = buildInvoicesSampleTsvWithClients([]);
-      triggerDownload(tsv, "invoices_sample.tsv", "text/tab-separated-values");
-    }
+  const handleDownloadSampleTSV = () => {
+    void runSampleDownloadTask(
+      async () => {
+        try {
+          const clients = await getWorkspaceClientsForSample(workspaceId);
+          downloadSampleFile(
+            buildInvoicesSampleTsvWithClients(clients),
+            "invoices_sample.tsv",
+            "text/tab-separated-values;charset=utf-8;"
+          );
+        } catch (err) {
+          console.error("Failed to generate sample TSV:", err);
+          downloadSampleFile(
+            buildInvoicesSampleTsvWithClients([]),
+            "invoices_sample.tsv",
+            "text/tab-separated-values;charset=utf-8;"
+          );
+        }
+      },
+      {
+        onStart: () => setIsDownloadingSample(true),
+        onEnd: () => setIsDownloadingSample(false),
+        onError: (err) => {
+          console.error("[ImportInvoicesSection] sample TSV download failed:", err);
+          setError(err instanceof Error ? err.message : "Failed to download sample TSV");
+        },
+      }
+    );
   };
 
-  /**
-   * Download sample CSV with workspace clients
-   */
-  const handleDownloadSampleCSV = async () => {
-    try {
-      const clients = await getWorkspaceClientsForSample(workspaceId);
-      const csv = buildInvoicesSampleCsvWithClients(clients);
-      triggerDownload(csv, "invoices_sample.csv", "text/csv");
-    } catch (err) {
-      console.error("Failed to generate sample CSV:", err);
-      // Fallback to static sample
-      const csv = buildInvoicesSampleCsvWithClients([]);
-      triggerDownload(csv, "invoices_sample.csv", "text/csv");
-    }
+  const handleDownloadSampleCSV = () => {
+    void runSampleDownloadTask(
+      async () => {
+        try {
+          const clients = await getWorkspaceClientsForSample(workspaceId);
+          downloadSampleFile(
+            buildInvoicesSampleCsvWithClients(clients),
+            "invoices_sample.csv",
+            "text/csv;charset=utf-8;"
+          );
+        } catch (err) {
+          console.error("Failed to generate sample CSV:", err);
+          downloadSampleFile(
+            buildInvoicesSampleCsvWithClients([]),
+            "invoices_sample.csv",
+            "text/csv;charset=utf-8;"
+          );
+        }
+      },
+      {
+        onStart: () => setIsDownloadingSample(true),
+        onEnd: () => setIsDownloadingSample(false),
+        onError: (err) => {
+          console.error("[ImportInvoicesSection] sample CSV download failed:", err);
+          setError(err instanceof Error ? err.message : "Failed to download sample CSV");
+        },
+      }
+    );
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -371,6 +385,7 @@ export function ImportInvoicesSection({ workspaceId }: ImportInvoicesSectionProp
       onDownloadSampleTSV={handleDownloadSampleTSV}
       onDownloadSampleCSV={handleDownloadSampleCSV}
       isLoading={isLoading}
+      isDownloadingSample={isDownloadingSample}
       isExecuting={isExecuting}
       error={error}
       previewErrors={preview?.errors || []}

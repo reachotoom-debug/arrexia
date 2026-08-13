@@ -6,7 +6,7 @@ import { ImportCard } from "./ImportCard";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { previewPaymentsImport, executePaymentsImport, type PreviewRow, type PreviewResult } from "../actions/payments";
 import { formatMoney } from "@/lib/utils/format-money";
-import { downloadSampleFile } from "../_lib/sampleFiles";
+import { downloadSampleFile, runSampleDownloadTask } from "../_lib/sampleFiles";
 import { buildPaymentsSampleTsv, buildPaymentsSampleCsv, PAYMENTS_EXPORT_HEADERS } from "../_spec/payments";
 import {
   generateCleanedFile,
@@ -18,20 +18,20 @@ interface ImportPaymentsSectionProps {
   workspaceId: string;
 }
 
-/**
- * Download sample TSV file (recommended)
- */
-function downloadSampleTSV() {
-  const tsv = buildPaymentsSampleTsv();
-  downloadSampleFile(tsv, "payments_sample.tsv", "text/tab-separated-values;charset=utf-8;");
+function createPaymentsSampleTsvDownload(): void {
+  downloadSampleFile(
+    buildPaymentsSampleTsv(),
+    "payments_sample.tsv",
+    "text/tab-separated-values;charset=utf-8;"
+  );
 }
 
-/**
- * Download sample CSV file
- */
-function downloadSampleCSV() {
-  const csv = buildPaymentsSampleCsv();
-  downloadSampleFile(csv, "payments_sample.csv", "text/csv;charset=utf-8;");
+function createPaymentsSampleCsvDownload(): void {
+  downloadSampleFile(
+    buildPaymentsSampleCsv(),
+    "payments_sample.csv",
+    "text/csv;charset=utf-8;"
+  );
 }
 
 export function ImportPaymentsSection({ workspaceId }: ImportPaymentsSectionProps) {
@@ -39,6 +39,7 @@ export function ImportPaymentsSection({ workspaceId }: ImportPaymentsSectionProp
   const [fileSelected, setFileSelected] = useState(false);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDownloadingSample, setIsDownloadingSample] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [executeResults, setExecuteResults] = useState<Array<{
@@ -85,6 +86,28 @@ export function ImportPaymentsSection({ workspaceId }: ImportPaymentsSectionProp
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDownloadSampleTSV = () => {
+    void runSampleDownloadTask(createPaymentsSampleTsvDownload, {
+      onStart: () => setIsDownloadingSample(true),
+      onEnd: () => setIsDownloadingSample(false),
+      onError: (err) => {
+        console.error("[ImportPaymentsSection] sample TSV download failed:", err);
+        setError(err instanceof Error ? err.message : "Failed to download sample TSV");
+      },
+    });
+  };
+
+  const handleDownloadSampleCSV = () => {
+    void runSampleDownloadTask(createPaymentsSampleCsvDownload, {
+      onStart: () => setIsDownloadingSample(true),
+      onEnd: () => setIsDownloadingSample(false),
+      onError: (err) => {
+        console.error("[ImportPaymentsSection] sample CSV download failed:", err);
+        setError(err instanceof Error ? err.message : "Failed to download sample CSV");
+      },
+    });
   };
 
   const handleExecute = async () => {
@@ -298,9 +321,10 @@ export function ImportPaymentsSection({ workspaceId }: ImportPaymentsSectionProp
       importantNote={`Every row must contain all ${PAYMENTS_EXPORT_HEADERS.length} columns; leave unused fields blank.`}
       fileInputId="payments-file-input"
       onFileSelect={handleFileSelect}
-      onDownloadSampleTSV={downloadSampleTSV}
-      onDownloadSampleCSV={downloadSampleCSV}
+      onDownloadSampleTSV={handleDownloadSampleTSV}
+      onDownloadSampleCSV={handleDownloadSampleCSV}
       isLoading={isLoading}
+      isDownloadingSample={isDownloadingSample}
       isExecuting={isExecuting}
       error={error}
       previewErrors={preview?.errors || []}

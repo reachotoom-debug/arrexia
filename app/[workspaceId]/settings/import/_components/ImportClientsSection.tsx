@@ -6,7 +6,7 @@ import { ImportCard } from "./ImportCard";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { previewClientsImport, executeClientsImport, type PreviewRow, type PreviewResult } from "../actions/clients";
 import { CLIENTS_EXPORT_HEADERS } from "../_constants";
-import { downloadSampleFile } from "../_lib/sampleFiles";
+import { downloadSampleFile, runSampleDownloadTask } from "../_lib/sampleFiles";
 import { buildClientsSampleTsv, buildClientsSampleCsv } from "../_spec/clients";
 import {
   generateExecutableCleanedFile,
@@ -22,17 +22,23 @@ interface ImportClientsSectionProps {
 /**
  * Download sample TSV file (recommended)
  */
-function downloadSampleTSV() {
-  const tsv = buildClientsSampleTsv();
-  downloadSampleFile(tsv, "clients_sample.tsv", "text/tab-separated-values;charset=utf-8;");
+function createClientsSampleTsvDownload(): void {
+  downloadSampleFile(
+    buildClientsSampleTsv(),
+    "clients_sample.tsv",
+    "text/tab-separated-values;charset=utf-8;"
+  );
 }
 
 /**
  * Download sample CSV file
  */
-function downloadSampleCSV() {
-  const csv = buildClientsSampleCsv();
-  downloadSampleFile(csv, "clients_sample.csv", "text/csv;charset=utf-8;");
+function createClientsSampleCsvDownload(): void {
+  downloadSampleFile(
+    buildClientsSampleCsv(),
+    "clients_sample.csv",
+    "text/csv;charset=utf-8;"
+  );
 }
 
 export function ImportClientsSection({ workspaceId }: ImportClientsSectionProps) {
@@ -40,6 +46,7 @@ export function ImportClientsSection({ workspaceId }: ImportClientsSectionProps)
   const [fileSelected, setFileSelected] = useState(false);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDownloadingSample, setIsDownloadingSample] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [executeResults, setExecuteResults] = useState<Array<{
@@ -114,6 +121,28 @@ export function ImportClientsSection({ workspaceId }: ImportClientsSectionProps)
     } finally {
       setIsExecuting(false);
     }
+  };
+
+  const handleDownloadSampleTSV = () => {
+    void runSampleDownloadTask(createClientsSampleTsvDownload, {
+      onStart: () => setIsDownloadingSample(true),
+      onEnd: () => setIsDownloadingSample(false),
+      onError: (err) => {
+        console.error("[ImportClientsSection] sample TSV download failed:", err);
+        setError(err instanceof Error ? err.message : "Failed to download sample TSV");
+      },
+    });
+  };
+
+  const handleDownloadSampleCSV = () => {
+    void runSampleDownloadTask(createClientsSampleCsvDownload, {
+      onStart: () => setIsDownloadingSample(true),
+      onEnd: () => setIsDownloadingSample(false),
+      onError: (err) => {
+        console.error("[ImportClientsSection] sample CSV download failed:", err);
+        setError(err instanceof Error ? err.message : "Failed to download sample CSV");
+      },
+    });
   };
 
   // Calculate counts
@@ -282,9 +311,10 @@ export function ImportClientsSection({ workspaceId }: ImportClientsSectionProps)
       importantNote="Columns: Name (required), Email, Company, Country, Phone, WhatsApp, Payment Terms Days, Status. Phone and WhatsApp map to distinct client fields."
       fileInputId="clients-file-input"
       onFileSelect={handleFileSelect}
-      onDownloadSampleTSV={downloadSampleTSV}
-      onDownloadSampleCSV={downloadSampleCSV}
+      onDownloadSampleTSV={handleDownloadSampleTSV}
+      onDownloadSampleCSV={handleDownloadSampleCSV}
       isLoading={isLoading}
+      isDownloadingSample={isDownloadingSample}
       isExecuting={isExecuting}
       error={error}
       previewErrors={preview?.errors || []}
