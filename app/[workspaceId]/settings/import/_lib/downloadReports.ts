@@ -2,8 +2,36 @@
  * Utilities for downloading cleaned files and error reports
  */
 
+export type CleanedFilePreviewRow = {
+  rowIndex: number;
+  action: string;
+};
+
+/** Rows eligible for execute / cleaned-file export (Client Import V1). */
+export function isExecutableImportPreviewRow(action: string): boolean {
+  return action === "insert" || action === "update";
+}
+
 /**
- * Generate cleaned file (all rows with autofixes applied)
+ * Generate a re-importable cleaned file containing ONLY executable preview rows.
+ * Excludes FAIL and SKIP rows so the download can be uploaded and executed.
+ */
+export function generateExecutableCleanedFile(
+  headers: readonly string[],
+  normalizedRows: Array<Record<string, string>>,
+  previewRows: CleanedFilePreviewRow[],
+  format: "csv" | "tsv"
+): string {
+  const executableNormalizedRows = previewRows
+    .filter((row) => isExecutableImportPreviewRow(row.action))
+    .map((row) => normalizedRows[row.rowIndex - 1])
+    .filter((row): row is Record<string, string> => row != null);
+
+  return generateCleanedFile(headers, executableNormalizedRows, format);
+}
+
+/**
+ * Generate cleaned file content for the given rows (caller filters when needed).
  */
 export function generateCleanedFile(
   headers: readonly string[],

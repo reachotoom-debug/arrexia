@@ -9,9 +9,10 @@ import { CLIENTS_EXPORT_HEADERS } from "../_constants";
 import { downloadSampleFile } from "../_lib/sampleFiles";
 import { buildClientsSampleTsv, buildClientsSampleCsv } from "../_spec/clients";
 import {
-  generateCleanedFile,
+  generateExecutableCleanedFile,
   generateErrorReport,
   downloadFile,
+  isExecutableImportPreviewRow,
 } from "../_lib/downloadReports";
 
 interface ImportClientsSectionProps {
@@ -241,15 +242,23 @@ export function ImportClientsSection({ workspaceId }: ImportClientsSectionProps)
     </div>
   ) : null;
 
-  // Download cleaned file handler
+  const hasExecutableRows =
+    preview?.rows?.some((row) => isExecutableImportPreviewRow(row.action)) ?? false;
+
+  // Download cleaned file handler — executable INSERT/UPDATE rows only (excludes FAIL/SKIP)
   const handleDownloadCleanedFile = () => {
-    if (!preview?.normalizedRows || !preview.delimiter) return;
+    if (!preview?.normalizedRows || !preview.delimiter || !preview.rows) return;
     // Use original headers from normalized rows
     const headers = preview.normalizedRows.length > 0 
       ? Object.keys(preview.normalizedRows[0])
       : CLIENTS_EXPORT_HEADERS;
     const format = preview.delimiter === "\t" ? "tsv" : "csv";
-    const cleaned = generateCleanedFile(headers, preview.normalizedRows, format);
+    const cleaned = generateExecutableCleanedFile(
+      headers,
+      preview.normalizedRows,
+      preview.rows,
+      format
+    );
     downloadFile(cleaned, `clients_cleaned.${format}`, format === "tsv" ? "text/tab-separated-values;charset=utf-8;" : "text/csv;charset=utf-8;");
   };
 
@@ -285,7 +294,9 @@ export function ImportClientsSection({ workspaceId }: ImportClientsSectionProps)
       canExecute={canExecute}
       onExecute={handleExecute}
       fileSelected={fileSelected}
-      onDownloadCleanedFile={preview?.normalizedRows ? handleDownloadCleanedFile : undefined}
+      onDownloadCleanedFile={
+        preview?.normalizedRows && hasExecutableRows ? handleDownloadCleanedFile : undefined
+      }
       onDownloadErrorReport={preview?.rows && preview.rows.some((r) => r.action === "fail") ? handleDownloadErrorReport : undefined}
       showDownloadButtons={!!preview}
     />
