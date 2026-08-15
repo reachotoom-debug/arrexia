@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/invoices/utils";
 import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
+import { buildClientCardContactLines } from "@/lib/clients/clientCardPresentation";
 import { resolveClientStatus } from "@/lib/clients/state";
-import { getPaymentTermsLabel } from "@/lib/utils/payment-terms";
 import { Eye, Pencil } from "lucide-react";
 import { EntityCard } from "@/components/ui/EntityCard";
 import { EmptyState } from "@/components/ui/state";
@@ -86,16 +86,12 @@ export function ClientsCardView({ clients, workspaceId, searchParams }: ClientsC
                 ? "text-emerald-600"
                 : "text-slate-900";
 
-          const contactParts = [
-            getClientPhone(client),
-            getClientWhatsApp(client)
-              ? `WA: ${getClientWhatsApp(client)}`
-              : null,
-          ].filter(Boolean) as string[];
-          const phoneTermsParts = [
-            ...contactParts,
-            client.payment_terms ? getPaymentTermsLabel(client.payment_terms) : null,
-          ].filter(Boolean) as string[];
+          const contactLines = buildClientCardContactLines({
+            phone: getClientPhone(client),
+            whatsapp: getClientWhatsApp(client),
+            paymentTerms: client.payment_terms,
+            country: client.country,
+          });
 
           const statusBadge = (
             <span
@@ -120,9 +116,11 @@ export function ClientsCardView({ clients, workspaceId, searchParams }: ClientsC
               {client.email ? (
                 <div className="truncate">{client.email}</div>
               ) : null}
-              {phoneTermsParts.length > 0 ? (
-                <div className="truncate">{phoneTermsParts.join(" · ")}</div>
-              ) : null}
+              {contactLines.map((line, index) => (
+                <div key={`${client.id}-contact-${index}`} className="truncate">
+                  {line}
+                </div>
+              ))}
             </>
           );
 
@@ -135,7 +133,7 @@ export function ClientsCardView({ clients, workspaceId, searchParams }: ClientsC
               <EntityCard
                 title={client.name}
                 subtitle={client.company ?? undefined}
-                meta={client.email || phoneTermsParts.length ? metaNodes : undefined}
+                meta={client.email || contactLines.length > 0 ? metaNodes : undefined}
                 amount={
                   <span className={`text-lg font-semibold tabular-nums ${amountColor}`}>
                     {formatMoney(Math.abs(outstanding), "USD")}

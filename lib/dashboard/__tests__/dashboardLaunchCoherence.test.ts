@@ -133,4 +133,12 @@ describe("Dashboard launch coherence", () => {
     assert.match(pageSrc, /view === "owner-overview"/);
     assert.match(pageSrc, /Performance Snapshot/);
   });
+
+  it("14 — Overdue Outstanding KPI binds to overdueAmount only", () => {
+    const kpiSrc = readFileSync(KPI_ROW, "utf8");
+    assert.match(kpiSrc, /title="Overdue Outstanding"/);
+    assert.match(kpiSrc, /value=\{fmt\(totals\.overdueAmount\)\}/);
+    assert.doesNotMatch(kpiSrc, /totals\.totalOutstanding/);
+    assert.doesNotMatch(kpiSrc, /Total Outstanding \(Overdue\)/);
+  });
 });

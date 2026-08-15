@@ -41,7 +41,7 @@ export function DashboardKpiRow({
         icon={AlertTriangle}
       />
       <KPI
-        title="Total Outstanding (Overdue)"
+        title="Overdue Outstanding"
         value={fmt(totals.overdueAmount)}
         subtext="Includes all overdue invoices"
         intent="danger"
