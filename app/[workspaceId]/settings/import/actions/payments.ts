@@ -9,6 +9,12 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireWorkspace } from "@/lib/auth/server";
 import { parseMMDDYYYY, generateTransactionId } from "@/lib/payments/import-utils";
+import {
+  validatePaymentImportBatchOverpay,
+  type ExistingPaymentSnapshot,
+  type InvoiceOutstandingSnapshot,
+  type PaymentImportOverpayRow,
+} from "@/lib/payments/paymentImportOverpay";
 import { parseDelimited } from "@/lib/import/parseDelimited";
 import { PAYMENTS_EXPORT_HEADERS } from "../_constants";
 
@@ -427,6 +433,106 @@ export async function previewPaymentsImport(
           client_id: invoice.client_id,
         },
     });
+  }
+
+  // Overpayment validation (batch-aware; matches invoices_view financial semantics)
+  const overpayCandidateRows = results.filter(
+    (r) => r.action === "insert" || r.action === "update"
+  );
+
+  if (overpayCandidateRows.length > 0) {
+    const invoiceIds = [
+      ...new Set(
+        overpayCandidateRows
+          .map((r) => r.data.invoice_id)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const transactionIds = [
+      ...new Set(
+        overpayCandidateRows
+          .filter((r) => r.action === "update" && r.data.transaction_id)
+          .map((r) => r.data.transaction_id)
+      ),
+    ];
+
+    const invoiceSnapshots = new Map<string, InvoiceOutstandingSnapshot>();
+    if (invoiceIds.length > 0) {
+      const { data: invoiceViews, error: invoiceViewError } = await supabase
+        .from("invoices_view")
+        .select("id, invoice_number, total, outstanding")
+        .eq("workspace_id", workspaceId)
+        .in("id", invoiceIds);
+
+      if (invoiceViewError) {
+        errors.push(
+          `Failed to load invoice balances for overpayment validation: ${invoiceViewError.message}`
+        );
+      } else {
+        for (const view of invoiceViews ?? []) {
+          invoiceSnapshots.set(view.id, {
+            invoiceId: view.id,
+            invoiceNumber: view.invoice_number,
+            total: Number(view.total ?? 0),
+            outstanding: Number(view.outstanding ?? 0),
+          });
+        }
+      }
+    }
+
+    const existingPayments = new Map<string, ExistingPaymentSnapshot>();
+    if (transactionIds.length > 0) {
+      const { data: payments, error: paymentsError } = await supabase
+        .from("payments")
+        .select("transaction_id, invoice_id, amount, status")
+        .eq("workspace_id", workspaceId)
+        .in("transaction_id", transactionIds)
+        .is("archived_at", null);
+
+      if (paymentsError) {
+        errors.push(
+          `Failed to load existing payments for overpayment validation: ${paymentsError.message}`
+        );
+      } else {
+        for (const payment of payments ?? []) {
+          if (!payment.transaction_id) continue;
+          existingPayments.set(payment.transaction_id, {
+            transactionId: payment.transaction_id,
+            invoiceId: payment.invoice_id,
+            amount: Number(payment.amount ?? 0),
+            status: payment.status,
+          });
+        }
+      }
+    }
+
+    if (errors.length === 0) {
+      const overpayRows: PaymentImportOverpayRow[] = overpayCandidateRows
+        .filter((r) => r.data.invoice_id)
+        .map((r) => ({
+          rowId: r.rowId,
+          invoiceId: r.data.invoice_id!,
+          invoiceNumber: r.data.invoice_number,
+          amount: r.data.amount,
+          status: r.data.status,
+          transactionId: r.data.transaction_id,
+          isUpdate: r.action === "update",
+        }));
+
+      const overpayErrors = validatePaymentImportBatchOverpay({
+        rows: overpayRows,
+        invoices: invoiceSnapshots,
+        existingPayments,
+      });
+
+      for (const row of results) {
+        const overpayReason = overpayErrors.get(row.rowId);
+        if (overpayReason) {
+          row.action = "fail";
+          row.reason = overpayReason;
+        }
+      }
+    }
   }
 
   // Determine overall ok status (no errors and no fail rows)
