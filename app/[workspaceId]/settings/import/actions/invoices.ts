@@ -536,10 +536,10 @@ export async function previewInvoicesImport(
         currency = currencyRaw.toUpperCase(); // Still normalize but RPC will reject
       }
       
-      // Normalize status to lowercase: draft|sent|void
+      // Normalize derived/external statuses (Overdue, Paid, etc.) before RPC validation.
       const statusRaw = getField(row, "status");
-      const statusNormalized = statusRaw ? statusRaw.toLowerCase().trim() as "draft" | "sent" | "void" : "sent";
-      
+      const statusResolution = resolveImportedInvoiceStatus(statusRaw || null);
+
       rpcRows.push({
         row_type: "invoice",
         invoice_number: invoiceNumber,
@@ -548,7 +548,7 @@ export async function previewInvoicesImport(
         issue_date: getField(row, "issue_date"),
         due_date: getField(row, "due_date") || null,
         currency: currency, // Always include (defaults to USD if blank)
-        status: statusNormalized, // Lowercase: draft|sent|void
+        status: statusResolution.baseStatus, // Canonical lifecycle: draft|sent|void
         po_number: getField(row, "po_number") || null,
         notes: getField(row, "notes") || null,
       });

@@ -127,11 +127,7 @@ export function ImportInvoicesSection({ workspaceId }: ImportInvoicesSectionProp
       // Call previewInvoicesImport
       const result = await previewInvoicesImport(workspaceId, fileText);
       setPreview(result);
-      
-      // Set error if there are validation errors
-      if (result.errors.length > 0) {
-        setError(result.errors.join("; "));
-      }
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to preview import");
     } finally {

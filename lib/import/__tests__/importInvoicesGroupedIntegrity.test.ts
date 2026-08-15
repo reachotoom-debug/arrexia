@@ -156,6 +156,7 @@ describe("invoice import preview warning wiring", () => {
 
   it("uses non-blocking preview warnings for derived status and amount mismatch", () => {
     assert.match(actionsSrc, /resolveImportedInvoiceStatus/);
+    assert.match(actionsSrc, /status: statusResolution\.baseStatus/);
     assert.match(actionsSrc, /validationWarnings\.push\(statusResolution\.warning\)/);
     assert.match(actionsSrc, /buildInvoiceLineAmountMismatchWarning/);
     assert.match(actionsSrc, /validation_warnings: validationWarnings/);
