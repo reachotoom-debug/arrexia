@@ -90,6 +90,11 @@ export interface ReminderEligibilityInput {
   rule: ReminderRuleEligibilityInput;
   invoice: ReminderInvoiceEligibilityInput;
   history: ReminderHistoryEntry[];
+  /**
+   * True when invoice_delivery_logs contains a successful send on the invoice due date
+   * (workspace calendar). Satisfies the on_due occurrence only — not general history.
+   */
+  successfulInvoiceDeliveryOnDueDate?: boolean;
 }
 
 export type RuleOccurrenceRef = {
@@ -457,6 +462,26 @@ export function manualEmailSatisfiesOccurrence(params: {
   return latestApplicable === params.scheduledDate;
 }
 
+/**
+ * Successful invoice email delivery on the due date satisfies the canonical on_due occurrence.
+ * Does not affect other trigger types or general reminder/cooldown history.
+ */
+export function invoiceDeliverySatisfiesOnDueOccurrence(params: {
+  triggerType: string;
+  scheduledDate: string;
+  dueDate: string;
+  successfulInvoiceDeliveryOnDueDate: boolean;
+}): boolean {
+  if (!params.successfulInvoiceDeliveryOnDueDate) {
+    return false;
+  }
+  if (params.triggerType !== "on_due") {
+    return false;
+  }
+  const due = params.dueDate.slice(0, 10);
+  return params.scheduledDate === due;
+}
+
 export function isOccurrenceSatisfied(params: {
   history: ReminderHistoryEntry[];
   ruleId: string;
@@ -465,6 +490,7 @@ export function isOccurrenceSatisfied(params: {
   dueDate: string;
   workspaceTimeZone?: string | null;
   allRules?: AfterDueRuleRef[];
+  successfulInvoiceDeliveryOnDueDate?: boolean;
 }): boolean {
   if (
     sentHistoryBlocksRuleOccurrence(
@@ -475,6 +501,18 @@ export function isOccurrenceSatisfied(params: {
       params.rule,
       params.dueDate
     )
+  ) {
+    return true;
+  }
+
+  if (
+    invoiceDeliverySatisfiesOnDueOccurrence({
+      triggerType: params.rule.triggerType,
+      scheduledDate: params.scheduledDate,
+      dueDate: params.dueDate,
+      successfulInvoiceDeliveryOnDueDate:
+        params.successfulInvoiceDeliveryOnDueDate ?? false,
+    })
   ) {
     return true;
   }
@@ -664,6 +702,7 @@ export function evaluateScheduledOccurrenceEligibility(
       dueDate,
       workspaceTimeZone,
       allRules: input.allRules,
+      successfulInvoiceDeliveryOnDueDate: input.successfulInvoiceDeliveryOnDueDate,
     })
   ) {
     return ineligible("already_sent_for_rule", {
@@ -731,6 +770,7 @@ export function evaluateReminderEligibility(
       dueDate,
       workspaceTimeZone,
       allRules: input.allRules,
+      successfulInvoiceDeliveryOnDueDate: input.successfulInvoiceDeliveryOnDueDate,
     })
   ) {
     return ineligible("already_sent_for_rule", {

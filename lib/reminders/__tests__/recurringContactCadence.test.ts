@@ -224,10 +224,50 @@ describe("recurring contact cadence — cooldown gate", () => {
     assert.equal(results[0]?.scheduledDate, "2026-07-22");
   });
 
-  it("7 — invoice delivery logs are outside reminder history (no cooldown)", () => {
+  it("7 — invoice delivery is outside general reminder cooldown/history but satisfies on_due on due date", () => {
     const eligibleSrc = readFileSync("lib/reminders/getEligibleReminders.ts", "utf8");
     assert.match(eligibleSrc, /from\("reminders"\)/);
-    assert.doesNotMatch(eligibleSrc, /invoice_delivery_logs/);
+    assert.match(eligibleSrc, /from\("invoice_delivery_logs"\)/);
+    assert.match(eligibleSrc, /buildSuccessfulInvoiceDeliveryOnDueDateByInvoiceId/);
+    assert.doesNotMatch(eligibleSrc, /invoice_delivery_logs[\s\S]*isRecurringContactCooldownActive/);
+
+    const results = evaluateCandidates({
+      evaluationDate: "2026-07-01",
+      rules: [
+        rule({
+          id: "rule-on-due",
+          trigger_type: "on_due",
+          offset_days: 0,
+          sort_order: 1,
+        }),
+      ],
+    });
+    assert.equal(results.length, 1);
+
+    const blocked = buildEligibleReminderCandidates({
+      workspaceId: WORKSPACE_ID,
+      evaluationDate: "2026-07-01",
+      workspaceTimeZone: "UTC",
+      invoices: [invoice({ due_date: "2026-07-01" })],
+      rules: [
+        rule({
+          id: "rule-on-due",
+          trigger_type: "on_due",
+          offset_days: 0,
+          sort_order: 1,
+        }),
+      ],
+      historyRows: [],
+      invoiceDeliveryRows: [
+        {
+          invoice_id: "inv-1",
+          status: "sent",
+          created_at: "2026-07-01T12:00:00.000Z",
+        },
+      ],
+      clientEmailsByClientId: new Map([["client-1", "client@example.com"]]),
+    });
+    assert.equal(blocked.length, 0);
   });
 
   it("8 — scheduled_at remains logical recurrence date, not cooldown expiry", () => {

@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
 import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
 import {
   evaluateReminderEligibility,
@@ -103,6 +104,41 @@ export type ReminderHistoryCandidateRow = {
   channel?: string | null;
 };
 
+export type InvoiceDeliveryCandidateRow = {
+  invoice_id: string;
+  status: string;
+  created_at: string;
+};
+
+/** Maps invoice id → true when a successful delivery occurred on that invoice's due date. */
+export function buildSuccessfulInvoiceDeliveryOnDueDateByInvoiceId(params: {
+  invoices: Array<{ id: string; due_date: string }>;
+  deliveryRows: InvoiceDeliveryCandidateRow[];
+  workspaceTimeZone: string;
+}): Map<string, boolean> {
+  const dueDateByInvoiceId = new Map(
+    params.invoices.map((invoice) => [invoice.id, invoice.due_date.slice(0, 10)])
+  );
+  const result = new Map<string, boolean>();
+
+  for (const row of params.deliveryRows) {
+    if (row.status !== "sent") continue;
+
+    const dueDate = dueDateByInvoiceId.get(row.invoice_id);
+    if (!dueDate) continue;
+
+    const deliveryCalendarDate = instantToWorkspaceCalendarDate(
+      row.created_at,
+      params.workspaceTimeZone
+    );
+    if (deliveryCalendarDate === dueDate) {
+      result.set(row.invoice_id, true);
+    }
+  }
+
+  return result;
+}
+
 /** PostgREST nested-select shape for reminder_rules + reminder_templates join. */
 export type SupabaseReminderRuleRow = {
   id: string;
@@ -187,6 +223,7 @@ export function buildEligibleReminderCandidates(params: {
   invoices: InvoiceCandidateRow[];
   rules: ReminderRuleCandidateRow[];
   historyRows: ReminderHistoryCandidateRow[];
+  invoiceDeliveryRows?: InvoiceDeliveryCandidateRow[];
   clientEmailsByClientId: Map<string, string | null>;
 }): EligibleReminderCandidate[] {
   const {
@@ -196,6 +233,7 @@ export function buildEligibleReminderCandidates(params: {
     invoices,
     rules,
     historyRows,
+    invoiceDeliveryRows = [],
     clientEmailsByClientId,
   } = params;
 
@@ -210,6 +248,12 @@ export function buildEligibleReminderCandidates(params: {
   }
 
   const historyByInvoiceId = groupHistoryByInvoiceId(historyRows);
+  const invoiceDeliveryOnDueDateByInvoiceId =
+    buildSuccessfulInvoiceDeliveryOnDueDateByInvoiceId({
+      invoices,
+      deliveryRows: invoiceDeliveryRows,
+      workspaceTimeZone,
+    });
   const results: EligibleReminderCandidate[] = [];
 
   for (const invoice of invoices) {
@@ -231,6 +275,8 @@ export function buildEligibleReminderCandidates(params: {
       enabledRules,
       history,
       clientEmail,
+      successfulInvoiceDeliveryOnDueDate:
+        invoiceDeliveryOnDueDateByInvoiceId.get(invoice.id) ?? false,
     });
 
     if (candidate) {
@@ -258,6 +304,7 @@ function selectCatchUpCandidateForInvoice(params: {
   enabledRules: ReminderRuleCandidateRow[];
   history: ReminderHistoryEntry[];
   clientEmail: string | null;
+  successfulInvoiceDeliveryOnDueDate: boolean;
 }): EligibleReminderCandidate | null {
   const {
     workspaceId,
@@ -267,6 +314,7 @@ function selectCatchUpCandidateForInvoice(params: {
     enabledRules,
     history,
     clientEmail,
+    successfulInvoiceDeliveryOnDueDate,
   } = params;
 
   if (manualEmailSentTodayForInvoice(history, evaluationDate, workspaceTimeZone)) {
@@ -338,6 +386,7 @@ function selectCatchUpCandidateForInvoice(params: {
         invoice: invoiceInput,
         history,
         allRules: allRulesRef,
+        successfulInvoiceDeliveryOnDueDate,
       });
 
       if (!eligibility.eligible || !eligibility.scheduledDate) {
@@ -598,6 +647,25 @@ export async function getEligibleReminders(
     historyRows = (data ?? []) as ReminderHistoryCandidateRow[];
   }
 
+  let invoiceDeliveryRows: InvoiceDeliveryCandidateRow[] = [];
+  if (invoiceIds.length > 0) {
+    const { data: deliveryData, error: deliveryError } = await supabase
+      .from("invoice_delivery_logs")
+      .select("invoice_id, status, created_at")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "sent")
+      .in("invoice_id", invoiceIds);
+
+    if (deliveryError) {
+      console.error(
+        "[getEligibleReminders] invoice_delivery_logs load error",
+        deliveryError
+      );
+    } else {
+      invoiceDeliveryRows = (deliveryData ?? []) as InvoiceDeliveryCandidateRow[];
+    }
+  }
+
   const invoiceCandidates: InvoiceCandidateRow[] = invoices.map((inv) => ({
     id: inv.id,
     invoice_number: inv.invoice_number ?? null,
@@ -623,6 +691,7 @@ export async function getEligibleReminders(
     invoices: invoiceCandidates,
     rules: mapSupabaseReminderRulesToCandidates(rules),
     historyRows,
+    invoiceDeliveryRows,
     clientEmailsByClientId,
   });
 }
