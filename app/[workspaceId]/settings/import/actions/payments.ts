@@ -15,6 +15,7 @@ import {
   type InvoiceOutstandingSnapshot,
   type PaymentImportOverpayRow,
 } from "@/lib/payments/paymentImportOverpay";
+import { mapRpcPaymentImportResults } from "@/lib/payments/paymentImportExecuteResult";
 import { parseDelimited } from "@/lib/import/parseDelimited";
 import { PAYMENTS_EXPORT_HEADERS } from "../_constants";
 
@@ -701,73 +702,24 @@ export async function executePaymentsImport(
   revalidatePath(`/${workspaceId}/dashboard`);
   revalidatePath(`/${workspaceId}/clients`);
 
-  // RPC results shape can vary:
-  // 1) Legacy: array
-  // 2) New: object { ok: true, results: [...] } or { ok: true, preview: [...] }
-  const normalizedResults: unknown[] = Array.isArray(data)
-    ? data
-    : data && typeof data === "object" && Array.isArray((data as { results?: unknown[] }).results)
-      ? (data as { results: unknown[] }).results
-      : data && typeof data === "object" && Array.isArray((data as { preview?: unknown[] }).preview)
-        ? (data as { preview: unknown[] }).preview
-        : [];
+  // RPC results: { ok, results: [{ rowId, status, payment_id, error }] }
+  const resultMap = mapRpcPaymentImportResults({
+    rpcData: data,
+    previewRows: rows,
+    processedRows: rowsToProcess,
+  });
 
   if (process.env.NODE_ENV === "development") {
     console.log(
       "[payments-import] rpc shape",
       Array.isArray(data) ? "array" : typeof data,
       (data as { ok?: boolean } | null)?.ok,
-      normalizedResults.length
+      resultMap.size
     );
   }
 
-  // Map RPC results back to preview rows using row_id, NOT array index.
-  // Expected DB row shape: { row_id, payment_id, action, error_message }
-  const resultMap = new Map<
-    number,
-    { payment_id: string | null; status: "ok" | "failed"; error_message: string | null }
-  >();
-
-  normalizedResults.forEach((result: unknown) => {
-    if (!result || typeof result !== "object") return;
-    const r = result as Record<string, unknown>;
-
-    // Prefer explicit row_id coming back from DB
-    let rowIdNum: number | null = null;
-    if (r.row_id !== undefined && r.row_id !== null) {
-      const parsed = Number.parseInt(String(r.row_id), 10);
-      if (Number.isFinite(parsed)) rowIdNum = parsed;
-    }
-
-    // Back-compat: some legacy shapes may return rowId (string)
-    if (rowIdNum === null && typeof r.rowId === "string" && r.rowId) {
-      const matched = rows.find((row) => row.rowId === r.rowId);
-      if (matched) rowIdNum = matched.rowIndex;
-    }
-
-    // Back-compat: some RPCs may return 1-based `row` index into p_rows.
-    // Convert to the preview rowIndex using the rowsToProcess array.
-    if (rowIdNum === null && typeof r.row === "number") {
-      const idx = r.row - 1; // 1-based -> 0-based
-      const matched = rowsToProcess[idx];
-      if (matched) rowIdNum = matched.rowIndex;
-    }
-
-    if (rowIdNum === null) return;
-
-    const action = String(r.action ?? "").toUpperCase();
-    const status: "ok" | "failed" =
-      action === "INSERT" || action === "UPDATE" || action === "SKIP" ? "ok" : "failed";
-
-    resultMap.set(rowIdNum, {
-      payment_id: (r.payment_id as string | null) ?? null,
-      status,
-      error_message: (r.error_message as string | null) ?? null,
-    });
-  });
-
   // Return row-level results for all rows
-  return rows.map((row, index) => {
+  return rows.map((row) => {
     if (row.action === "skip") {
       return {
         rowId: row.rowId,
@@ -778,8 +730,7 @@ export async function executePaymentsImport(
       };
     }
 
-    // Map by row_id (use the preview rowIndex as the join key)
-    const result = resultMap.get(row.rowIndex);
+    const result = resultMap.get(row.rowId);
     if (result) {
       return {
         rowId: row.rowId,
@@ -790,13 +741,12 @@ export async function executePaymentsImport(
       };
     }
 
-    // No RPC result for this row - explicit error
     return {
       rowId: row.rowId,
       rowIndex: row.rowIndex,
       payment_id: null,
       status: "failed" as const,
-      error_message: `No RPC result for row ${index + 1}`,
+      error_message: `No RPC result for rowId=${row.rowId}`,
     };
   });
 }
