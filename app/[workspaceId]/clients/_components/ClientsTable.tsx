@@ -70,6 +70,8 @@ interface ClientsTableProps {
 
   workspaceId: string;
 
+  workspaceDefaultCurrency?: string;
+
   sortBy?: string;
 
   sortDir?: string;
@@ -80,7 +82,12 @@ interface ClientsTableProps {
 
 
 
-export function ClientsTable({ clients, workspaceId, searchParams }: ClientsTableProps) {
+export function ClientsTable({
+  clients,
+  workspaceId,
+  workspaceDefaultCurrency = "USD",
+  searchParams,
+}: ClientsTableProps) {
 
   const router = useRouter();
 
@@ -302,7 +309,7 @@ export function ClientsTable({ clients, workspaceId, searchParams }: ClientsTabl
 
                     >
 
-                      {formatMoney(Math.abs(outstanding), "USD")}
+                      {formatMoney(Math.abs(outstanding), workspaceDefaultCurrency)}
 
                     </td>
 

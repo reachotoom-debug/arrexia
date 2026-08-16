@@ -202,6 +202,7 @@ export async function getDashboardData(
     isOverdue: Boolean(inv.is_overdue),
     overdueDays: Number(inv.overdue_days ?? 0),
     riskLevel: (inv.risk_level as "high" | "medium" | "low" | null) ?? null,
+    currency: inv.currency ?? null,
   }));
 
   // Ledger AR view: all-time invoices_view rows, excluding draft/void and archived invoices. No date filter.
@@ -678,6 +679,7 @@ export async function getDashboardData(
       outstanding: inv.outstanding,
       riskLevel: inv.riskLevel,
       primaryEmail: inv.clientId ? eligibleClients.get(inv.clientId)?.email ?? null : null,
+      currency: inv.currency,
     }));
   const overdueInvoicesHasMore = allOverdueInvoicesList.length > 10;
   const overdueInvoicesList = allOverdueInvoicesList.slice(0, 10);
@@ -967,6 +969,7 @@ export async function getDashboardData(
     insight,
     reminderEffectiveness,
     businessName,
+    defaultCurrency: workspaceCurrency,
   };
 }
 

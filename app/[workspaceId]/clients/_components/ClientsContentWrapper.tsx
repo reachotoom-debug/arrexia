@@ -26,6 +26,7 @@ interface Client {
 interface ClientsContentWrapperProps {
   clients: Client[];
   workspaceId: string;
+  workspaceDefaultCurrency?: string;
   sortBy?: string;
   sortDir?: string;
   searchParams: Record<string, string | string[] | undefined>;
@@ -38,6 +39,7 @@ interface ClientsContentWrapperProps {
 export function ClientsContentWrapper({
   clients,
   workspaceId,
+  workspaceDefaultCurrency = "USD",
   sortBy,
   sortDir,
   searchParams,
@@ -82,6 +84,7 @@ export function ClientsContentWrapper({
           <ClientsCardView
             clients={clients}
             workspaceId={workspaceId}
+            workspaceDefaultCurrency={workspaceDefaultCurrency}
             searchParams={searchParams}
           />
         </div>
@@ -92,6 +95,7 @@ export function ClientsContentWrapper({
           <ClientsListView
             clients={clients}
             workspaceId={workspaceId}
+            workspaceDefaultCurrency={workspaceDefaultCurrency}
             sortBy={sortBy}
             sortDir={sortDir}
             searchParams={searchParams}
@@ -101,6 +105,7 @@ export function ClientsContentWrapper({
             <ClientsCardView
               clients={clients}
               workspaceId={workspaceId}
+              workspaceDefaultCurrency={workspaceDefaultCurrency}
               searchParams={searchParams}
             />
           </div>

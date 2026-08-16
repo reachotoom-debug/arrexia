@@ -13,6 +13,9 @@ interface ArFocusViewProps {
 
 export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
   const overdueCount = data.arFocus.overdueInvoicesCount;
+  const workspaceCurrency = data.defaultCurrency ?? "USD";
+  const fmtAggregate = (amount: number) =>
+    formatCurrency(amount, { currency: workspaceCurrency });
 
   // Convert overdue invoices for table
   const overdueInvoicesForTable = data.arFocus.overdueInvoices.map((inv) => ({
@@ -27,6 +30,7 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
     outstanding: inv.outstanding,
     overdueDays: inv.overdueDays,
     riskLevel: inv.riskLevel,
+    currency: inv.currency,
   }));
 
   return (
@@ -35,19 +39,19 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
       <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <KPI
           label="Collectible Outstanding"
-          value={formatCurrency(data.arFocus.collectibleOutstanding, { currency: "USD" })}
+          value={fmtAggregate(data.arFocus.collectibleOutstanding)}
           icon={AlertTriangle}
           iconBgColor="bg-blue-100"
         />
         <KPI
           label="Overdue Amount"
-          value={formatCurrency(data.arFocus.overdueAmount, { currency: "USD" })}
+          value={fmtAggregate(data.arFocus.overdueAmount)}
           icon={AlertTriangle}
           iconBgColor="bg-red-100"
         />
         <KPI
           label="High-Risk Exposure"
-          value={formatCurrency(data.arFocus.highRiskExposure, { currency: "USD" })}
+          value={fmtAggregate(data.arFocus.highRiskExposure)}
           icon={Target}
           iconBgColor="bg-red-100"
         />
@@ -86,7 +90,7 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
                 {data.riskOverview.high.invoiceCount} invoice{data.riskOverview.high.invoiceCount !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-red-900">
-                {formatCurrency(data.riskOverview.high.amount, { currency: "USD" })}
+                {fmtAggregate(data.riskOverview.high.amount)}
               </div>
             </Link>
 
@@ -104,7 +108,7 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
                 {data.riskOverview.medium.invoiceCount} invoice{data.riskOverview.medium.invoiceCount !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-amber-900">
-                {formatCurrency(data.riskOverview.medium.amount, { currency: "USD" })}
+                {fmtAggregate(data.riskOverview.medium.amount)}
               </div>
             </Link>
 
@@ -122,7 +126,7 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
                 {data.riskOverview.low.invoiceCount} invoice{data.riskOverview.low.invoiceCount !== 1 ? "s" : ""}
               </div>
               <div className="text-lg font-semibold text-yellow-900">
-                {formatCurrency(data.riskOverview.low.amount, { currency: "USD" })}
+                {fmtAggregate(data.riskOverview.low.amount)}
               </div>
             </Link>
           </div>
@@ -136,6 +140,7 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
             clients={data.arFocus.topOverdueClients}
             hasMore={data.arFocus.topOverdueClientsHasMore}
             workspaceId={workspaceId}
+            currency={workspaceCurrency}
           />
         </div>
         <div className="min-w-0">
@@ -143,6 +148,7 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
             invoices={overdueInvoicesForTable}
             workspaceId={workspaceId}
             hasMore={data.arFocus.overdueInvoicesHasMore}
+            defaultCurrency={workspaceCurrency}
           />
         </div>
       </div>

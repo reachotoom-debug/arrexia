@@ -17,8 +17,8 @@ interface DashboardInsightProps {
   workspaceId: string;
 }
 
-function formatCurrency(value: number): string {
-  return formatCurrencyHelper(value, { currency: "USD" });
+function formatCurrencyAmount(value: number, currencyCode: string): string {
+  return formatCurrencyHelper(value, { currency: currencyCode });
 }
 
 function formatPct(value: number): string {
@@ -119,6 +119,7 @@ export function DashboardInsight({ summary, workspaceId }: DashboardInsightProps
 
   const insight = getDashboardInsight(summary);
   const { totals } = summary;
+  const workspaceCurrency = summary.defaultCurrency ?? "USD";
 
   const iconConfig = {
     critical: {
@@ -165,10 +166,10 @@ export function DashboardInsight({ summary, workspaceId }: DashboardInsightProps
 
       <div className="hidden flex-wrap items-center gap-2 md:flex">
         <span className="inline-flex items-center gap-1 rounded-full border border-slate-100 bg-white px-3 py-1 text-[11px] font-medium text-slate-500">
-          Overdue: {formatCurrency(totals.overdueAmount)}
+          Overdue: {formatCurrencyAmount(totals.overdueAmount, workspaceCurrency)}
         </span>
         <span className="inline-flex items-center gap-1 rounded-full border border-slate-100 bg-white px-3 py-1 text-[11px] font-medium text-slate-500">
-          High-risk: {formatCurrency(totals.highRiskExposure)}
+          High-risk: {formatCurrencyAmount(totals.highRiskExposure, workspaceCurrency)}
         </span>
         <Link
           href={`/${workspaceId}/collections`}

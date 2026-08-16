@@ -29,9 +29,14 @@ interface Client {
 interface ClientsCardsProps {
   clients: Client[];
   workspaceId: string;
+  workspaceDefaultCurrency?: string;
 }
 
-export function ClientsCards({ clients, workspaceId }: ClientsCardsProps) {
+export function ClientsCards({
+  clients,
+  workspaceId,
+  workspaceDefaultCurrency = "USD",
+}: ClientsCardsProps) {
   const router = useRouter();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
@@ -114,7 +119,7 @@ export function ClientsCards({ clients, workspaceId }: ClientsCardsProps) {
                         : "text-slate-700"
                     }`}
                   >
-                    {formatMoney(Math.abs(outstanding), "USD")}
+                    {formatMoney(Math.abs(outstanding), workspaceDefaultCurrency)}
                   </div>
                 </div>
               </div>

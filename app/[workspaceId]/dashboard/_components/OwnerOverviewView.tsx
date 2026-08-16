@@ -70,8 +70,13 @@ export function OwnerOverviewView({ data, workspaceId }: OwnerOverviewViewProps)
           workspaceId={workspaceId}
           totalInvoiced={totalInvoiced12m}
           paymentsCount={0}
+          currency={data.defaultCurrency ?? "USD"}
         />
-        <StatusFunnelChart data={funnelChartData} workspaceId={workspaceId} />
+        <StatusFunnelChart
+          data={funnelChartData}
+          workspaceId={workspaceId}
+          currency={data.defaultCurrency ?? "USD"}
+        />
       </div>
     </div>
   );

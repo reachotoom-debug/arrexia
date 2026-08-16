@@ -17,9 +17,14 @@ import { ChartEmptyState } from "@/app/[workspaceId]/dashboard/_components/Chart
 interface StatusFunnelChartProps {
   data?: Array<{ status: string; count: number; amount: number }>;
   workspaceId?: string;
+  currency?: string;
 }
 
-export function StatusFunnelChart({ data = [], workspaceId }: StatusFunnelChartProps) {
+export function StatusFunnelChart({
+  data = [],
+  workspaceId,
+  currency = "USD",
+}: StatusFunnelChartProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -115,11 +120,11 @@ export function StatusFunnelChart({ data = [], workspaceId }: StatusFunnelChartP
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 12, fill: "#64748b" }}
-                tickFormatter={(value) => formatCurrencyAxis(value, "USD")}
+                tickFormatter={(value) => formatCurrencyAxis(value, currency)}
                 tickMargin={8}
                 width={70}
               />
-              <Tooltip content={<ChartTooltip currency="USD" />} />
+              <Tooltip content={<ChartTooltip currency={currency} />} />
               <Legend
                 wrapperStyle={{
                   paddingTop: "8px",

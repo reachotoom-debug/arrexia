@@ -11,9 +11,15 @@ interface TopOverdueClientsTableProps {
   clients: Array<{ clientName: string; overdueAmount: number }>;
   hasMore?: boolean;
   workspaceId: string;
+  currency?: string;
 }
 
-export function TopOverdueClientsTable({ clients, hasMore, workspaceId }: TopOverdueClientsTableProps) {
+export function TopOverdueClientsTable({
+  clients,
+  hasMore,
+  workspaceId,
+  currency = "USD",
+}: TopOverdueClientsTableProps) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-200">
@@ -43,7 +49,7 @@ export function TopOverdueClientsTable({ clients, hasMore, workspaceId }: TopOve
                         {client.clientName}
                       </td>
                       <td className="px-3 py-3 text-right font-semibold text-red-600 whitespace-nowrap tabular-nums">
-                        {formatCurrency(client.overdueAmount, { currency: "USD" })}
+                        {formatCurrency(client.overdueAmount, { currency })}
                       </td>
                     </tr>
                   ))}

@@ -32,10 +32,16 @@ interface Client {
 interface ClientsCardViewProps {
   clients: Client[];
   workspaceId: string;
+  workspaceDefaultCurrency?: string;
   searchParams: Record<string, string | string[] | undefined>;
 }
 
-export function ClientsCardView({ clients, workspaceId, searchParams }: ClientsCardViewProps) {
+export function ClientsCardView({
+  clients,
+  workspaceId,
+  workspaceDefaultCurrency = "USD",
+  searchParams,
+}: ClientsCardViewProps) {
   const router = useRouter();
 
   const returnToUrl = React.useMemo(() => {
@@ -136,7 +142,7 @@ export function ClientsCardView({ clients, workspaceId, searchParams }: ClientsC
                 meta={client.email || contactLines.length > 0 ? metaNodes : undefined}
                 amount={
                   <span className={`text-lg font-semibold tabular-nums ${amountColor}`}>
-                    {formatMoney(Math.abs(outstanding), "USD")}
+                    {formatMoney(Math.abs(outstanding), workspaceDefaultCurrency)}
                   </span>
                 }
                 status={statusBadge}

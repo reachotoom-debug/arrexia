@@ -21,6 +21,7 @@ interface RevenueOverviewChartProps {
   workspaceId?: string;
   totalInvoiced?: number;
   paymentsCount?: number;
+  currency?: string;
 }
 
 export function RevenueOverviewChart({
@@ -28,6 +29,7 @@ export function RevenueOverviewChart({
   workspaceId,
   totalInvoiced = 0,
   paymentsCount = 0,
+  currency = "USD",
 }: RevenueOverviewChartProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -111,11 +113,11 @@ export function RevenueOverviewChart({
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 12, fill: "#64748b" }}
-                tickFormatter={(value) => formatCurrencyAxis(value, "USD")}
+                tickFormatter={(value) => formatCurrencyAxis(value, currency)}
                 tickMargin={8}
                 width={70}
               />
-              <Tooltip content={<ChartTooltip currency="USD" />} />
+              <Tooltip content={<ChartTooltip currency={currency} />} />
               <Legend
                 wrapperStyle={{
                   paddingTop: "8px",

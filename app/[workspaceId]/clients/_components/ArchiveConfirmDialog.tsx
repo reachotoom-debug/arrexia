@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface ArchiveConfirmDialogProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface ArchiveConfirmDialogProps {
   workspaceId: string;
   clientId: string;
   action: "archive" | "inactivate";
+  workspaceDefaultCurrency?: string;
 }
 
 export function ArchiveConfirmDialog({
@@ -22,16 +24,13 @@ export function ArchiveConfirmDialog({
   workspaceId,
   clientId,
   action,
+  workspaceDefaultCurrency = "USD",
 }: ArchiveConfirmDialogProps) {
   if (!isOpen) return null;
 
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-    }).format(amount);
-  };
+  const formattedOutstanding = formatCurrency(outstanding, {
+    currency: workspaceDefaultCurrency,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -53,7 +52,7 @@ export function ArchiveConfirmDialog({
           <div className="mb-6">
             <p className="text-sm text-slate-700">
               This client has an outstanding balance of{" "}
-              <span className="font-semibold">{formatMoney(outstanding)}</span>.
+              <span className="font-semibold">{formattedOutstanding}</span>.
               {action === "archive"
                 ? " Archiving hides them from active workflows but does not close invoices."
                 : " Inactivating hides them from active workflows but does not close invoices."}

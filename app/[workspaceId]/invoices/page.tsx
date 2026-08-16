@@ -32,6 +32,10 @@ import {
   primaryCtaDisabledClass,
 } from "@/components/ui/cta-styles";
 import { unstable_noStore as noStore } from "next/cache";
+import {
+  ACTIVE_INVOICES_VIEW_SELECT,
+  resolveInvoiceDisplayCurrency,
+} from "@/lib/invoices/invoiceListCurrency";
 // Note: invoices_view provides status and financial fields directly.
 
 const INVOICE_PAGE_SIZE = 10;
@@ -385,9 +389,7 @@ async function loadInvoices(
     // ========================================================================
     query = supabase
       .from("invoices_view")
-      .select(
-        "id, invoice_number, client_name, issue_date, due_date, total, paid, outstanding, display_status, risk_level"
-      )
+      .select(ACTIVE_INVOICES_VIEW_SELECT)
       .eq("workspace_id", workspaceId);
 
     countQuery = supabase
@@ -664,6 +666,7 @@ async function loadInvoices(
         display_status: normalizeDisplayStatus(status) as InvoiceStatus,
         risk_level: null,
         client_name,
+        currency: (invoice.currency as string | null | undefined) ?? null,
       };
     } else {
       // Active tabs: Use direct columns from invoices_view
@@ -680,6 +683,7 @@ async function loadInvoices(
         display_status: invoice.display_status as InvoiceStatus,
         risk_level: (invoice.risk_level as string | null | undefined) ?? null,
         client_name,
+        currency: (invoice.currency as string | null | undefined) ?? null,
       };
     }
   });
@@ -735,12 +739,26 @@ export default async function InvoicesPage({
     ? resolvedSearchParams.limit[0]
     : resolvedSearchParams.limit;
 
+  const supabase = await supabaseServer();
+
   // Load invoices using the refactored function
   let invoiceData;
+  let workspaceDefaultCurrency = "USD";
   try {
-    invoiceData = await perf.time("loadInvoices", () =>
-      loadInvoices(workspaceId, resolvedSearchParams)
-    );
+    const [loadedInvoices, settingsResult] = await Promise.all([
+      perf.time("loadInvoices", () =>
+        loadInvoices(workspaceId, resolvedSearchParams)
+      ),
+      supabase
+        .from("settings")
+        .select("default_currency")
+        .eq("workspace_id", workspaceId)
+        .maybeSingle(),
+    ]);
+    invoiceData = loadedInvoices;
+    workspaceDefaultCurrency =
+      (settingsResult.data as { default_currency?: string } | null)?.default_currency ??
+      "USD";
   } catch {
     perf.finish({ status: "error" });
     return (
@@ -798,7 +816,10 @@ export default async function InvoicesPage({
     // invoice_number and client_name are now available from invoices_view
     const invoiceNumber = invoice.invoice_number ?? null;
     const clientName = invoice.client_name ?? null;
-    const currency = "USD";
+    const currency = resolveInvoiceDisplayCurrency(
+      invoice.currency as string | null | undefined,
+      workspaceDefaultCurrency
+    );
     
     return {
       ...invoice,
@@ -1061,7 +1082,7 @@ export default async function InvoicesPage({
         <span>
           Outstanding:{" "}
           <span className="font-medium text-slate-800">
-            {formatCurrency(summaryOutstanding, { currency: "USD" })}
+            {formatCurrency(summaryOutstanding, { currency: workspaceDefaultCurrency })}
           </span>
         </span>
         <span>

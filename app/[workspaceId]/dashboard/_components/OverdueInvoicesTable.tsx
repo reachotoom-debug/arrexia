@@ -16,12 +16,14 @@ type DashboardOverdueInvoice = {
   outstanding: number;
   overdueDays: number;
   riskLevel: string | null;
+  currency?: string | null;
 };
 
 interface OverdueInvoicesTableProps {
   invoices: DashboardOverdueInvoice[];
   workspaceId: string;
   hasMore?: boolean;
+  defaultCurrency?: string;
 }
 
 /** Compact dashboard card table — no min-w-[60rem]; fits card on desktop. */
@@ -60,6 +62,7 @@ export function OverdueInvoicesTable({
   invoices,
   workspaceId,
   hasMore,
+  defaultCurrency = "USD",
 }: OverdueInvoicesTableProps) {
   return (
     <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -163,7 +166,10 @@ export function OverdueInvoicesTable({
                               "w-[6.5rem] text-right whitespace-nowrap font-medium tabular-nums text-slate-900"
                             )}
                           >
-                            {formatCurrency(invoice.outstanding, { currency: "USD" })}
+                            {formatCurrency(invoice.outstanding, {
+                              currency: invoice.currency,
+                              fallbackCurrency: defaultCurrency,
+                            })}
                           </td>
                         </tr>
                       );

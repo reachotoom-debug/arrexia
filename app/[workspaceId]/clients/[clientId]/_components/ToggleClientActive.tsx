@@ -11,12 +11,14 @@ interface ToggleClientActiveProps {
   workspaceId: string;
   clientId: string;
   currentActive: boolean;
+  workspaceDefaultCurrency?: string;
 }
 
 export function ToggleClientActive({
   workspaceId,
   clientId,
   currentActive,
+  workspaceDefaultCurrency = "USD",
 }: ToggleClientActiveProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -110,6 +112,7 @@ export function ToggleClientActive({
           workspaceId={workspaceId}
           clientId={clientId}
           action="inactivate"
+          workspaceDefaultCurrency={workspaceDefaultCurrency}
         />
       )}
     </>

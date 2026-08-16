@@ -31,6 +31,14 @@ export default async function ClientPage({ params }: ClientPageProps) {
     notFound();
   }
 
+  const { data: settings } = await supabase
+    .from("settings")
+    .select("default_currency")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
+  const workspaceDefaultCurrency = settings?.default_currency ?? "USD";
+
   // Client state model: Active vs Inactive vs Archived
   // Inactive: is_active = false AND archived_at IS NULL
   // Archived: archived_at IS NOT NULL
@@ -140,6 +148,7 @@ export default async function ClientPage({ params }: ClientPageProps) {
                 workspaceId={workspaceId}
                 clientId={clientId}
                 currentActive={client.is_active}
+                workspaceDefaultCurrency={workspaceDefaultCurrency}
               />
             )}
           </div>
@@ -176,12 +185,12 @@ export default async function ClientPage({ params }: ClientPageProps) {
           <KPI title="Active invoices" value={totalInvoices} />
           <KPI
             title="Active billed"
-            value={formatMoney(totalBilled, "USD")}
+            value={formatMoney(totalBilled, workspaceDefaultCurrency)}
           />
-          <KPI title="Active paid" value={formatMoney(totalPaid, "USD")} />
+          <KPI title="Active paid" value={formatMoney(totalPaid, workspaceDefaultCurrency)} />
           <KPI
             title="Active outstanding"
-            value={formatMoney(outstandingBalance, "USD")}
+            value={formatMoney(outstandingBalance, workspaceDefaultCurrency)}
           />
         </div>
         <p className="text-xs text-slate-500">

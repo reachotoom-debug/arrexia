@@ -47,6 +47,7 @@ export interface CollectionsWorkItem {
   riskLevel: "high" | "medium" | "low" | null;
   primaryEmail?: string | null;
   primaryPhone?: string | null;
+  currency?: string | null;
 }
 
 export interface ActivityItem {
@@ -144,4 +145,5 @@ export interface DashboardData {
   insight: DashboardInsight;
   reminderEffectiveness: ReminderEffectivenessData[];
   businessName: string;
+  defaultCurrency: string;
 }

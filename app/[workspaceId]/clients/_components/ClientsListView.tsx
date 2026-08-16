@@ -74,12 +74,20 @@ interface Client {
 interface ClientsListViewProps {
   clients: Client[];
   workspaceId: string;
+  workspaceDefaultCurrency?: string;
   sortBy?: string;
   sortDir?: string;
   searchParams: Record<string, string | string[] | undefined>;
 }
 
-export function ClientsListView({ clients, workspaceId, sortBy, sortDir, searchParams }: ClientsListViewProps) {
+export function ClientsListView({
+  clients,
+  workspaceId,
+  workspaceDefaultCurrency = "USD",
+  sortBy,
+  sortDir,
+  searchParams,
+}: ClientsListViewProps) {
   // Build returnTo URL from current searchParams for edit links
   const returnToUrl = React.useMemo(() => {
     const params = new URLSearchParams();
@@ -259,7 +267,7 @@ export function ClientsListView({ clients, workspaceId, sortBy, sortDir, searchP
                             : "text-slate-700"
                         }`}
                       >
-                        {formatMoney(Math.abs(outstanding), "USD")}
+                        {formatMoney(Math.abs(outstanding), workspaceDefaultCurrency)}
                       </div>
                     </td>
                     

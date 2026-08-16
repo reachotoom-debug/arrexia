@@ -656,8 +656,9 @@ export default async function ClientsPage({
   // Load clients and, when needed, workspace-wide client total in parallel
   let clientData;
   let workspaceClientCount: number | null = null;
+  let workspaceDefaultCurrency = "USD";
   try {
-    const [loadedClientData, workspaceClientCountResult] = await Promise.all([
+    const [loadedClientData, workspaceClientCountResult, settingsResult] = await Promise.all([
       perf.time("loadClients", () => loadClients(workspaceId, resolvedSearchParams)),
       skipWorkspaceClientCount
         ? Promise.resolve(null)
@@ -671,9 +672,17 @@ export default async function ClientsPage({
                 .eq("workspace_id", workspaceId),
             (result) => `count=${result.count ?? 0}`
           ),
+      supabase
+        .from("settings")
+        .select("default_currency")
+        .eq("workspace_id", workspaceId)
+        .maybeSingle(),
     ]);
 
     clientData = loadedClientData;
+    workspaceDefaultCurrency =
+      (settingsResult.data as { default_currency?: string } | null)?.default_currency ??
+      "USD";
     workspaceClientCount = skipWorkspaceClientCount
       ? clientData.totalCount
       : workspaceClientCountResult?.count ?? 0;
@@ -981,6 +990,7 @@ export default async function ClientsPage({
         <ClientsContentWrapper
           clients={viewClients}
           workspaceId={workspaceId}
+          workspaceDefaultCurrency={workspaceDefaultCurrency}
           sortBy={sort ?? undefined}
           sortDir={dir ?? undefined}
           searchParams={resolvedSearchParams}
