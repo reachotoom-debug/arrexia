@@ -219,7 +219,7 @@ async function getCollectionsData(
     console.error("[Collections] failed to calculate outstanding total", { workspaceId, metricsError });
   }
 
-  const exposureLabel = formatPortfolioExposureLabel(outstandingByCurrency);
+  const exposureLabel = formatPortfolioExposureLabel(outstandingByCurrency, defaultCurrency);
 
   return {
     rows: enrichedInvoices,
@@ -228,6 +228,7 @@ async function getCollectionsData(
     pageSize,
     totalPages,
     evaluationDate,
+    defaultCurrency,
     summary: {
       invoicesInView: totalCount,
       outstandingByCurrency,
@@ -301,7 +302,7 @@ export default async function CollectionsPage({
     );
   }
 
-  const { rows: invoices, count, page: currentPage, totalPages, summary, evaluationDate } =
+  const { rows: invoices, count, page: currentPage, totalPages, summary, evaluationDate, defaultCurrency } =
     collectionsData;
 
   const riskOptions = [
@@ -489,7 +490,7 @@ export default async function CollectionsPage({
                       const client = inv.client;
                       const overdueDays = Number(inv.overdue_days ?? 0);
                       const outstanding = Number(inv.outstanding ?? 0);
-                      const currency = inv.currency ?? "USD";
+                      const currency = inv.currency ?? defaultCurrency ?? "USD";
                       const escalate = shouldRecommendEscalation(overdueDays, outstanding);
 
                       return (

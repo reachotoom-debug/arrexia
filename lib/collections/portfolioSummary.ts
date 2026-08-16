@@ -34,10 +34,11 @@ export function computePortfolioExposureByCurrency(
 }
 
 export function formatPortfolioExposureLabel(
-  totals: Array<{ currency: string; amount: number }>
+  totals: Array<{ currency: string; amount: number }>,
+  defaultCurrency = "USD"
 ): { value: string; detail?: string } {
   if (totals.length === 0) {
-    return { value: formatMoney(0, "USD") };
+    return { value: formatMoney(0, defaultCurrency) };
   }
 
   if (totals.length === 1) {

@@ -68,6 +68,19 @@ describe("Collections portfolio summary (Task 3)", () => {
     assert.equal(label.detail, "Totals shown separately by currency.");
   });
 
+  it("K — zero overdue exposure uses workspace default currency, not hardcoded USD", () => {
+    const label = formatPortfolioExposureLabel([], "JOD");
+    assert.doesNotMatch(label.value, /^\$/);
+    assert.match(label.value, /0\.00/);
+
+    const pageSrc = readFileSync(COLLECTIONS_PAGE, "utf8");
+    assert.match(pageSrc, /formatPortfolioExposureLabel\(outstandingByCurrency, defaultCurrency\)/);
+    assert.doesNotMatch(
+      readFileSync("lib/collections/portfolioSummary.ts", "utf8"),
+      /totals\.length === 0[\s\S]*formatMoney\(0, "USD"\)/
+    );
+  });
+
   it("F — primary portfolio action remains available", () => {
     const src = readFileSync(PORTFOLIO_ACTION_CELL, "utf8");
     assert.match(src, /View account/);
