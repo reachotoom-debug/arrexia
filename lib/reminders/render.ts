@@ -3,6 +3,7 @@
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 import { formatCurrency } from "@/lib/format/currency";
 import { buildAppUrl } from "@/lib/config/appUrl";
+import { upgradeLegacyCanonicalReminderCopy } from "./canonicalDefaults";
 import { computeReminderDaysOverdue } from "./calendarOverdue";
 
 interface InvoiceForRender {
@@ -116,6 +117,9 @@ export function renderReminderTemplateFromContext(args: {
   const { template, context } = args;
   const replacements = context.replacements;
 
+  const subject = upgradeLegacyCanonicalReminderCopy(template.subject);
+  const body = upgradeLegacyCanonicalReminderCopy(template.body);
+
   const interpolate = (input: string) =>
     input.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
       if (key in replacements) return replacements[key] ?? "";
@@ -123,8 +127,8 @@ export function renderReminderTemplateFromContext(args: {
     });
 
   return {
-    subject: interpolate(template.subject),
-    html: interpolate(template.body),
+    subject: interpolate(subject),
+    html: interpolate(body),
   };
 }
 

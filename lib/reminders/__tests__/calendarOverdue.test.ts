@@ -6,6 +6,10 @@ import { instantToWorkspaceCalendarDate, formatDateOnlyField } from "@/lib/datet
 import { formatCurrency } from "@/lib/format/currency";
 import { computeInvoiceOverdueDays } from "@/lib/invoices/workspaceInvoiceAging";
 import {
+  getCanonicalStageByCode,
+  LEGACY_CANONICAL_LITERAL_OVERDUE_COPY,
+} from "../canonicalDefaults";
+import {
   buildReminderTemplateContext,
   renderReminderTemplateFromContext,
 } from "../render";
@@ -274,10 +278,215 @@ describe("reminder template currency formatting", () => {
     assert.doesNotMatch(email.text, /1,500\.000/);
   });
 
-  it("canonical overdue templates use {{amount_due}} token for consistent formatting", () => {
-    const defaultsSrc = readFileSync("lib/reminders/canonicalDefaults.ts", "utf8");
-    assert.match(defaultsSrc, /{{amount_due}}/);
-    assert.doesNotMatch(defaultsSrc, /{{outstanding_amount}}/);
+  it("canonical overdue templates use {{amount_due}} and {{days_overdue}} tokens", () => {
+    const plus3 = getCanonicalStageByCode("plus_3");
+    const plus7 = getCanonicalStageByCode("plus_7");
+    assert.match(plus3.subject, /\{\{days_overdue\}\}/);
+    assert.match(plus7.subject, /\{\{days_overdue\}\}/);
+    assert.match(plus3.body, /\{\{days_overdue\}\}/);
+    assert.match(plus7.body, /\{\{days_overdue\}\}/);
+    assert.doesNotMatch(plus7.subject, /\bis 7 days overdue\b/);
+    assert.doesNotMatch(plus7.body, /\bis now 7 days overdue\b/);
+  });
+});
+
+describe("reminder customer-facing overdue age consistency", () => {
+  const legacyPlus7 = LEGACY_CANONICAL_LITERAL_OVERDUE_COPY.find(
+    (entry) => entry.code === "plus_7"
+  )!;
+  const tokenizedPlus7 = getCanonicalStageByCode("plus_7");
+  const tokenizedFinal = getCanonicalStageByCode("final");
+
+  function renderCustomerFacingReminder(params: {
+    template: { id: string; subject: string; body: string };
+    invoiceNumber: string;
+    dueDate: string;
+    outstanding: number;
+    currency: string;
+    daysOverdue: number;
+  }) {
+    const context = buildReminderTemplateContext({
+      invoiceView: {
+        invoice_number: params.invoiceNumber,
+        due_date: params.dueDate,
+        outstanding: params.outstanding,
+        currency: params.currency,
+        workspace_name: "Acme",
+      },
+      client: { name: "Client", email: "client@test.com" },
+      daysOverdue: params.daysOverdue,
+    });
+
+    const rendered = renderReminderTemplateFromContext({
+      template: params.template,
+      context,
+    });
+
+    const email = renderReminderEmail({
+      businessName: "Acme",
+      clientName: "Client",
+      invoiceNumber: params.invoiceNumber,
+      dueDate: params.dueDate,
+      outstandingAmount: context.outstandingFormatted,
+      daysOverdue: params.daysOverdue,
+      mainMessage: rendered.html,
+    });
+
+    return { rendered, email, context };
+  }
+
+  it("A — +7 occurrence sent exactly +7 => customer copy says 7", () => {
+    const { rendered, email } = renderCustomerFacingReminder({
+      template: {
+        id: "plus_7",
+        subject: tokenizedPlus7.subject,
+        body: tokenizedPlus7.body,
+      },
+      invoiceNumber: "INV-0003",
+      dueDate: "2026-08-08",
+      outstanding: 2200,
+      currency: "JOD",
+      daysOverdue: 7,
+    });
+
+    assert.match(rendered.subject, /Invoice INV-0003 is 7 days overdue/);
+    assert.match(rendered.html, /is now 7 days overdue/);
+    assert.match(email.text, /Days overdue[\s\S]*7/);
+  });
+
+  it("B — +7 catch-up sent +9 => legacy stored template says 9 (INV-0003 production case)", () => {
+    const { rendered, email } = renderCustomerFacingReminder({
+      template: {
+        id: "plus_7",
+        subject: legacyPlus7.subject,
+        body: legacyPlus7.body,
+      },
+      invoiceNumber: "INV-0003",
+      dueDate: "2026-08-08",
+      outstanding: 2200,
+      currency: "JOD",
+      daysOverdue: 9,
+    });
+
+    assert.match(rendered.subject, /Invoice INV-0003 is 9 days overdue/);
+    assert.doesNotMatch(rendered.subject, /7 days overdue/);
+    assert.match(rendered.html, /is now 9 days overdue \(due Aug 8, 2026\)/);
+    assert.doesNotMatch(rendered.html, /is now 7 days overdue/);
+    assert.match(email.text, /Days overdue[\s\S]*9/);
+  });
+
+  it("C — +14 catch-up sent +18 => customer copy says 18", () => {
+    const { rendered, email } = renderCustomerFacingReminder({
+      template: {
+        id: "final",
+        subject: tokenizedFinal.subject,
+        body: tokenizedFinal.body,
+      },
+      invoiceNumber: "INV-0010",
+      dueDate: "2026-07-01",
+      outstanding: 5000,
+      currency: "USD",
+      daysOverdue: 18,
+    });
+
+    assert.match(rendered.html, /18 days after the due date/);
+    assert.doesNotMatch(rendered.html, /14 days after the due date/);
+    assert.match(email.text, /Days overdue[\s\S]*18/);
+  });
+
+  it("D — recurring occurrence sent later uses current age, not rule offset", () => {
+    const { rendered, email } = renderCustomerFacingReminder({
+      template: {
+        id: "plus_7",
+        subject: tokenizedPlus7.subject,
+        body: tokenizedPlus7.body,
+      },
+      invoiceNumber: "INV-0040",
+      dueDate: "2026-07-01",
+      outstanding: 1000,
+      currency: "USD",
+      daysOverdue: 40,
+    });
+
+    assert.match(rendered.subject, /40 days overdue/);
+    assert.match(rendered.html, /now 40 days overdue/);
+    assert.match(email.text, /Days overdue[\s\S]*40/);
+  });
+
+  it("E — subject, prose, and detail table all agree on overdue age", () => {
+    const { rendered, email } = renderCustomerFacingReminder({
+      template: {
+        id: "plus_7",
+        subject: legacyPlus7.subject,
+        body: legacyPlus7.body,
+      },
+      invoiceNumber: "INV-0003",
+      dueDate: "2026-08-08",
+      outstanding: 2200,
+      currency: "JOD",
+      daysOverdue: 9,
+    });
+
+    assert.match(rendered.subject, /\b9 days overdue\b/);
+    assert.match(rendered.html, /\b9 days overdue\b/);
+    assert.match(email.text, /Days overdue:\s*9/);
+    assert.match(email.html, /Days overdue[\s\S]*>\s*9\s*</);
+  });
+
+  it("F — JOD formatting remains JOD 2,200.00 alongside corrected overdue age", () => {
+    const expectedOutstanding = formatCurrency(2200, { currency: "JOD" });
+    const { rendered, email } = renderCustomerFacingReminder({
+      template: {
+        id: "plus_7",
+        subject: legacyPlus7.subject,
+        body: legacyPlus7.body,
+      },
+      invoiceNumber: "INV-0003",
+      dueDate: "2026-08-08",
+      outstanding: 2200,
+      currency: "JOD",
+      daysOverdue: 9,
+    });
+
+    assert.match(expectedOutstanding, /JOD[\s\u00a0]?2,200\.00/);
+    assert.match(rendered.html, /JOD[\s\u00a0]?2,200\.00/);
+    assert.match(email.text, /Outstanding amount[\s\S]*JOD[\s\u00a0]?2,200\.00/);
+    assert.match(rendered.html, /9 days overdue/);
+  });
+
+  it("G — scheduledDate is not used for customer-facing overdue age in send path", () => {
+    const sendSrc = readFileSync("lib/reminders/send.ts", "utf8");
+    assert.match(sendSrc, /computeReminderDaysOverdue\(\{[\s\S]*dueDate: invoiceView\.due_date/);
+    assert.match(sendSrc, /daysOverdue,/);
+    assert.doesNotMatch(
+      sendSrc,
+      /buildReminderTemplateContext\([\s\S]*scheduledDate/
+    );
+  });
+
+  it("does not rewrite customized templates that diverge from legacy canonical copy", () => {
+    const customSubject = "Friendly reminder about invoice {{invoice_number}}";
+    const customBody = "Please pay {{amount_due}} when you can.";
+    const context = buildReminderTemplateContext({
+      invoiceView: {
+        invoice_number: "INV-CUSTOM",
+        due_date: "2026-08-08",
+        outstanding: 100,
+        currency: "USD",
+        workspace_name: "Acme",
+      },
+      client: { name: "Client", email: "client@test.com" },
+      daysOverdue: 9,
+    });
+
+    const rendered = renderReminderTemplateFromContext({
+      template: { id: "custom", subject: customSubject, body: customBody },
+      context,
+    });
+
+    assert.equal(rendered.subject, "Friendly reminder about invoice INV-CUSTOM");
+    assert.match(rendered.html, /Please pay \$100\.00 when you can\./);
+    assert.doesNotMatch(rendered.html, /9 days overdue/);
   });
 });
 

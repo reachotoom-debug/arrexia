@@ -56,9 +56,9 @@ export const CANONICAL_REMINDER_STAGES: readonly CanonicalReminderStage[] = [
     code: "plus_3",
     ruleName: "3 days after due",
     templateName: "Reminder: 3 days overdue",
-    subject: "Invoice {{invoice_number}} is 3 days overdue",
+    subject: "Invoice {{invoice_number}} is {{days_overdue}} days overdue",
     body:
-      "Invoice {{invoice_number}} for {{amount_due}} is now 3 days overdue (due {{due_date}}).\n\n" +
+      "Invoice {{invoice_number}} for {{amount_due}} is now {{days_overdue}} days overdue (due {{due_date}}).\n\n" +
       "Please arrange payment at your earliest convenience.",
     triggerType: "after_due",
     offsetDays: 3,
@@ -69,9 +69,9 @@ export const CANONICAL_REMINDER_STAGES: readonly CanonicalReminderStage[] = [
     code: "plus_7",
     ruleName: "7 days after due",
     templateName: "Reminder: 7 days overdue",
-    subject: "Invoice {{invoice_number}} is 7 days overdue",
+    subject: "Invoice {{invoice_number}} is {{days_overdue}} days overdue",
     body:
-      "Invoice {{invoice_number}} for {{amount_due}} is now 7 days overdue (due {{due_date}}).\n\n" +
+      "Invoice {{invoice_number}} for {{amount_due}} is now {{days_overdue}} days overdue (due {{due_date}}).\n\n" +
       "We appreciate your prompt attention to this payment.",
     triggerType: "after_due",
     offsetDays: 7,
@@ -106,6 +106,41 @@ export function getCanonicalStageByCode(code: CanonicalTemplateCode): CanonicalR
     throw new Error(`Unknown canonical template code: ${code}`);
   }
   return stage;
+}
+
+/**
+ * Legacy canonical copy seeded before launch QA used rule-offset literals in prose.
+ * Upgraded at render time only when stored subject/body match exactly — custom templates untouched.
+ */
+export const LEGACY_CANONICAL_LITERAL_OVERDUE_COPY: ReadonlyArray<{
+  code: "plus_3" | "plus_7";
+  subject: string;
+  body: string;
+}> = [
+  {
+    code: "plus_3",
+    subject: "Invoice {{invoice_number}} is 3 days overdue",
+    body:
+      "Invoice {{invoice_number}} for {{amount_due}} is now 3 days overdue (due {{due_date}}).\n\n" +
+      "Please arrange payment at your earliest convenience.",
+  },
+  {
+    code: "plus_7",
+    subject: "Invoice {{invoice_number}} is 7 days overdue",
+    body:
+      "Invoice {{invoice_number}} for {{amount_due}} is now 7 days overdue (due {{due_date}}).\n\n" +
+      "We appreciate your prompt attention to this payment.",
+  },
+];
+
+/** Replace exact legacy canonical literals with tokenized copy; leave customized templates unchanged. */
+export function upgradeLegacyCanonicalReminderCopy(text: string): string {
+  for (const legacy of LEGACY_CANONICAL_LITERAL_OVERDUE_COPY) {
+    const stage = getCanonicalStageByCode(legacy.code);
+    if (text === legacy.subject) return stage.subject;
+    if (text === legacy.body) return stage.body;
+  }
+  return text;
 }
 
 /** Standalone Arrexia trial and paid tiers enable all canonical stages by default. */
