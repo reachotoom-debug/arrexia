@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { instantToWorkspaceCalendarDate, formatDateOnlyField } from "@/lib/datetime/formatDateTime";
+import { formatCurrency } from "@/lib/format/currency";
 import { computeInvoiceOverdueDays } from "@/lib/invoices/workspaceInvoiceAging";
 import {
   buildReminderTemplateContext,
@@ -221,6 +222,62 @@ describe("reminder rendering overdue contract", () => {
     const context = buildReminderTemplateContext(baseContextArgs);
     assert.match(context.dueDateFormatted, /Jul/);
     assert.match(context.dueDateFormatted, /9/);
+  });
+});
+
+describe("reminder template currency formatting", () => {
+  it("formats JOD outstanding as 2 decimal places in prose and matches email table formatter", () => {
+    const context = buildReminderTemplateContext({
+      invoiceView: {
+        invoice_number: "INV-0002",
+        due_date: "2026-07-01",
+        outstanding: 1500,
+        currency: "JOD",
+        workspace_name: "Acme",
+      },
+      client: { name: "Client", email: "client@test.com" },
+      daysOverdue: 7,
+    });
+
+    const expectedOutstanding = formatCurrency(1500, { currency: "JOD" });
+
+    assert.equal(context.replacements.amount_due, expectedOutstanding);
+    assert.equal(context.replacements.outstanding_formatted, expectedOutstanding);
+    assert.equal(context.outstandingFormatted, expectedOutstanding);
+    assert.match(expectedOutstanding, /JOD[\s\u00a0]?1,500\.00/);
+
+    const prose = renderReminderTemplateFromContext({
+      template: {
+        id: "after-7",
+        subject: "Invoice {{invoice_number}} is 7 days overdue",
+        body:
+          "Invoice {{invoice_number}} for {{amount_due}} is now 7 days overdue (due {{due_date}}).",
+      },
+      context,
+    }).html;
+
+    assert.match(prose, /Invoice INV-0002 for JOD[\s\u00a0]?1,500\.00 is now 7 days overdue/);
+    assert.doesNotMatch(prose, /1,500\.000/);
+
+    const email = renderReminderEmail({
+      businessName: "Acme",
+      clientName: "Client",
+      invoiceNumber: "INV-0002",
+      dueDate: "2026-07-01",
+      outstandingAmount: expectedOutstanding,
+      daysOverdue: 7,
+      mainMessage: prose,
+    });
+
+    assert.match(email.text, /Outstanding amount[\s\S]*JOD[\s\u00a0]?1,500\.00/);
+    assert.match(email.html, /JOD[\s\u00a0]?1,500\.00/);
+    assert.doesNotMatch(email.text, /1,500\.000/);
+  });
+
+  it("canonical overdue templates use {{amount_due}} token for consistent formatting", () => {
+    const defaultsSrc = readFileSync("lib/reminders/canonicalDefaults.ts", "utf8");
+    assert.match(defaultsSrc, /{{amount_due}}/);
+    assert.doesNotMatch(defaultsSrc, /{{outstanding_amount}}/);
   });
 });
 

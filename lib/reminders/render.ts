@@ -1,6 +1,7 @@
 // lib/reminders/render.ts
 
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
+import { formatCurrency } from "@/lib/format/currency";
 import { buildAppUrl } from "@/lib/config/appUrl";
 import { computeReminderDaysOverdue } from "./calendarOverdue";
 
@@ -63,15 +64,7 @@ export function buildReminderTemplateContext(args: {
 
   const outstandingFormatted = (() => {
     if (outstanding == null) return "";
-    if (!currency) return String(outstanding);
-    try {
-      return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency,
-      }).format(outstanding);
-    } catch {
-      return String(outstanding);
-    }
+    return formatCurrency(outstanding, { currency: currency || "USD" });
   })();
 
   const resolvedDaysOverdue =
