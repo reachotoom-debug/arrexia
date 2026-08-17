@@ -20,6 +20,11 @@ import {
   getPaymentCreationBlockReason,
   paymentCreationBlockMessage,
 } from "@/lib/receivables/operationalEligibility";
+import {
+  formatPaymentUnarchiveOverpayError,
+  validatePaymentUnarchiveBatchOverpay,
+  wouldRestorePaymentCauseOverpay,
+} from "@/lib/payments/paymentUnarchiveOverpay";
 
 /**
  * Server action to load eligible invoices for a specific client (for payment recording)
@@ -692,7 +697,7 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
   // Step 1: Fetch existing row to check state and get invoice_id
   const { data: existing, error: fetchError } = await supabase
     .from("payments")
-    .select("id, workspace_id, invoice_id, client_id, archived_at")
+    .select("id, workspace_id, invoice_id, client_id, archived_at, amount, status")
     .eq("id", paymentId)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
@@ -718,7 +723,47 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
     return { ok: true, alreadyUnarchived: true, invoiceId: existing.invoice_id || null };
   }
 
-  // Step 3: Update archived_at = null (filter by BOTH id AND workspace_id, use select to verify update)
+  // Step 3: Block restore when re-including this payment would overpay the invoice
+  if (existing.invoice_id) {
+    const { data: invoiceView, error: invoiceViewError } = await supabase
+      .from("invoices_view")
+      .select("outstanding")
+      .eq("id", existing.invoice_id)
+      .eq("workspace_id", workspaceId)
+      .is("archived_at", null)
+      .maybeSingle();
+
+    if (invoiceViewError) {
+      console.error("[unarchivePayment] invoice load failed", {
+        code: invoiceViewError.code,
+        message: invoiceViewError.message,
+        workspaceId,
+        paymentId,
+        invoiceId: existing.invoice_id,
+      });
+      throw new Error(`Failed to validate invoice outstanding: ${invoiceViewError.message}`);
+    }
+
+    const currentOutstanding = Number(invoiceView?.outstanding ?? 0);
+    const paymentAmount = Number(existing.amount ?? 0);
+
+    if (
+      wouldRestorePaymentCauseOverpay({
+        paymentAmount,
+        paymentStatus: existing.status,
+        currentOutstanding,
+      })
+    ) {
+      throw new Error(
+        formatPaymentUnarchiveOverpayError({
+          paymentAmount,
+          availableOutstanding: currentOutstanding,
+        })
+      );
+    }
+  }
+
+  // Step 4: Update archived_at = null (filter by BOTH id AND workspace_id, use select to verify update)
   const { error: updateError, data: updatedPayments } = await supabase
     .from("payments")
     .update({ archived_at: null })
@@ -753,7 +798,7 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
     });
   }
 
-  // Step 4: Recalculate invoice state if payment was linked to an invoice
+  // Step 5: Recalculate invoice state if payment was linked to an invoice
   if (existing.invoice_id) {
     try {
       await recalculateInvoiceState(existing.invoice_id);
@@ -762,7 +807,7 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
     }
   }
 
-  // Step 5: Log audit event (non-blocking)
+  // Step 6: Log audit event (non-blocking)
   try {
     await logAuditEvent({
       workspaceId,
@@ -899,7 +944,7 @@ export async function bulkUnarchivePayments(workspaceId: string, paymentIds: str
   // Step 1: Fetch existing payments to get invoice_ids before unarchiving
   const { data: existingPayments, error: fetchError } = await supabase
     .from("payments")
-    .select("id, invoice_id")
+    .select("id, invoice_id, amount, status")
     .eq("workspace_id", workspaceId)
     .in("id", paymentIds)
     .not("archived_at", "is", null);
@@ -920,6 +965,59 @@ export async function bulkUnarchivePayments(workspaceId: string, paymentIds: str
   }
 
   const idsToUnarchive = existingPayments.map((p) => p.id);
+
+  const linkedInvoiceIds = Array.from(
+    new Set(
+      existingPayments
+        .map((payment) => payment.invoice_id)
+        .filter((invoiceId): invoiceId is string => Boolean(invoiceId))
+    )
+  );
+
+  const outstandingByInvoice = new Map<string, number>();
+
+  if (linkedInvoiceIds.length > 0) {
+    const { data: invoiceRows, error: invoiceRowsError } = await supabase
+      .from("invoices_view")
+      .select("id, outstanding")
+      .eq("workspace_id", workspaceId)
+      .in("id", linkedInvoiceIds)
+      .is("archived_at", null);
+
+    if (invoiceRowsError) {
+      console.error("[bulkUnarchivePayments] invoice load failed", {
+        code: invoiceRowsError.code,
+        message: invoiceRowsError.message,
+        workspaceId,
+        paymentIds: idsToUnarchive,
+      });
+      return {
+        ok: false,
+        message: `Failed to validate invoice outstanding: ${invoiceRowsError.message}`,
+      };
+    }
+
+    for (const invoiceRow of invoiceRows ?? []) {
+      outstandingByInvoice.set(invoiceRow.id, Number(invoiceRow.outstanding ?? 0));
+    }
+  }
+
+  const overpayErrors = validatePaymentUnarchiveBatchOverpay({
+    payments: existingPayments
+      .filter((payment) => payment.invoice_id)
+      .map((payment) => ({
+        paymentId: payment.id,
+        invoiceId: payment.invoice_id as string,
+        amount: Number(payment.amount ?? 0),
+        status: payment.status,
+      })),
+    outstandingByInvoice,
+  });
+
+  if (overpayErrors.size > 0) {
+    const firstError = overpayErrors.values().next().value as string;
+    return { ok: false, message: firstError };
+  }
 
   // Step 2: Update archived_at = null (using select array is safe, no single() here)
   const { error: updateError, data: updatedPayments } = await supabase
