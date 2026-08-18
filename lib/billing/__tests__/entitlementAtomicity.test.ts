@@ -413,10 +413,16 @@ describe("import pre-check remains non-authoritative", () => {
       "app/[workspaceId]/settings/import/actions/invoices.ts",
       "utf8"
     );
+    const paymentsSrc = readFileSync(
+      "app/[workspaceId]/settings/import/actions/payments.ts",
+      "utf8"
+    );
     assert.match(clientsSrc, /assertImportEntitlement/);
     assert.match(clientsSrc, /rpc_import_clients/);
     assert.match(invoicesSrc, /assertImportEntitlement/);
     assert.match(invoicesSrc, /import_invoices_grouped/);
+    assert.match(paymentsSrc, /assertImportEntitlement/);
+    assert.match(paymentsSrc, /rpc_import_payments/);
   });
 
   it("import RPC wrapper rejects concurrent overflow at database layer", () => {

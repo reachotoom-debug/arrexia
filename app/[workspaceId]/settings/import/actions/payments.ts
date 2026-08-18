@@ -8,6 +8,8 @@ import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireWorkspace } from "@/lib/auth/server";
+import { assertImportEntitlement } from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 import { parseMMDDYYYY, generateTransactionId } from "@/lib/payments/import-utils";
 import {
   validatePaymentImportBatchOverpay,
@@ -656,6 +658,21 @@ export async function executePaymentsImport(
       status: "ok" as const,
       error_message: null,
     }));
+  }
+
+  try {
+    await assertImportEntitlement(workspaceId, { newClients: 0, newInvoices: 0 });
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return rows.map((row) => ({
+        rowId: row.rowId,
+        rowIndex: row.rowIndex,
+        payment_id: null,
+        status: "failed" as const,
+        error_message: error.message,
+      }));
+    }
+    throw error;
   }
 
   // Prepare JSONB rows for RPC call

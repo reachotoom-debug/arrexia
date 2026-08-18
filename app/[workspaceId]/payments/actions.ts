@@ -110,6 +110,21 @@ async function recalculateInvoiceState(invoiceId: string) {
   void invoiceId;
 }
 
+async function getPaymentMutationEntitlementBlock(workspaceId: string): Promise<{
+  error: string;
+  code: EntitlementError["code"];
+} | null> {
+  try {
+    await assertWorkspaceMutationAllowed(workspaceId, "payment_mutation");
+    return null;
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return { error: error.message, code: error.code };
+    }
+    throw error;
+  }
+}
+
 export async function createPayment(
   workspaceId: string,
   rawValues: PaymentFormValues
@@ -125,13 +140,9 @@ export async function createPayment(
     return { error: "workspace_id is required" };
   }
 
-  try {
-    await assertWorkspaceMutationAllowed(workspaceId, "payment_mutation");
-  } catch (error) {
-    if (error instanceof EntitlementError) {
-      return { error: error.message, code: error.code };
-    }
-    throw error;
+  const entitlementBlock = await getPaymentMutationEntitlementBlock(workspaceId);
+  if (entitlementBlock) {
+    return { error: entitlementBlock.error, code: entitlementBlock.code };
   }
 
   const parsed = PaymentFormSchema.parse(rawValues);
@@ -345,6 +356,11 @@ export async function updatePayment(
     return { error: "workspace_id is required" };
   }
 
+  const entitlementBlock = await getPaymentMutationEntitlementBlock(workspaceId);
+  if (entitlementBlock) {
+    return { error: entitlementBlock.error, code: entitlementBlock.code };
+  }
+
   const parsed = PaymentFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
 
@@ -522,6 +538,11 @@ export async function deletePayment(workspaceId: string, paymentId: string) {
   const { user } = await requireUser();
   await requireWorkspace(workspaceId);
 
+  const entitlementBlock = await getPaymentMutationEntitlementBlock(workspaceId);
+  if (entitlementBlock) {
+    throw new Error(entitlementBlock.error);
+  }
+
   const supabase = await supabaseServer();
 
   // Get payment details before archiving (to recalculate state and for audit log)
@@ -590,6 +611,12 @@ export async function deletePayment(workspaceId: string, paymentId: string) {
 export async function archivePayment(workspaceId: string, paymentId: string) {
   const { user } = await requireUser();
   await requireWorkspace(workspaceId);
+
+  const entitlementBlock = await getPaymentMutationEntitlementBlock(workspaceId);
+  if (entitlementBlock) {
+    throw new Error(entitlementBlock.error);
+  }
+
   const supabase = await supabaseServer();
 
   // Step 1: Fetch existing row to check state and get invoice_id
@@ -692,6 +719,12 @@ export async function archivePayment(workspaceId: string, paymentId: string) {
 export async function unarchivePayment(workspaceId: string, paymentId: string) {
   const { user } = await requireUser();
   await requireWorkspace(workspaceId);
+
+  const entitlementBlock = await getPaymentMutationEntitlementBlock(workspaceId);
+  if (entitlementBlock) {
+    throw new Error(entitlementBlock.error);
+  }
+
   const supabase = await supabaseServer();
 
   // Step 1: Fetch existing row to check state and get invoice_id
@@ -837,6 +870,12 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
 export async function bulkArchivePayments(workspaceId: string, paymentIds: string[]) {
   const { user } = await requireUser();
   await requireWorkspace(workspaceId);
+
+  const entitlementBlock = await getPaymentMutationEntitlementBlock(workspaceId);
+  if (entitlementBlock) {
+    return { ok: false, message: entitlementBlock.error };
+  }
+
   const supabase = await supabaseServer();
 
   if (paymentIds.length === 0) {
@@ -935,6 +974,12 @@ export async function bulkArchivePayments(workspaceId: string, paymentIds: strin
 export async function bulkUnarchivePayments(workspaceId: string, paymentIds: string[]) {
   const { user } = await requireUser();
   await requireWorkspace(workspaceId);
+
+  const entitlementBlock = await getPaymentMutationEntitlementBlock(workspaceId);
+  if (entitlementBlock) {
+    return { ok: false, message: entitlementBlock.error };
+  }
+
   const supabase = await supabaseServer();
 
   if (paymentIds.length === 0) {
