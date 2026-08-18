@@ -2,7 +2,7 @@
 -- STAGING / LOCAL ONLY — NEVER RUN ON PRODUCTION
 -- Integration: import_invoices_grouped financial integrity + atomicity
 -- Usage: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/db/importInvoicesGroupedIntegrity.integration.sql
--- Requires: migration 20260810120000_fix_import_invoices_grouped_integrity.sql applied
+-- Requires: migrations through 20260817120000_invoice_import_paid_total_guard.sql applied
 -- ============================================================================
 
 BEGIN;
@@ -293,6 +293,90 @@ BEGIN
   END IF;
   IF (SELECT count(*) FROM public.payments WHERE invoice_id = v_invoice_id AND archived_at IS NULL) <> 1 THEN
     RAISE EXCEPTION 'payment preservation removed or duplicated payment rows';
+  END IF;
+
+  -- --------------------------------------------------------------------------
+  -- Paid-total guard: invalid reduction blocked; dry-run detects; payments untouched
+  -- --------------------------------------------------------------------------
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-PAID-GUARD', 'client_email', 'acme@example.com', 'client_name', 'Acme Corp', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-PAID-GUARD', 'item_description', 'Seed', 'quantity', '1', 'unit_price', '2000')
+  );
+  PERFORM public.internal_import_invoices_grouped(v_workspace_id, v_rows, false);
+
+  SELECT id INTO v_invoice_id FROM public.invoices WHERE workspace_id = v_workspace_id AND invoice_number = 'INV-PAID-GUARD';
+
+  INSERT INTO public.payments (
+    workspace_id, organization_id, invoice_id, client_id, amount, currency, payment_date, method, status, transaction_id
+  )
+  SELECT i.workspace_id, v_org_id, i.id, i.client_id, 1500, 'USD', CURRENT_DATE, 'manual', 'completed', 'IMPORT-PAID-GUARD-TXN-1'
+  FROM public.invoices i WHERE i.id = v_invoice_id;
+
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-PAID-GUARD', 'client_email', 'acme@example.com', 'client_name', 'Acme Corp', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-PAID-GUARD', 'item_description', 'Reduced', 'quantity', '1', 'unit_price', '1000')
+  );
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, true);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'paid-total dry-run should reject invalid reduction: %', v_result;
+  END IF;
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'paid-total execute should reject invalid reduction: %', v_result;
+  END IF;
+
+  SELECT amount INTO v_amount FROM public.invoices WHERE id = v_invoice_id;
+  IF v_amount <> 2000 THEN
+    RAISE EXCEPTION 'paid-total guard changed invoice amount to %', v_amount;
+  END IF;
+  IF (SELECT amount FROM public.payments WHERE invoice_id = v_invoice_id AND archived_at IS NULL LIMIT 1) <> 1500 THEN
+    RAISE EXCEPTION 'paid-total guard modified payment amount';
+  END IF;
+
+  -- Pending payment does not block valid reduction
+  INSERT INTO public.payments (
+    workspace_id, organization_id, invoice_id, client_id, amount, currency, payment_date, method, status, transaction_id
+  )
+  SELECT i.workspace_id, v_org_id, i.id, i.client_id, 500, 'USD', CURRENT_DATE, 'manual', 'pending', 'IMPORT-PAID-GUARD-PENDING'
+  FROM public.invoices i WHERE i.id = v_invoice_id;
+
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-PAID-GUARD', 'client_email', 'acme@example.com', 'client_name', 'Acme Corp', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-PAID-GUARD', 'item_description', 'Allowed reduction', 'quantity', '1', 'unit_price', '1600')
+  );
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'pending payment should not block valid reduction: %', v_result;
+  END IF;
+
+  SELECT paid, total INTO v_total_paid, v_amount FROM public.invoices_view WHERE id = v_invoice_id;
+  IF v_total_paid <> 1500 OR v_amount <> 1600 THEN
+    RAISE EXCEPTION 'allowed reduction mismatch paid=% total=%', v_total_paid, v_amount;
+  END IF;
+
+  -- Batch rollback when one invoice violates paid-total guard
+  SELECT count(*) INTO v_invoice_count FROM public.invoices WHERE workspace_id = v_workspace_id;
+
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-PAID-BATCH-OK', 'client_email', 'acme@example.com', 'client_name', 'Acme Corp', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-PAID-BATCH-OK', 'item_description', 'Good', 'quantity', '1', 'unit_price', '100'),
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-PAID-GUARD', 'client_email', 'acme@example.com', 'client_name', 'Acme Corp', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-PAID-GUARD', 'item_description', 'Bad reduce', 'quantity', '1', 'unit_price', '1000')
+  );
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'paid-total batch should reject invalid invoice in batch';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.invoices WHERE workspace_id = v_workspace_id AND invoice_number = 'INV-PAID-BATCH-OK') THEN
+    RAISE EXCEPTION 'paid-total batch failure committed sibling invoice';
+  END IF;
+
+  IF (SELECT count(*) FROM public.invoices WHERE workspace_id = v_workspace_id) <> v_invoice_count THEN
+    RAISE EXCEPTION 'paid-total batch failure changed invoice count';
   END IF;
 
   -- --------------------------------------------------------------------------

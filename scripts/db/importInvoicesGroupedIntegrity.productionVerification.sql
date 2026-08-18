@@ -35,7 +35,8 @@ BEGIN;
 
 -- ============================================================================
 -- A. Apply proposed migration definitions inside this transaction
--- (copied from supabase/migrations/20260810120000_fix_import_invoices_grouped_integrity.sql)
+-- (internal_import_invoices_grouped from 20260817120000_invoice_import_paid_total_guard.sql;
+--  import_invoices_grouped wrapper from 20260810120000_fix_import_invoices_grouped_integrity.sql)
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION public.internal_import_invoices_grouped(
@@ -65,14 +66,19 @@ DECLARE
 
   v_invoice_ids jsonb := '{}'::jsonb;
   v_subtotal numeric;
+  v_new_total numeric;
+  v_effective_paid numeric;
   v_item_position integer;
 
   v_org_id uuid;
   v_has_org_id boolean;
 
   v_default_currency char(3) := 'USD';
+  v_currency text;
 
   v_invoice_numbers_seen jsonb := '{}'::jsonb;
+
+  v_paid_total_tolerance constant numeric := 0.01;
 BEGIN
   SELECT EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -161,6 +167,65 @@ BEGIN
       'ok', false,
       'errors', v_errors,
       'created', jsonb_build_object('clients',0,'invoices',0,'items',0)
+    );
+  END IF;
+
+  -- Paid-total guard: block re-import that would leave effective paid above new total
+  FOR v_row IN
+    SELECT value
+    FROM jsonb_array_elements(p_rows) AS t(value)
+    WHERE LOWER(COALESCE(value->>'row_type', '')) = 'invoice'
+  LOOP
+    v_inv := COALESCE(v_row->>'invoice_number', '');
+    v_existing_invoice_id := NULL;
+    v_currency := NULL;
+
+    SELECT COALESCE(SUM((elem->>'quantity')::numeric * (elem->>'unit_price')::numeric), 0)
+    INTO v_new_total
+    FROM jsonb_array_elements(p_rows) AS elem
+    WHERE LOWER(COALESCE(elem->>'row_type', '')) = 'item'
+      AND COALESCE(elem->>'invoice_number', '') = v_inv;
+
+    SELECT i.id, COALESCE(NULLIF(UPPER(LEFT(TRIM(v_row->>'currency'), 3)), ''), i.currency::text)
+    INTO v_existing_invoice_id, v_currency
+    FROM public.invoices i
+    WHERE i.workspace_id = p_workspace_id
+      AND i.invoice_number = v_inv
+      AND i.archived_at IS NULL
+    LIMIT 1;
+
+    IF v_existing_invoice_id IS NOT NULL THEN
+      SELECT COALESCE(SUM(COALESCE(p.net_amount, p.amount)), 0)
+      INTO v_effective_paid
+      FROM public.payments p
+      WHERE p.invoice_id = v_existing_invoice_id
+        AND p.archived_at IS NULL
+        AND (
+          p.status IS NULL
+          OR p.status = 'completed'
+          OR p.status = 'paid'
+        );
+
+      IF v_effective_paid > v_new_total + v_paid_total_tolerance THEN
+        v_errors := v_errors || jsonb_build_array(
+          format(
+            'Invoice %s cannot be updated to %s %s because %s %s has already been paid.',
+            v_inv,
+            COALESCE(v_currency, v_default_currency::text),
+            to_char(v_new_total, 'FM999,999,990.00'),
+            COALESCE(v_currency, v_default_currency::text),
+            to_char(v_effective_paid, 'FM999,999,990.00')
+          )
+        );
+      END IF;
+    END IF;
+  END LOOP;
+
+  IF jsonb_array_length(v_errors) > 0 THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'errors', v_errors,
+      'created', jsonb_build_object('clients', 0, 'invoices', 0, 'items', 0)
     );
   END IF;
 
@@ -767,7 +832,7 @@ BEGIN
   RAISE NOTICE 'TEST_H_PAYMENT: PASS';
 
   -- --------------------------------------------------------------------------
-  -- TEST K — OVERPAID RE-IMPORT (total below paid; payments preserved)
+  -- TEST K — OVERPAID RE-IMPORT BLOCKED (total below paid; invoice/payments unchanged)
   -- --------------------------------------------------------------------------
   v_rows := jsonb_build_array(
     jsonb_build_object('row_type','invoice','invoice_number', v_inv_overpaid,'client_email', v_prefix || '-client-a@verify.local','client_name', v_prefix || ' Client A','issue_date','2026-07-01','due_date','2026-08-01','currency','USD','status','sent'),
@@ -807,27 +872,52 @@ BEGIN
     jsonb_build_object('row_type','invoice','invoice_number', v_inv_overpaid,'client_email', v_prefix || '-client-a@verify.local','client_name', v_prefix || ' Client A','issue_date','2026-07-01','due_date','2026-08-01','currency','USD','status','sent'),
     jsonb_build_object('row_type','item','invoice_number', v_inv_overpaid,'item_description','Overpaid reduced line','quantity','1','unit_price','500')
   );
-  PERFORM public.internal_import_invoices_grouped(v_ws_a, v_rows, false);
 
-  SELECT paid, total, outstanding, display_status
-  INTO v_total_paid, v_amount, v_outstanding, v_display_status
+  v_result := public.internal_import_invoices_grouped(v_ws_a, v_rows, true);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: dry-run should reject paid-over-total re-import';
+  END IF;
+  IF COALESCE(v_result->'errors'->>0, '') NOT LIKE '%cannot be updated to%already been paid%' THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: dry-run error missing paid-total message: %', v_result;
+  END IF;
+
+  v_result := public.internal_import_invoices_grouped(v_ws_a, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: execute should reject paid-over-total re-import';
+  END IF;
+
+  SELECT paid, total, outstanding
+  INTO v_total_paid, v_amount, v_outstanding
   FROM public.invoices_view
   WHERE id = v_invoice_id;
 
-  IF v_total_paid <> 800 THEN
-    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: expected view paid 800, got %', v_total_paid;
-  END IF;
-  IF v_amount <> 500 OR v_outstanding <> 0 THEN
-    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: expected view total 500 outstanding 0, got total=% outstanding=%', v_amount, v_outstanding;
-  END IF;
-  IF v_display_status <> 'paid' THEN
-    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: expected display_status paid, got %', v_display_status;
+  IF v_total_paid <> 800 OR v_amount <> 1000 OR v_outstanding <> 200 THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: invoice/paid state changed after rejection total=% paid=% outstanding=%', v_amount, v_total_paid, v_outstanding;
   END IF;
   IF (SELECT count(*) FROM public.payments WHERE invoice_id = v_invoice_id AND archived_at IS NULL) <> 1 THEN
     RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: payment row was altered or removed';
   END IF;
   IF (SELECT amount FROM public.payments WHERE invoice_id = v_invoice_id AND archived_at IS NULL LIMIT 1) <> 800 THEN
     RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: payment amount changed';
+  END IF;
+
+  -- Allow re-import when new total equals effective paid
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type','invoice','invoice_number', v_inv_overpaid,'client_email', v_prefix || '-client-a@verify.local','client_name', v_prefix || ' Client A','issue_date','2026-07-01','due_date','2026-08-01','currency','USD','status','sent'),
+    jsonb_build_object('row_type','item','invoice_number', v_inv_overpaid,'item_description','Exact paid line','quantity','1','unit_price','800')
+  );
+  v_result := public.internal_import_invoices_grouped(v_ws_a, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: exact paid re-import should succeed: %', v_result;
+  END IF;
+
+  SELECT paid, total, outstanding
+  INTO v_total_paid, v_amount, v_outstanding
+  FROM public.invoices_view
+  WHERE id = v_invoice_id;
+
+  IF v_total_paid <> 800 OR v_amount <> 800 OR v_outstanding <> 0 THEN
+    RAISE EXCEPTION 'VERIFY_FAILED TEST_K_OVERPAID: exact paid re-import mismatch total=% paid=% outstanding=%', v_amount, v_total_paid, v_outstanding;
   END IF;
   RAISE NOTICE 'TEST_K_OVERPAID: PASS';
 

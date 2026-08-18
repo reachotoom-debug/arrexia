@@ -235,10 +235,13 @@ describe("import invoices grouped production verification gate", () => {
     );
     assert.match(testSection, /unit_price','1000'/);
     assert.match(testSection, /unit_price','500'/);
-    assert.match(testSection, /800/);
-    assert.match(testSection, /display_status/);
+    assert.match(testSection, /cannot be updated to/);
+    assert.match(testSection, /already been paid/);
+    assert.match(testSection, /dry-run should reject paid-over-total re-import/);
+    assert.match(testSection, /execute should reject paid-over-total re-import/);
     assert.match(testSection, /FROM public\.invoices_view/);
     assert.doesNotMatch(testSection, /DELETE FROM public\.payments/);
+    assert.doesNotMatch(testSection, /expected view total 500 outstanding 0/);
   });
 
   it("creates entitlement fixtures before protected client inserts", () => {
@@ -308,6 +311,9 @@ describe("import invoices grouped integration SQL", () => {
     assert.match(integrationSql, /soft failure left earlier invoice committed/);
     assert.match(integrationSql, /hard failure left earlier invoice committed/);
     assert.match(integrationSql, /payment preservation failed/);
+    assert.match(integrationSql, /paid-total dry-run should reject invalid reduction/);
+    assert.match(integrationSql, /paid-total batch failure committed sibling invoice/);
+    assert.match(integrationSql, /pending payment should not block valid reduction/);
     assert.match(integrationSql, /re-import replace mismatch/);
     assert.match(integrationSql, /dry-run wrote invoices/);
     assert.match(integrationSql, /FROM public\.invoices_view/);
