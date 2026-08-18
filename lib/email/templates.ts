@@ -21,13 +21,19 @@ const ARREXIA_EMAIL_LOGO_URL = "https://arrexia.app/brand/arrexia-logo-email.png
 /** @deprecated Use renderFooter() output instead. Kept for callers that reference the constant. */
 export const PLATFORM_EMAIL_FOOTER = "Powered by Arrexia";
 
-export type EmailBadge = "invoice" | "payment_reminder" | "test_email" | "newsletter";
+export type EmailBadge =
+  | "invoice"
+  | "payment_reminder"
+  | "test_email"
+  | "newsletter"
+  | "trial_lifecycle";
 
 const BADGE_LABELS: Record<EmailBadge, string> = {
   invoice: "INVOICE",
   payment_reminder: "PAYMENT REMINDER",
   test_email: "TEST EMAIL",
   newsletter: "NEWSLETTER",
+  trial_lifecycle: "ACCOUNT",
 };
 
 const LEGACY_BRAND_PATTERN = /flowcollect/gi;
@@ -537,4 +543,252 @@ export function renderNewsletterWelcomeEmail(): { html: string; text: string } {
     },
     infoBoxNote: "You are receiving this because you subscribed to Arrexia updates.",
   });
+}
+
+export type TrialLifecycleEmailContext = {
+  workspaceName: string;
+  trialEndsAt: string | null;
+  workspaceUrl: string;
+  billingUrl: string;
+};
+
+function renderTrialLifecycleShell(
+  context: TrialLifecycleEmailContext,
+  mainMessage: string,
+  options?: {
+    summaryRows?: SummaryRow[];
+    infoBoxNote?: string;
+    ctaLabel?: string;
+    ctaUrl?: string;
+  }
+): { html: string; text: string } {
+  return renderEmailShell({
+    businessName: "Arrexia",
+    logoUrl: ARREXIA_EMAIL_LOGO_URL,
+    badge: "trial_lifecycle",
+    greeting: "Hello,",
+    mainMessage,
+    summaryRows: options?.summaryRows,
+    infoBoxNote: options?.infoBoxNote,
+    ctaButton: {
+      label: options?.ctaLabel ?? "Open workspace",
+      url: options?.ctaUrl ?? context.workspaceUrl,
+    },
+  });
+}
+
+export function renderTrialStartedEmail(context: TrialLifecycleEmailContext): {
+  html: string;
+  text: string;
+  subject: string;
+} {
+  const rendered = renderTrialLifecycleShell(
+    context,
+    [
+      `Welcome to Arrexia — your ${context.trialEndsAt ? "14-day" : ""} free trial is now active for ${context.workspaceName}.`,
+      "",
+      "Arrexia helps you send invoices, track payments, and follow up on overdue balances with organized collections workflows.",
+      "",
+      "A good first step: add a client, create your first invoice, and review reminder settings when you're ready to automate follow-up.",
+    ].join("\n"),
+    {
+      summaryRows: context.trialEndsAt
+        ? [{ label: "Trial ends", value: formatDisplayDatePlain(context.trialEndsAt) }]
+        : undefined,
+      infoBoxNote:
+        "Your workspace data stays yours. Request an upgrade any time from Billing & Subscription when you need continued write access after the trial.",
+      ctaLabel: "Go to your workspace",
+    }
+  );
+
+  return {
+    ...rendered,
+    subject: "Welcome to Arrexia — your 14-day trial is active",
+  };
+}
+
+export function renderTrialSevenDaysRemainingEmail(context: TrialLifecycleEmailContext): {
+  html: string;
+  text: string;
+  subject: string;
+} {
+  const rendered = renderTrialLifecycleShell(
+    context,
+    [
+      `You have about 7 days left in your Arrexia free trial for ${context.workspaceName}.`,
+      "",
+      "You still have full access to invoices, payment tracking, and collections reminders. If you have overdue invoices, this is a good time to review reminder rules and keep cash flow moving.",
+    ].join("\n"),
+    {
+      summaryRows: context.trialEndsAt
+        ? [{ label: "Trial ends", value: formatDisplayDatePlain(context.trialEndsAt) }]
+        : undefined,
+      ctaLabel: "Continue in workspace",
+    }
+  );
+
+  return {
+    ...rendered,
+    subject: "7 days left in your Arrexia trial",
+  };
+}
+
+export function renderTrialThreeDaysRemainingEmail(context: TrialLifecycleEmailContext): {
+  html: string;
+  text: string;
+  subject: string;
+} {
+  const rendered = renderTrialLifecycleShell(
+    context,
+    [
+      `Your Arrexia free trial for ${context.workspaceName} ends in about 3 days.`,
+      "",
+      "When the trial ends, your workspace data remains available to view. Protected write actions — such as creating or changing invoices, clients, and payments — will require a paid plan.",
+      "",
+      "Request an upgrade from Billing & Subscription to keep working without interruption.",
+    ].join("\n"),
+    {
+      summaryRows: context.trialEndsAt
+        ? [{ label: "Trial ends", value: formatDisplayDatePlain(context.trialEndsAt) }]
+        : undefined,
+      ctaLabel: "Review upgrade options",
+      ctaUrl: context.billingUrl,
+    }
+  );
+
+  return {
+    ...rendered,
+    subject: "Your Arrexia trial ends in 3 days",
+  };
+}
+
+export function renderTrialOneDayRemainingEmail(context: TrialLifecycleEmailContext): {
+  html: string;
+  text: string;
+  subject: string;
+} {
+  const endDate = context.trialEndsAt ? formatDisplayDatePlain(context.trialEndsAt) : "tomorrow";
+
+  const rendered = renderTrialLifecycleShell(
+    context,
+    [
+      `Your Arrexia free trial for ${context.workspaceName} ends tomorrow (${endDate}).`,
+      "",
+      "Your workspace data will remain available. After the trial, protected write actions will require a paid plan. Upgrading restores full write access.",
+    ].join("\n"),
+    {
+      summaryRows: [{ label: "Trial ends", value: endDate }],
+      infoBoxNote: "No data is deleted when the trial ends.",
+      ctaLabel: "Request upgrade",
+      ctaUrl: context.billingUrl,
+    }
+  );
+
+  return {
+    ...rendered,
+    subject: "Your Arrexia trial ends tomorrow",
+  };
+}
+
+export function renderTrialExpiredEmail(context: TrialLifecycleEmailContext): {
+  html: string;
+  text: string;
+  subject: string;
+} {
+  const rendered = renderTrialLifecycleShell(
+    context,
+    [
+      `Your Arrexia free trial for ${context.workspaceName} has ended.`,
+      "",
+      "Your workspace data remains available to view. Creating or changing protected collection data — including invoices, clients, payments, and automated reminders — now requires a paid plan.",
+      "",
+      "Request an upgrade to restore write access.",
+    ].join("\n"),
+    {
+      infoBoxNote: "Your account and workspace remain active in read-only mode.",
+      ctaLabel: "Request upgrade",
+      ctaUrl: context.billingUrl,
+    }
+  );
+
+  return {
+    ...rendered,
+    subject: "Your Arrexia trial has ended",
+  };
+}
+
+export function renderTrialExpiredPlusThreeEmail(context: TrialLifecycleEmailContext): {
+  html: string;
+  text: string;
+  subject: string;
+} {
+  const rendered = renderTrialLifecycleShell(
+    context,
+    [
+      `Your Arrexia trial for ${context.workspaceName} ended a few days ago, and your workspace is still available.`,
+      "",
+      "If collections follow-up slipped while you evaluated Arrexia, your invoice and client history is still there. Upgrading restores write access so you can pick up where you left off.",
+    ].join("\n"),
+    {
+      ctaLabel: "Return to workspace",
+    }
+  );
+
+  return {
+    ...rendered,
+    subject: "Your Arrexia workspace is ready when you are",
+  };
+}
+
+export function renderTrialExpiredPlusSevenEmail(context: TrialLifecycleEmailContext): {
+  html: string;
+  text: string;
+  subject: string;
+} {
+  const rendered = renderTrialLifecycleShell(
+    context,
+    [
+      `This is a final reminder that your Arrexia trial for ${context.workspaceName} has ended.`,
+      "",
+      "Your data is still available in the workspace. Request an upgrade whenever you're ready to restore write access and continue managing invoices and collections in Arrexia.",
+    ].join("\n"),
+    {
+      ctaLabel: "View upgrade options",
+      ctaUrl: context.billingUrl,
+    }
+  );
+
+  return {
+    ...rendered,
+    subject: "Still interested in Arrexia?",
+  };
+}
+
+export function renderTrialLifecycleEmail(
+  eventKey:
+    | "trial_started"
+    | "trial_7_days_remaining"
+    | "trial_3_days_remaining"
+    | "trial_1_day_remaining"
+    | "trial_expired"
+    | "trial_expired_plus_3_days"
+    | "trial_expired_plus_7_days",
+  context: TrialLifecycleEmailContext
+): { html: string; text: string; subject: string } {
+  switch (eventKey) {
+    case "trial_started":
+      return renderTrialStartedEmail(context);
+    case "trial_7_days_remaining":
+      return renderTrialSevenDaysRemainingEmail(context);
+    case "trial_3_days_remaining":
+      return renderTrialThreeDaysRemainingEmail(context);
+    case "trial_1_day_remaining":
+      return renderTrialOneDayRemainingEmail(context);
+    case "trial_expired":
+      return renderTrialExpiredEmail(context);
+    case "trial_expired_plus_3_days":
+      return renderTrialExpiredPlusThreeEmail(context);
+    case "trial_expired_plus_7_days":
+      return renderTrialExpiredPlusSevenEmail(context);
+  }
 }

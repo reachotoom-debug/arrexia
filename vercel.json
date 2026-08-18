@@ -3,6 +3,10 @@
     {
       "path": "/api/internal/reminders/run",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/internal/billing/lifecycle/run",
+      "schedule": "0 7 * * *"
     }
   ]
 }

@@ -77,6 +77,9 @@ export async function createArrexiaTrialSubscription(
     .eq("id", workspaceId)
     .is("trial_consumed_at", null);
 
+  const { enqueueTrialStartedEmail } = await import("@/lib/billing/trialLifecycleScheduling");
+  enqueueTrialStartedEmail(workspaceId);
+
   return { ok: true, created: true };
 }
 

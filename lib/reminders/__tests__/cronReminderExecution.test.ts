@@ -302,9 +302,15 @@ describe("cron reminder execution (P0)", () => {
     const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as {
       crons: Array<{ path: string; schedule: string }>;
     };
-    assert.equal(vercel.crons.length, 1);
-    assert.equal(vercel.crons[0].path, "/api/internal/reminders/run");
-    assert.equal(vercel.crons[0].schedule, "0 6 * * *");
+    const reminderCron = vercel.crons.find(
+      (cron) => cron.path === "/api/internal/reminders/run"
+    );
+    assert.ok(reminderCron);
+    assert.equal(reminderCron.schedule, "0 6 * * *");
+    assert.equal(
+      vercel.crons.some((cron) => cron.path === "/api/internal/billing/lifecycle/run"),
+      true
+    );
   });
 
   it("M — cron/service-role send resolves workspace organization_id via passed client", async () => {
