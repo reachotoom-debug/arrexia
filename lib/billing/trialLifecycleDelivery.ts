@@ -149,6 +149,7 @@ export async function deliverTrialLifecycleEmail(
     trialEndsAt,
     workspaceUrl,
     billingUrl,
+    ownerDisplayName: ownerLookup.owner.displayName,
   });
 
   const sendResult = await sendEmailFn({

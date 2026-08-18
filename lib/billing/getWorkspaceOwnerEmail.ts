@@ -1,10 +1,13 @@
 import "server-only";
 
+import { extractFirstName } from "@/lib/actions/morningGreeting";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type WorkspaceOwnerContact = {
   userId: string;
   email: string;
+  /** First name derived from profiles.full_name when available. */
+  displayName: string | null;
 };
 
 export type WorkspaceOwnerLookupResult =
@@ -35,6 +38,37 @@ export function pickEarliestOwnerMember(
     }
     return a.user_id.localeCompare(b.user_id);
   })[0]!;
+}
+
+async function loadOwnerDisplayName(
+  admin: ReturnType<typeof supabaseAdmin>,
+  userId: string,
+  email: string
+): Promise<string | null> {
+  const { data: profile, error } = await admin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      `[trial-lifecycle] profile lookup failed for ${userId}:`,
+      error.message
+    );
+    return null;
+  }
+
+  const displayName = extractFirstName(profile?.full_name ?? null);
+  if (!displayName) {
+    return null;
+  }
+
+  if (displayName.toLowerCase() === email.trim().toLowerCase()) {
+    return null;
+  }
+
+  return displayName;
 }
 
 export async function getWorkspaceOwnerEmail(
@@ -78,11 +112,14 @@ export async function getWorkspaceOwnerEmail(
     return { ok: false, reason: "no_email" };
   }
 
+  const displayName = await loadOwnerDisplayName(admin, owner.user_id, email);
+
   return {
     ok: true,
     owner: {
       userId: owner.user_id,
       email,
+      displayName,
     },
   };
 }
@@ -138,7 +175,9 @@ export async function getWorkspaceOwnerEmailsByWorkspaceId(
       continue;
     }
 
-    results.set(workspaceId, { userId: owner.user_id, email });
+    const displayName = await loadOwnerDisplayName(admin, owner.user_id, email);
+
+    results.set(workspaceId, { userId: owner.user_id, email, displayName });
   }
 
   return results;

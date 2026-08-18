@@ -3,6 +3,7 @@
  * Email-client safe: inline styles, table layout, absolute image URLs.
  */
 
+import { extractFirstName } from "@/lib/actions/morningGreeting";
 import { getConfiguredAppUrl } from "@/lib/config/appUrl";
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 
@@ -550,7 +551,13 @@ export type TrialLifecycleEmailContext = {
   trialEndsAt: string | null;
   workspaceUrl: string;
   billingUrl: string;
+  ownerDisplayName?: string | null;
 };
+
+export function renderTrialLifecycleGreeting(ownerDisplayName?: string | null): string {
+  const firstName = extractFirstName(ownerDisplayName);
+  return firstName ? `Hello ${firstName},` : "Hello,";
+}
 
 function renderTrialLifecycleShell(
   context: TrialLifecycleEmailContext,
@@ -566,7 +573,7 @@ function renderTrialLifecycleShell(
     businessName: "Arrexia",
     logoUrl: ARREXIA_EMAIL_LOGO_URL,
     badge: "trial_lifecycle",
-    greeting: "Hello,",
+    greeting: renderTrialLifecycleGreeting(context.ownerDisplayName),
     mainMessage,
     summaryRows: options?.summaryRows,
     infoBoxNote: options?.infoBoxNote,

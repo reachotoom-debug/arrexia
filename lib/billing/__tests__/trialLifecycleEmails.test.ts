@@ -31,7 +31,12 @@ import {
 } from "@/lib/billing/trialLifecycleEvents";
 import { resolveWorkspaceEntitlement } from "@/lib/billing/resolveWorkspaceEntitlement";
 import { computeTrialEndsAt, TRIAL_DURATION_DAYS } from "@/lib/billing/trialConfig";
-import { renderTrialExpiredEmail, renderTrialLifecycleEmail } from "@/lib/email/templates";
+import {
+  renderTrialExpiredEmail,
+  renderTrialLifecycleEmail,
+  renderTrialLifecycleGreeting,
+  renderTrialStartedEmail,
+} from "@/lib/email/templates";
 import { verifyCronReminderAuth } from "@/lib/reminders/cronAuth";
 import type { WorkspaceSubscriptionSnapshot } from "@/lib/billing/workspaceSubscription";
 
@@ -505,7 +510,7 @@ describe("trial lifecycle delivery", () => {
         loadEntitlementFn: async () => entitlement,
         resolveOwnerFn: async () => ({
           ok: true,
-          owner: { userId: "user-owner", email: "owner@example.com" },
+          owner: { userId: "user-owner", email: "owner@example.com", displayName: null },
         }),
         sendEmailFn: async (input) => {
           sent.push({ to: input.to, subject: input.subject });
@@ -844,5 +849,66 @@ describe("pre-commit correctness audit regressions", () => {
     const runSrc = readFileSync("lib/billing/runTrialLifecycleEmails.ts", "utf8");
     assert.match(runSrc, /selectTrialLifecycleEventForRun/);
     assert.doesNotMatch(runSrc, /for \(const eventKey of eligibleEvents\)/);
+  });
+});
+
+describe("trial lifecycle greeting personalization", () => {
+  const templateContext = {
+    workspaceName: "Acme",
+    trialEndsAt: TRIAL_END,
+    workspaceUrl: "https://arrexia.app/ws-1",
+    billingUrl: "https://arrexia.app/ws-1/settings?section=billing",
+  };
+
+  it("A — owner with valid name renders Hello Mohammed,", () => {
+    assert.equal(renderTrialLifecycleGreeting("Mohammed"), "Hello Mohammed,");
+    const rendered = renderTrialStartedEmail({
+      ...templateContext,
+      ownerDisplayName: "Mohammed",
+    });
+    assert.match(rendered.text, /Hello Mohammed,/);
+    assert.match(rendered.html, /Hello Mohammed,/);
+  });
+
+  it("B — owner without name renders Hello,", () => {
+    assert.equal(renderTrialLifecycleGreeting(null), "Hello,");
+    const rendered = renderTrialExpiredEmail({
+      ...templateContext,
+      ownerDisplayName: null,
+    });
+    assert.match(rendered.text, /^Hello,/m);
+    assert.doesNotMatch(rendered.text, /Hello undefined/);
+  });
+
+  it("C — whitespace-only name falls back to Hello,", () => {
+    assert.equal(renderTrialLifecycleGreeting("   "), "Hello,");
+    assert.equal(renderTrialLifecycleGreeting("\t\n"), "Hello,");
+  });
+
+  it("D — email address is never used as greeting name", () => {
+    assert.equal(renderTrialLifecycleGreeting("arrexia@atomicmail.io"), "Hello,");
+    assert.equal(renderTrialLifecycleGreeting("arrexia@atomicmail.io "), "Hello,");
+  });
+
+  it("E — all seven lifecycle templates accept personalization consistently", () => {
+    for (const eventKey of [
+      "trial_started",
+      "trial_7_days_remaining",
+      "trial_3_days_remaining",
+      "trial_1_day_remaining",
+      "trial_expired",
+      "trial_expired_plus_3_days",
+      "trial_expired_plus_7_days",
+    ] as const) {
+      const named = renderTrialLifecycleEmail(eventKey, {
+        ...templateContext,
+        ownerDisplayName: "Mohammed",
+      });
+      assert.match(named.text, /Hello Mohammed,/);
+
+      const generic = renderTrialLifecycleEmail(eventKey, templateContext);
+      assert.match(generic.text, /Hello,/);
+      assert.doesNotMatch(generic.text, /Hello Mohammed,/);
+    }
   });
 });
