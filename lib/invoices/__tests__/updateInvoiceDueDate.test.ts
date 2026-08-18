@@ -79,9 +79,10 @@ describe("updateInvoice due-date edit contract (INV-0007)", () => {
 
     assert.match(
       createBlock,
-      /const dueDate = computeDueDate\(parsed\.issueDate, effectiveDays\)/
+      /dueDate = computeDueDate\(parsed\.issueDate, effectiveDays\)/
     );
     assert.match(createBlock, /p_due_date: dueDate/);
+    assert.doesNotMatch(createBlock, /p_due_date: parsed\.dueDate/);
   });
 
   it("InvoiceForm clears stale paymentTermsDays when preset changes", () => {
