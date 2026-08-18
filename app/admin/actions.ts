@@ -17,6 +17,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 import { getAdminRevalidatePaths } from "@/lib/admin/adminPaths";
 import { getAdminInfrastructureStatus } from "@/lib/admin/adminInfrastructure";
+import { extendWorkspaceTrial } from "@/lib/admin/extendWorkspaceTrial";
 import { repairUserWorkspace } from "@/lib/admin/repairUserWorkspace";
 import { repairWorkspaceReminders } from "@/lib/admin/repairWorkspaceReminders";
 
@@ -374,32 +375,10 @@ export async function extendWorkspaceTrialAction(
     if (!ctx.canAccessFullAdmin) {
       return { ok: false, error: "Admin setup required before extending trials" };
     }
-    const admin = supabaseAdmin();
+    const result = await extendWorkspaceTrial(workspaceId, days, supabaseAdmin());
 
-    const { data: sub, error: loadError } = await admin
-      .from("workspace_subscriptions")
-      .select("trial_ends_at")
-      .eq("workspace_id", workspaceId)
-      .maybeSingle();
-
-    if (loadError || !sub) {
-      return { ok: false, error: "Subscription not found" };
-    }
-
-    const base = sub.trial_ends_at ? new Date(sub.trial_ends_at) : new Date();
-    base.setDate(base.getDate() + days);
-
-    const { error } = await admin
-      .from("workspace_subscriptions")
-      .update({
-        trial_ends_at: base.toISOString(),
-        status: "trial",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("workspace_id", workspaceId);
-
-    if (error) {
-      return { ok: false, error: error.message };
+    if (!result.ok) {
+      return { ok: false, error: result.error };
     }
 
     await logAdminAuditEvent({
