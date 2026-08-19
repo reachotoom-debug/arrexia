@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
 import {
+  formatPublicTrialMicrocopy,
   getPlanDefinition,
   getPublicTeaserPriceDisplay,
   getEnterpriseContactHref,
+  PUBLIC_PRICING,
   trialHref,
   type PlanId,
 } from "@/lib/billing/plans";
@@ -21,8 +23,8 @@ const TEASER_PLAN_CONFIG: TeaserPlanConfig[] = [
     id: "starter",
     copy: "Everything you need to get organized and get paid.",
     features: [
-      "Up to 25 clients",
-      "Up to 50 invoices/month",
+      "After activation: up to 25 clients",
+      "After activation: up to 50 invoices/month",
       "Manual reminders",
       "Basic risk score",
     ],
@@ -33,8 +35,8 @@ const TEASER_PLAN_CONFIG: TeaserPlanConfig[] = [
     copy: "For growing businesses that want smarter collections.",
     features: [
       "Everything in Starter",
-      "Up to 250 clients",
-      "Up to 500 invoices/month",
+      "After activation: up to 250 clients",
+      "After activation: up to 500 invoices/month",
       "Automated reminders",
       "Advanced risk analysis",
     ],
@@ -42,10 +44,10 @@ const TEASER_PLAN_CONFIG: TeaserPlanConfig[] = [
   },
   {
     id: "business",
-    copy: "Higher-volume collections for growing finance teams.",
+    copy: "Unlimited collections for growing finance teams.",
     features: [
       "Everything in Pro",
-      "Higher volume limits",
+      "Unlimited clients and invoices",
       "Advanced collections workflows",
       "Priority support",
     ],
@@ -74,6 +76,9 @@ export function LandingPricingTeaser() {
           </h2>
           <p className="mt-4 text-lg text-slate-600">
             Powerful. Affordable. Built to pay for itself.
+          </p>
+          <p className="mt-4 text-sm text-slate-600 sm:text-base">
+            {formatPublicTrialMicrocopy()}. {PUBLIC_PRICING.trialSameOnEveryPlanNote}
           </p>
         </div>
 

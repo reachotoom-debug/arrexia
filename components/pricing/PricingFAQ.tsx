@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatPublicTrialMicrocopy } from "@/lib/billing/plans";
 
 const FAQ = [
   {
@@ -7,7 +8,7 @@ const FAQ = [
   },
   {
     q: "Do I need a credit card to get started?",
-    a: "No.",
+    a: `No. ${formatPublicTrialMicrocopy()}.`,
   },
   {
     q: "Can I upgrade later?",
@@ -18,8 +19,8 @@ const FAQ = [
     a: "No — freelancers, agencies, consultants, and SMBs use Arrexia.",
   },
   {
-    q: "What happens on the free plan?",
-    a: "You can use Arrexia on the free plan and upgrade to Starter or Pro when you need more capacity.",
+    q: "What happens after the free trial?",
+    a: "When your 14-day trial ends, you'll need a paid plan to keep creating and updating invoices, clients, and collections workflows. Your data stays available.",
   },
 ];
 

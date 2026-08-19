@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { formatPublicTrialMicrocopy, PUBLIC_PRICING } from "@/lib/billing/plans";
 
 type PricingHeroProps = {
   trialHref: string;
@@ -41,7 +42,8 @@ export function PricingHero({ trialHref }: PricingHeroProps) {
               </Button>
             </Link>
           </div>
-          <p className="text-sm text-slate-600">No credit card required</p>
+          <p className="text-sm text-slate-600">{formatPublicTrialMicrocopy()}</p>
+          <p className="text-sm text-slate-600">{PUBLIC_PRICING.trialSameOnEveryPlanNote}</p>
           <p className="max-w-xl text-sm text-slate-600 sm:text-base">
             Recover overdue invoices. Automate reminders. Get paid faster.
           </p>

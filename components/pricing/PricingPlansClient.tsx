@@ -70,7 +70,7 @@ export function PricingPlansClient() {
           ctaLabel="Get started free"
           ctaHref={trialHref("business")}
           showTrialMicrocopy
-          footnote="Higher limits and team controls for scaling collections."
+          footnote="Unlimited clients and invoices for scaling collections."
         />
 
         <PricingCard

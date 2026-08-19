@@ -1,3 +1,9 @@
+import {
+  TRIAL_CLIENT_LIMIT,
+  TRIAL_DURATION_DAYS,
+  TRIAL_INVOICE_LIMIT_TOTAL,
+} from "./trialConfig";
+
 export type WorkspacePlan = "free" | "starter" | "pro" | "business";
 
 /** Includes future tiers shown in marketing/billing UI but not yet stored in DB. */
@@ -18,10 +24,33 @@ export type BillingInterval = "monthly" | "annual";
 
 export const PUBLIC_PRICING = {
   trialLabel: "Try Arrexia free",
+  trialHeadline: `${TRIAL_DURATION_DAYS}-day free trial`,
   trialMicrocopy: "No credit card required",
+  trialClientAllowanceLabel: `Up to ${TRIAL_CLIENT_LIMIT} clients`,
+  trialInvoiceAllowanceLabel: `${TRIAL_INVOICE_LIMIT_TOTAL} invoices during your trial`,
+  trialSameOnEveryPlanNote: "Same trial on every plan.",
+  paidLimitsNote: "Limits below apply after paid activation.",
   annualSavingsLabel: "Save 17% — 2 months free",
   annualSavingsShortLabel: "Save 17%",
 } as const;
+
+/** Compact public trial terms for pricing cards and hero sections. */
+export function formatPublicTrialMicrocopy(): string {
+  return [
+    PUBLIC_PRICING.trialHeadline,
+    PUBLIC_PRICING.trialClientAllowanceLabel,
+    PUBLIC_PRICING.trialInvoiceAllowanceLabel,
+    PUBLIC_PRICING.trialMicrocopy,
+  ].join(" · ");
+}
+
+export function getPublicTrialMicrocopyLines(): readonly string[] {
+  return [
+    PUBLIC_PRICING.trialHeadline,
+    `${PUBLIC_PRICING.trialClientAllowanceLabel} · ${PUBLIC_PRICING.trialInvoiceAllowanceLabel}`,
+    PUBLIC_PRICING.trialMicrocopy,
+  ] as const;
+}
 
 export type PlanDefinition = {
   id: PlanId;

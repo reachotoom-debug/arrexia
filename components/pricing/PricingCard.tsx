@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FeatureItem, FeatureList } from "./FeatureList";
 import Link from "next/link";
-import { PUBLIC_PRICING } from "@/lib/billing/plans";
+import { PUBLIC_PRICING, getPublicTrialMicrocopyLines } from "@/lib/billing/plans";
 
 interface PricingCardProps {
   name: string;
@@ -112,9 +112,12 @@ export function PricingCard({
           )}
 
           {showTrialMicrocopy ? (
-            <p className="text-center text-xs text-slate-600">
-              {PUBLIC_PRICING.trialMicrocopy}
-            </p>
+            <div className="space-y-1 text-center text-xs text-slate-600">
+              {getPublicTrialMicrocopyLines().map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+              <p className="text-slate-500">{PUBLIC_PRICING.paidLimitsNote}</p>
+            </div>
           ) : null}
 
           {footnote ? (

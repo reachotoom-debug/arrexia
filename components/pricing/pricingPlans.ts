@@ -13,7 +13,6 @@ export type { BillingInterval };
 export const STARTER_FEATURES: readonly FeatureItem[] = [
   { label: "Up to 25 active clients" },
   { label: "Up to 50 invoices per month" },
-  { label: "1 workspace member" },
   { label: "Client management" },
   { label: "Invoice management" },
   { label: "Manual payment tracking" },
@@ -29,7 +28,6 @@ export const PRO_FEATURES: readonly FeatureItem[] = [
   { label: "Everything in Starter" },
   { label: "Up to 250 active clients" },
   { label: "Up to 500 invoices per month" },
-  { label: "Up to 3 workspace members" },
   { label: "Automated reminder rules" },
   { label: "Suggested reminders" },
   { label: "Collection workflows" },
@@ -42,7 +40,7 @@ export const PRO_FEATURES: readonly FeatureItem[] = [
 
 export const BUSINESS_FEATURES: readonly FeatureItem[] = [
   { label: "Everything in Pro" },
-  { label: "Higher client and invoice volume" },
+  { label: "Unlimited clients and invoices" },
   { label: "Advanced collections workflows" },
   { label: "Priority support" },
 ];

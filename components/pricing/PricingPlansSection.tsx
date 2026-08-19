@@ -1,3 +1,4 @@
+import { formatPublicTrialMicrocopy, PUBLIC_PRICING } from "@/lib/billing/plans";
 import { PricingComparison } from "./PricingComparison";
 import { PricingPlansClient } from "./PricingPlansClient";
 
@@ -13,8 +14,8 @@ export function PricingPlansSection() {
             Plans built for cash recovery
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base text-slate-600 sm:text-lg">
-            Get started free on Arrexia. Upgrade when Arrexia starts saving
-            you time and recovering overdue payments.
+            {formatPublicTrialMicrocopy()}. {PUBLIC_PRICING.trialSameOnEveryPlanNote} Upgrade when
+            Arrexia starts saving you time and recovering overdue payments.
           </p>
         </div>
 
