@@ -25,7 +25,6 @@ import {
 import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
 import { resolveWorkspaceBusinessDate } from "@/lib/invoices/workspaceInvoiceAging";
 import { formatPaymentBusinessDate } from "@/lib/payments/paymentBusinessDate";
-import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 import { canShowRecordPaymentCta } from "@/lib/invoices/invoiceFinancialState";
 import { buildInvoicePdfApiPath } from "@/lib/invoices/invoice-pdf-route";
 
@@ -45,7 +44,6 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
   const sandboxMode = isSandboxSenderActive();
   const sandboxTestRecipientEmail = getResendTestRecipientEmail();
   const supabase = await supabaseServer();
-  const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
 
   // 1) Load invoice (by id or invoice_number), including archived
   const invoiceSelect = `
@@ -130,6 +128,7 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
 
   const client = clientRes.data;
   const settings = settingsRes.data;
+  const workspaceTimeZone = settings?.timezone ?? null;
 
   // Build branding from settings (single source of truth for invoice display)
   const branding = buildInvoiceBranding(settings);

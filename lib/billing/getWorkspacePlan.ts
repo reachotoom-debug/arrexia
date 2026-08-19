@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { perfTime } from "@/lib/perf/server";
 
@@ -72,7 +74,9 @@ async function loadStoredWorkspacePlan(
   return DEFAULT_PLAN;
 }
 
-export async function getWorkspacePlan(workspaceId: string): Promise<WorkspacePlanResult> {
+async function loadWorkspacePlanUncached(
+  workspaceId: string
+): Promise<WorkspacePlanResult> {
   await loadStoredWorkspacePlan(workspaceId, supabaseAdmin());
   const billing = await getWorkspaceEntitlementForBilling(workspaceId);
 
@@ -85,3 +89,6 @@ export async function getWorkspacePlan(workspaceId: string): Promise<WorkspacePl
     entitlement: billing.entitlement,
   };
 }
+
+/** Request-scoped memoized workspace plan (one load per workspaceId per RSC request). */
+export const getWorkspacePlan = cache(loadWorkspacePlanUncached);
