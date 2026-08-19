@@ -1,40 +1,17 @@
 export function PricingROI() {
   return (
     <section className="space-y-10 lg:space-y-12">
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm lg:p-12">
-        <div className="mx-auto max-w-3xl space-y-8 text-center">
-          <h2 className="text-2xl font-semibold text-slate-900 sm:text-3xl lg:text-4xl">
-            Arrexia pays for itself
-          </h2>
-          <p className="text-base leading-relaxed text-slate-600 sm:text-lg">
-            If Arrexia helps you recover just one overdue invoice faster, the
-            subscription can already pay for itself.
-          </p>
-
-          <div className="grid gap-4 text-left sm:grid-cols-2">
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-5">
-              <p className="text-sm font-medium text-blue-700">Starter</p>
-              <p className="mt-1 text-sm text-slate-700 sm:text-base">
-                Recover a $500 invoice faster → Starter justified.
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-5">
-              <p className="text-sm font-medium text-blue-700">Pro</p>
-              <p className="mt-1 text-sm text-slate-700 sm:text-base">
-                Recover a $2,000 client payment sooner → Pro becomes insignificant.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="mx-auto max-w-3xl space-y-4 text-center">
-        <h3 className="text-xl font-semibold text-slate-900 sm:text-2xl lg:text-3xl">
-          A Cash Collection Operations Platform.
-        </h3>
+        <h2 className="text-2xl font-semibold text-slate-900 sm:text-3xl lg:text-4xl">
+          A Cash Recovery Engine — not invoice software
+        </h2>
         <p className="text-base leading-relaxed text-slate-600 sm:text-lg">
-          Arrexia helps businesses reduce overdue receivables, automate payment follow-up, and
-          improve cash flow — not just generate invoices.
+          Arrexia is an AI-powered accounts receivable and collections platform. It helps finance
+          teams reduce manual payment chasing, prioritize overdue accounts, and run consistent
+          follow-up — without replacing your accounting stack.
+        </p>
+        <p className="text-base font-medium text-slate-800 sm:text-lg">
+          Recover more cash with less manual effort.
         </p>
       </div>
     </section>

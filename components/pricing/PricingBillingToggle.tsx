@@ -47,7 +47,7 @@ export function PricingBillingToggle({ value, onChange }: PricingBillingTogglePr
                 value === "annual" ? "text-blue-50" : "text-blue-700"
               }`}
             >
-              {PUBLIC_PRICING.annualSavingsLabel}
+              {PUBLIC_PRICING.annualToggleLabel}
             </span>
           </span>
         </button>

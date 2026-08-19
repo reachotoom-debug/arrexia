@@ -20,7 +20,9 @@ interface PricingCardProps {
   secondaryBadge?: string;
   equivalentSubtext?: string;
   savingsBadge?: string;
+  normalValueSubtext?: string;
   showTrialMicrocopy?: boolean;
+  capacityItems?: readonly FeatureItem[];
 }
 
 export function PricingCard({
@@ -38,7 +40,9 @@ export function PricingCard({
   secondaryBadge,
   equivalentSubtext,
   savingsBadge,
+  normalValueSubtext,
   showTrialMicrocopy,
+  capacityItems,
 }: PricingCardProps) {
   return (
     <Card
@@ -74,6 +78,9 @@ export function PricingCard({
               <span className="text-base text-slate-600 lg:text-lg">{period}</span>
             ) : null}
           </div>
+          {normalValueSubtext ? (
+            <p className="text-sm text-slate-500">{normalValueSubtext}</p>
+          ) : null}
           {equivalentSubtext ? (
             <p className="text-sm text-slate-600">{equivalentSubtext}</p>
           ) : null}
@@ -87,6 +94,14 @@ export function PricingCard({
         <p className="text-sm text-slate-600 sm:text-base">{subtitle}</p>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-7 p-7 pt-0 lg:gap-8 lg:p-9 lg:pt-0">
+        {capacityItems && capacityItems.length > 0 ? (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Plan capacity
+            </p>
+            <FeatureList items={capacityItems} />
+          </div>
+        ) : null}
         <FeatureList items={features} />
 
         <div className="mt-auto space-y-3">

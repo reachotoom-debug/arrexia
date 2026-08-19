@@ -30,8 +30,12 @@ export const PUBLIC_PRICING = {
   trialInvoiceAllowanceLabel: `${TRIAL_INVOICE_LIMIT_TOTAL} invoices during your trial`,
   trialSameOnEveryPlanNote: "Same trial on every plan.",
   paidLimitsNote: "Limits below apply after paid activation.",
-  annualSavingsLabel: "Save 17% — 2 months free",
-  annualSavingsShortLabel: "Save 17%",
+  /** Billing toggle label when annual is available. */
+  annualToggleLabel: "Annual — 2 months free",
+  annualTwoMonthsFreeLabel: "2 months free",
+  /** @deprecated Use annualToggleLabel */
+  annualSavingsLabel: "Annual — 2 months free",
+  annualSavingsShortLabel: "2 months free",
 } as const;
 
 /** Compact public trial terms for pricing cards and hero sections. */
@@ -209,6 +213,52 @@ export function formatPublicUsd(amount: number): string {
   }).format(amount);
 }
 
+/** Monthly equivalent and other sub-dollar annual figures on public pricing. */
+export function formatPublicUsdPrecise(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+export type PublicAnnualPricingDetails = {
+  annualCharge: number;
+  annualChargeFormatted: string;
+  normalAnnualValue: number;
+  normalAnnualValueFormatted: string;
+  savingsAmount: number;
+  savingsFormatted: string;
+  savingsLabel: string;
+  monthlyEquivalentFormatted: string;
+};
+
+/** Derived from frozen monthly × 12 and catalog annualPrice — presentation only. */
+export function getPublicAnnualPricingDetails(
+  planId: "starter" | "pro" | "business",
+): PublicAnnualPricingDetails {
+  const plan = PLAN_DEFINITIONS[planId];
+  const monthly = plan.monthlyPrice ?? 0;
+  const annual = plan.annualPrice ?? 0;
+  const normalAnnualValue = monthly * 12;
+  const savingsAmount = normalAnnualValue - annual;
+  const monthlyEquivalent = annual / 12;
+
+  const savingsFormatted = formatPublicUsd(savingsAmount);
+
+  return {
+    annualCharge: annual,
+    annualChargeFormatted: formatPublicUsd(annual),
+    normalAnnualValue,
+    normalAnnualValueFormatted: formatPublicUsd(normalAnnualValue),
+    savingsAmount,
+    savingsFormatted,
+    savingsLabel: `Save ${savingsFormatted} — ${PUBLIC_PRICING.annualTwoMonthsFreeLabel}`,
+    monthlyEquivalentFormatted: formatPublicUsdPrecise(monthlyEquivalent),
+  };
+}
+
 export function formatMonthlyPrice(planId: PlanId): string {
   const plan = getPlanDefinition(planId);
   if (plan.contactSalesOnly) return "Contact Sales";
@@ -243,6 +293,8 @@ export function getBillingUiPlanLimits(planId: PlanId): string[] {
 export type PublicPlanPricingDisplay = {
   price: string;
   period: string;
+  /** Shown under annual charge — e.g. "$468 normally" */
+  normalValueSubtext?: string;
   equivalentSubtext?: string;
   savingsBadge?: string;
 };
@@ -254,10 +306,13 @@ export function getPublicPlanPricing(
   const plan = PLAN_DEFINITIONS[planId];
 
   if (interval === "annual" && plan.annualPrice) {
+    const annual = getPublicAnnualPricingDetails(planId);
     return {
-      price: formatPublicUsd(plan.annualPrice),
+      price: annual.annualChargeFormatted,
       period: "/year",
-      savingsBadge: PUBLIC_PRICING.annualSavingsLabel,
+      normalValueSubtext: `${annual.normalAnnualValueFormatted} normally`,
+      savingsBadge: annual.savingsLabel,
+      equivalentSubtext: `${annual.monthlyEquivalentFormatted}/mo billed annually`,
     };
   }
 

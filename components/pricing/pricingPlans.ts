@@ -10,29 +10,34 @@ import {
 
 export type { BillingInterval };
 
-export const STARTER_FEATURES: readonly FeatureItem[] = [
+export const STARTER_CAPACITY: readonly FeatureItem[] = [
   { label: "Up to 25 active clients" },
   { label: "Up to 50 invoices per month" },
-  { label: "Client management" },
-  { label: "Invoice management" },
+];
+
+export const PRO_CAPACITY: readonly FeatureItem[] = [
+  { label: "Up to 250 active clients" },
+  { label: "Up to 500 invoices per month" },
+];
+
+export const BUSINESS_CAPACITY: readonly FeatureItem[] = [
+  { label: "Unlimited clients and invoices" },
+];
+
+export const STARTER_FEATURES: readonly FeatureItem[] = [
+  { label: "Client & invoice management" },
   { label: "Manual payment tracking" },
   { label: "Branded PDF invoices" },
-  { label: "Basic dashboard" },
-  { label: "Basic risk score" },
-  { label: "Manual reminders" },
-  { label: "Reminder history" },
+  { label: "Basic dashboard & risk score" },
+  { label: "Manual reminders & reminder history" },
   { label: "Export data" },
 ];
 
 export const PRO_FEATURES: readonly FeatureItem[] = [
   { label: "Everything in Starter" },
-  { label: "Up to 250 active clients" },
-  { label: "Up to 500 invoices per month" },
   { label: "Automated reminder rules" },
-  { label: "Suggested reminders" },
-  { label: "Collection workflows" },
-  { label: "Advanced risk analysis" },
-  { label: "Collections dashboard" },
+  { label: "Suggested reminders & collection workflows" },
+  { label: "Advanced risk analysis & collections dashboard" },
   { label: "Email templates" },
   { label: "CSV import/export" },
   { label: "Priority support" },
@@ -40,7 +45,6 @@ export const PRO_FEATURES: readonly FeatureItem[] = [
 
 export const BUSINESS_FEATURES: readonly FeatureItem[] = [
   { label: "Everything in Pro" },
-  { label: "Unlimited clients and invoices" },
   { label: "Advanced collections workflows" },
   { label: "Priority support" },
 ];

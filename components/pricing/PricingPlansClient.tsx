@@ -5,13 +5,16 @@ import { PricingBillingToggle } from "./PricingBillingToggle";
 import { PricingCard } from "./PricingCard";
 import {
   BillingInterval,
+  BUSINESS_CAPACITY,
   BUSINESS_FEATURES,
   getBusinessPricing,
   getEnterpriseContactHref,
   getProPricing,
   getStarterPricing,
   getPublicTeaserPriceDisplay,
+  PRO_CAPACITY,
   PRO_FEATURES,
+  STARTER_CAPACITY,
   STARTER_FEATURES,
   trialHref,
 } from "./pricingPlans";
@@ -32,52 +35,58 @@ export function PricingPlansClient() {
           name="Starter"
           price={starterPricing.price}
           period={starterPricing.period}
+          normalValueSubtext={starterPricing.normalValueSubtext}
           equivalentSubtext={starterPricing.equivalentSubtext}
           savingsBadge={starterPricing.savingsBadge}
-          subtitle="For freelancers & solo businesses"
+          subtitle="Build a consistent collections process"
+          capacityItems={STARTER_CAPACITY}
           features={STARTER_FEATURES}
-          ctaLabel="Get started free"
+          ctaLabel="Start Free Trial"
           ctaHref={trialHref("starter")}
           showTrialMicrocopy
-          footnote="Perfect for freelancers and small businesses."
+          footnote="For smaller businesses replacing spreadsheets and ad-hoc payment chasing."
         />
 
         <PricingCard
           name="Pro"
           price={proPricing.price}
           period={proPricing.period}
+          normalValueSubtext={proPricing.normalValueSubtext}
           equivalentSubtext={proPricing.equivalentSubtext}
           savingsBadge={proPricing.savingsBadge}
-          subtitle="For growing agencies & SMBs"
+          subtitle="Run collections proactively"
+          capacityItems={PRO_CAPACITY}
           features={PRO_FEATURES}
-          ctaLabel="Get started free"
+          ctaLabel="Start Free Trial"
           ctaHref={trialHref("pro")}
           highlight
           badgeLabel="Most Popular"
           secondaryBadge={billingInterval === "annual" ? "Best value" : undefined}
           showTrialMicrocopy
-          footnote="Built for finance teams managing receivables at scale."
+          footnote="For growing finance teams managing larger receivables portfolios and stronger workflows."
         />
 
         <PricingCard
           name="Business"
           price={businessPricing.price}
           period={businessPricing.period}
+          normalValueSubtext={businessPricing.normalValueSubtext}
           equivalentSubtext={businessPricing.equivalentSubtext}
           savingsBadge={businessPricing.savingsBadge}
-          subtitle="For larger teams"
+          subtitle="Scale high-volume AR operations"
+          capacityItems={BUSINESS_CAPACITY}
           features={BUSINESS_FEATURES}
-          ctaLabel="Get started free"
+          ctaLabel="Start Free Trial"
           ctaHref={trialHref("business")}
           showTrialMicrocopy
-          footnote="Unlimited clients and invoices for scaling collections."
+          footnote="For organizations with substantial receivables volume and unlimited capacity needs."
         />
 
         <PricingCard
           name="Enterprise"
           price={getPublicTeaserPriceDisplay("enterprise").price}
           period={null}
-          subtitle="For organizations with custom needs"
+          subtitle="Custom collections at scale"
           features={[
             { label: "Custom usage limits" },
             { label: "Dedicated onboarding" },
@@ -86,7 +95,7 @@ export function PricingPlansClient() {
           ]}
           ctaLabel="Contact Sales"
           ctaHref={getEnterpriseContactHref()}
-          footnote="Custom terms, security, and volume pricing."
+          footnote="For larger organizations with complex security, volume, and onboarding requirements."
         />
       </div>
     </>

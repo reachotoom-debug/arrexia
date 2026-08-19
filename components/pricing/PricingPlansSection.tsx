@@ -1,6 +1,7 @@
 import { formatPublicTrialMicrocopy, PUBLIC_PRICING } from "@/lib/billing/plans";
 import { PricingComparison } from "./PricingComparison";
 import { PricingPlansClient } from "./PricingPlansClient";
+import { PricingValuePillars } from "./PricingValuePillars";
 
 export function PricingPlansSection() {
   return (
@@ -11,16 +12,18 @@ export function PricingPlansSection() {
             Pricing
           </p>
           <h2 className="mt-3 text-2xl font-semibold text-slate-900 sm:text-3xl lg:text-4xl">
-            Plans built for cash recovery
+            Collections capacity that matches your stage
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base text-slate-600 sm:text-lg">
-            {formatPublicTrialMicrocopy()}. {PUBLIC_PRICING.trialSameOnEveryPlanNote} Upgrade when
-            Arrexia starts saving you time and recovering overdue payments.
+            {formatPublicTrialMicrocopy()}. {PUBLIC_PRICING.trialSameOnEveryPlanNote}{" "}
+            {PUBLIC_PRICING.paidLimitsNote}
           </p>
         </div>
 
         <PricingPlansClient />
       </section>
+
+      <PricingValuePillars />
 
       <PricingComparison />
     </>
