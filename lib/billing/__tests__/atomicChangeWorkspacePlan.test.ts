@@ -26,7 +26,7 @@ const PAST_TRIAL_END = "2026-07-10T12:00:00.000Z";
 
 describe("rpc_change_workspace_plan_atomic migration contract", () => {
   const migration = readFileSync(
-    "supabase/migrations/20260806200000_rpc_change_workspace_plan_atomic.sql",
+    "supabase/migrations/20260822120000_annual_billing_interval.sql",
     "utf8"
   );
 
@@ -38,6 +38,11 @@ describe("rpc_change_workspace_plan_atomic migration contract", () => {
   it("locks workspace row with FOR UPDATE", () => {
     assert.match(migration, /FOR UPDATE/);
     assert.match(migration, /FROM public\.workspaces w/);
+  });
+
+  it("validates billing interval values", () => {
+    assert.match(migration, /billing_interval IN \('monthly', 'annual'\)/);
+    assert.match(migration, /invalid billing interval/);
   });
 
   it("rejects enterprise and accepts business in validation", () => {
@@ -66,6 +71,7 @@ describe("rpc_change_workspace_plan_atomic migration contract", () => {
       "current_period_starts_at",
       "current_period_ends_at",
       "cancel_at_period_end",
+      "billing_interval",
       "plan_updated_at",
       "subscription_updated_at",
     ]) {
@@ -297,6 +303,21 @@ describe("atomic snapshot helpers", () => {
     assert.ok(params);
     assert.equal(params?.p_target_plan, "pro");
     assert.equal(params?.p_subscription_status, "active");
+    assert.equal(params?.p_billing_interval, "monthly");
+  });
+
+  it("builds RPC params with annual billing interval", () => {
+    const params = buildAtomicWorkspacePlanRpcParams({
+      workspaceId: WORKSPACE_ID,
+      targetPlan: "pro",
+      syncMode: "activate_paid",
+      existingSubscription: null,
+      billingInterval: "annual",
+      now: NOW,
+    });
+
+    assert.ok(params);
+    assert.equal(params?.p_billing_interval, "annual");
   });
 
   it("verifyAtomicWorkspacePlanSnapshot enforces target/status match", () => {
@@ -311,6 +332,7 @@ describe("atomic snapshot helpers", () => {
       current_period_starts_at: NOW.toISOString(),
       current_period_ends_at: "2027-01-01T00:00:00.000Z",
       cancel_at_period_end: false,
+      billing_interval: "monthly",
       plan_updated_at: NOW.toISOString(),
       subscription_updated_at: NOW.toISOString(),
     };

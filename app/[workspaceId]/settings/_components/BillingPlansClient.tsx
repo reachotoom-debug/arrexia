@@ -15,9 +15,12 @@ import {
 import type { BillingUsageSummary } from "@/lib/billing/billingUsageTypes";
 import {
   BILLING_UI_PLANS,
+  formatBillingIntervalLabel,
   formatMonthlyPrice,
+  formatPaidSubscriptionPrice,
   getBillingUiPlanLimits,
   getPlanDefinition,
+  type BillingInterval,
   type PlanId,
   type WorkspacePlan,
 } from "@/lib/billing/plans";
@@ -106,18 +109,30 @@ export function BillingPlansClient({
   trial,
   entitlementState,
   paidPlan,
+  paidBillingInterval,
+  paidPeriodEndsAt,
   usageSummary,
 }: {
   subscription: CommercialSubscriptionPresentation;
   trial: TrialDisplayInfo | null;
   entitlementState: EntitlementState;
   paidPlan: WorkspacePlan | null;
+  paidBillingInterval: BillingInterval | null;
+  paidPeriodEndsAt: string | null;
   usageSummary: BillingUsageSummary;
 }) {
   const billingContext = { entitlementState, paidPlan };
   const activePaidPlan = entitlementState === "paid" ? paidPlan : null;
   const paidPrice =
-    activePaidPlan !== null ? formatMonthlyPrice(activePaidPlan) : null;
+    activePaidPlan !== null && paidBillingInterval
+      ? formatPaidSubscriptionPrice(activePaidPlan, paidBillingInterval)
+      : activePaidPlan !== null
+        ? formatMonthlyPrice(activePaidPlan)
+        : null;
+  const paidIntervalLabel =
+    activePaidPlan !== null && paidBillingInterval
+      ? formatBillingIntervalLabel(paidBillingInterval)
+      : null;
 
   return (
     <div className="w-full max-w-5xl space-y-6">
@@ -126,7 +141,15 @@ export function BillingPlansClient({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-base font-semibold text-slate-900">{subscription.planLabel}</p>
+              {paidIntervalLabel ? (
+                <p className="mt-0.5 text-sm text-slate-600">{paidIntervalLabel}</p>
+              ) : null}
               <p className="mt-0.5 text-sm text-slate-600">{subscription.statusLabel}</p>
+              {paidPeriodEndsAt ? (
+                <p className="mt-0.5 text-sm text-slate-600">
+                  Renews {formatDateOnlyField(paidPeriodEndsAt)}
+                </p>
+              ) : null}
             </div>
             {paidPrice ? (
               <p className="text-sm font-medium text-slate-700">{paidPrice}</p>

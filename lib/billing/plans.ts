@@ -22,6 +22,22 @@ export function getWorkspacePlanRank(plan: WorkspacePlan): number {
 
 export type BillingInterval = "monthly" | "annual";
 
+export function parseBillingInterval(value: string | null | undefined): BillingInterval | null {
+  if (value === "monthly" || value === "annual") {
+    return value;
+  }
+  return null;
+}
+
+/** Legacy or missing rows are treated as monthly paid cadence. */
+export function normalizeBillingInterval(value: string | null | undefined): BillingInterval {
+  return value === "annual" ? "annual" : "monthly";
+}
+
+export function formatBillingIntervalLabel(interval: BillingInterval): string {
+  return interval === "annual" ? "Annual" : "Monthly";
+}
+
 export const PUBLIC_PRICING = {
   trialLabel: "Try Arrexia free",
   trialHeadline: `${TRIAL_DURATION_DAYS}-day free trial`,
@@ -264,6 +280,20 @@ export function formatMonthlyPrice(planId: PlanId): string {
   if (plan.contactSalesOnly) return "Contact Sales";
   if (plan.comingSoon) return "Coming soon";
   if (plan.monthlyPrice === null || plan.monthlyPrice === 0) return "$0/mo";
+  return `$${plan.monthlyPrice}/mo`;
+}
+
+export function formatPaidSubscriptionPrice(
+  planId: WorkspacePlan,
+  interval: BillingInterval
+): string {
+  const plan = getPlanDefinition(planId);
+  if (interval === "annual" && plan.annualPrice) {
+    return `${formatPublicUsd(plan.annualPrice)}/year`;
+  }
+  if (plan.monthlyPrice === null) {
+    return "Contact Sales";
+  }
   return `$${plan.monthlyPrice}/mo`;
 }
 

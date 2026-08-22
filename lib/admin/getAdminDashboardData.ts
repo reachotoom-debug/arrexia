@@ -42,6 +42,7 @@ export type FounderSubscriberRow = {
   workspaceId: string;
   plan: WorkspacePlan;
   subscriptionStatus: string;
+  billingInterval: "monthly" | "annual";
   trialStartsAt: string | null;
   trialEndsAt: string | null;
   renewalDate: string | null;
@@ -147,6 +148,7 @@ type WorkspaceSubscriptionRow = {
   workspace_id: string;
   status: string;
   plan: string;
+  billing_interval?: string | null;
   trial_starts_at: string | null;
   trial_ends_at: string | null;
   current_period_starts_at: string | null;
@@ -405,6 +407,7 @@ export async function getFounderSubscribersData(): Promise<FounderSubscriberRow[
       subscriptionStatus: core.subscriptionsTableAvailable
         ? sub?.status ?? (plan === "free" ? "trial" : "active")
         : "manual",
+      billingInterval: sub?.billing_interval === "annual" ? "annual" : "monthly",
       trialStartsAt: core.subscriptionsTableAvailable
         ? sub?.trial_starts_at ?? null
         : null,

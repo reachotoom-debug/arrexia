@@ -6,6 +6,7 @@ export function subscriptionSnapshot(
     Pick<WorkspaceSubscriptionSnapshot, "status" | "plan">
 ): WorkspaceSubscriptionSnapshot {
   return {
+    billingInterval: "monthly",
     trialStartsAt: null,
     trialEndsAt: null,
     trialConsumedAt: null,

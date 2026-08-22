@@ -2,7 +2,7 @@ import "server-only";
 
 import { isPostgrestMissingTableError } from "@/lib/admin/postgrestErrors";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getPlanStorageLimits, isWorkspacePlan, type WorkspacePlan } from "./plans";
+import { getPlanStorageLimits, isWorkspacePlan, normalizeBillingInterval, type BillingInterval, type WorkspacePlan } from "./plans";
 import { buildSubscriptionUpsertPayload } from "./subscriptionSyncPayload";
 import type { SubscriptionSyncMode } from "./planMutationPolicy";
 import type {
@@ -24,6 +24,7 @@ export type AtomicWorkspacePlanSnapshot = {
   current_period_starts_at: string | null;
   current_period_ends_at: string | null;
   cancel_at_period_end: boolean;
+  billing_interval?: string;
   plan_updated_at: string;
   subscription_updated_at: string;
 };
@@ -33,6 +34,7 @@ export type AtomicWorkspacePlanChangeArgs = {
   targetPlan: WorkspacePlan;
   syncMode: SubscriptionSyncMode;
   existingSubscription: WorkspaceSubscriptionSnapshot | null;
+  billingInterval?: BillingInterval;
   now?: Date;
 };
 
@@ -96,6 +98,7 @@ export function parseAtomicWorkspacePlanSnapshot(
     current_period_starts_at: parseIso(row.current_period_starts_at),
     current_period_ends_at: parseIso(row.current_period_ends_at),
     cancel_at_period_end: parseBoolean(row.cancel_at_period_end),
+    billing_interval: String(row.billing_interval ?? "monthly"),
     plan_updated_at: String(row.plan_updated_at ?? ""),
     subscription_updated_at: String(row.subscription_updated_at ?? ""),
   };
@@ -111,7 +114,8 @@ export function buildAtomicWorkspacePlanRpcParams(
     args.targetPlan,
     args.syncMode,
     args.existingSubscription,
-    now
+    now,
+    { billingInterval: args.billingInterval ?? normalizeBillingInterval(args.existingSubscription?.billingInterval) }
   );
 
   if (!subscriptionPayload) {
@@ -131,6 +135,7 @@ export function buildAtomicWorkspacePlanRpcParams(
     p_current_period_starts_at: subscriptionPayload.current_period_starts_at ?? null,
     p_current_period_ends_at: subscriptionPayload.current_period_ends_at ?? null,
     p_cancel_at_period_end: subscriptionPayload.cancel_at_period_end ?? false,
+    p_billing_interval: subscriptionPayload.billing_interval ?? "monthly",
   };
 }
 

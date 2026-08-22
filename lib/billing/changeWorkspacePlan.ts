@@ -25,7 +25,7 @@ import {
   type EffectivePlanEntitlementSource,
 } from "./planMutationPolicy";
 import { buildSubscriptionUpsertPayload } from "./subscriptionSyncPayload";
-import { isWorkspacePlan, type WorkspacePlan } from "./plans";
+import { isWorkspacePlan, type BillingInterval, type WorkspacePlan } from "./plans";
 import { resolveEffectiveWorkspacePlan } from "./resolveEffectiveWorkspacePlan";
 import {
   loadWorkspaceSubscription,
@@ -39,6 +39,7 @@ export type ChangeWorkspacePlanCommand = {
   source: PlanMutationSource;
   actorUserId: string;
   allowAdminOverride?: boolean;
+  billingInterval?: BillingInterval;
   reason?: string;
   now?: Date;
 };
@@ -148,7 +149,8 @@ function resolveExpectedSubscriptionStatus(
     targetPlan,
     syncMode,
     existing,
-    now
+    now,
+    { billingInterval: "monthly" }
   );
   if (!payload || typeof payload.status !== "string") {
     return null;
@@ -243,12 +245,15 @@ export async function changeWorkspacePlan(
     };
   }
 
+  const billingInterval: BillingInterval = command.billingInterval ?? "monthly";
+
   const atomicResult = await executeAtomicWorkspacePlanChange(
     {
       workspaceId: command.workspaceId,
       targetPlan,
       syncMode,
       existingSubscription: before.subscription,
+      billingInterval,
       now,
     },
     supabaseAdmin()

@@ -1,6 +1,11 @@
 import { isPostgrestMissingTableError } from "@/lib/admin/postgrestErrors";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { isWorkspacePlan, type WorkspacePlan } from "./plans";
+import {
+  isWorkspacePlan,
+  normalizeBillingInterval,
+  type BillingInterval,
+  type WorkspacePlan,
+} from "./plans";
 
 export type WorkspaceSubscriptionStatus =
   | "trial"
@@ -12,6 +17,8 @@ export type WorkspaceSubscriptionStatus =
 export type WorkspaceSubscriptionSnapshot = {
   status: WorkspaceSubscriptionStatus;
   plan: WorkspacePlan;
+  /** Normalized on read; legacy fixtures may omit. */
+  billingInterval?: BillingInterval;
   trialStartsAt: string | null;
   trialEndsAt: string | null;
   trialConsumedAt: string | null;
@@ -24,6 +31,7 @@ type SubscriptionAdmin = Pick<ReturnType<typeof supabaseAdmin>, "from">;
 function mapSubscriptionRow(row: {
   status: string;
   plan: string;
+  billing_interval?: string | null;
   trial_starts_at: string | null;
   trial_ends_at: string | null;
   trial_consumed_at?: string | null;
@@ -36,6 +44,7 @@ function mapSubscriptionRow(row: {
   return {
     status,
     plan,
+    billingInterval: normalizeBillingInterval(row.billing_interval),
     trialStartsAt: row.trial_starts_at,
     trialEndsAt: row.trial_ends_at,
     trialConsumedAt: row.trial_consumed_at ?? row.trial_starts_at ?? null,
@@ -51,7 +60,7 @@ export async function loadWorkspaceSubscription(
   const { data, error } = await admin
     .from("workspace_subscriptions")
     .select(
-      "status, plan, trial_starts_at, trial_ends_at, trial_consumed_at, current_period_starts_at, current_period_ends_at"
+      "status, plan, billing_interval, trial_starts_at, trial_ends_at, trial_consumed_at, current_period_starts_at, current_period_ends_at"
     )
     .eq("workspace_id", workspaceId)
     .maybeSingle();
@@ -59,6 +68,28 @@ export async function loadWorkspaceSubscription(
   if (error) {
     if (isPostgrestMissingTableError(error)) {
       return null;
+    }
+    if (error.message?.includes("billing_interval")) {
+      const { data: legacyData, error: legacyError } = await admin
+        .from("workspace_subscriptions")
+        .select(
+          "status, plan, trial_starts_at, trial_ends_at, trial_consumed_at, current_period_starts_at, current_period_ends_at"
+        )
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+
+      if (legacyError) {
+        if (isPostgrestMissingTableError(legacyError)) {
+          return null;
+        }
+        throw new Error(`Failed to load workspace subscription: ${legacyError.message}`);
+      }
+
+      if (!legacyData) {
+        return null;
+      }
+
+      return mapSubscriptionRow({ ...legacyData, billing_interval: "monthly" });
     }
     throw new Error(`Failed to load workspace subscription: ${error.message}`);
   }

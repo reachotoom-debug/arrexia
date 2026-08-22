@@ -14,6 +14,7 @@ type SubscriptionRow = {
   plan: string;
   status: string;
   payment_provider?: string;
+  billing_interval?: string;
   trial_starts_at: string | null;
   trial_ends_at: string | null;
   current_period_starts_at: string | null;
@@ -283,6 +284,7 @@ class BillingQueryBuilder {
 }
 
 const VALID_PLANS = new Set(["free", "starter", "pro", "business"]);
+const VALID_INTERVALS = new Set(["monthly", "annual"]);
 const VALID_STATUSES = new Set(["trial", "active", "past_due", "cancelled", "expired"]);
 
 function executeAtomicRpc(
@@ -300,10 +302,13 @@ function executeAtomicRpc(
     return { data: null, error: { message: "atomic rpc failed", code: "P0001" } };
   }
 
+  const billingInterval = String(params.p_billing_interval ?? "monthly");
+
   if (
     !VALID_PLANS.has(targetPlan) ||
     !VALID_PLANS.has(subscriptionPlan) ||
-    !VALID_STATUSES.has(subscriptionStatus)
+    !VALID_STATUSES.has(subscriptionStatus) ||
+    !VALID_INTERVALS.has(billingInterval)
   ) {
     return { data: null, error: { message: "invalid plan or status", code: "22023" } };
   }
@@ -334,6 +339,7 @@ function executeAtomicRpc(
     plan: subscriptionPlan,
     status: subscriptionStatus,
     payment_provider: String(params.p_payment_provider ?? "manual"),
+    billing_interval: billingInterval,
     trial_starts_at: (params.p_trial_starts_at as string | null) ?? null,
     trial_ends_at: (params.p_trial_ends_at as string | null) ?? null,
     current_period_starts_at: (params.p_current_period_starts_at as string | null) ?? null,
@@ -369,6 +375,7 @@ function executeAtomicRpc(
     trial_ends_at: subscriptionRow.trial_ends_at,
     current_period_starts_at: subscriptionRow.current_period_starts_at,
     current_period_ends_at: subscriptionRow.current_period_ends_at,
+    billing_interval: subscriptionRow.billing_interval,
     cancel_at_period_end: Boolean(params.p_cancel_at_period_end ?? false),
     plan_updated_at: nowIso,
     subscription_updated_at: nowIso,

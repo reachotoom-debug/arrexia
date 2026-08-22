@@ -56,7 +56,11 @@ export default async function AdminSubscribersPage() {
                     <AdminDateTimeCell value={row.lastSignInAt} />
                   </td>
                   <td className="px-4 py-3">
-                    <ChangeWorkspacePlanForm workspaceId={row.workspaceId} currentPlan={row.plan} />
+                    <ChangeWorkspacePlanForm
+                      workspaceId={row.workspaceId}
+                      currentPlan={row.plan}
+                      currentBillingInterval={row.billingInterval}
+                    />
                   </td>
                 </tr>
               ))}

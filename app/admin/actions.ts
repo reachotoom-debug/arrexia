@@ -12,6 +12,13 @@ import {
   changeWorkspacePlan,
   parseAssignableWorkspacePlan,
 } from "@/lib/billing/changeWorkspacePlan";
+import { computeManualRenewalPeriodUpdate } from "@/lib/billing/billingPeriod";
+import { isPaidAssignablePlan } from "@/lib/billing/planMutationPolicy";
+import {
+  normalizeBillingInterval,
+  parseBillingInterval,
+} from "@/lib/billing/plans";
+import { loadWorkspaceSubscription } from "@/lib/billing/workspaceSubscription";
 import { isPostgrestMissingTableError } from "@/lib/admin/postgrestErrors";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -29,7 +36,8 @@ function revalidateAdmin() {
 
 export async function adminSetWorkspacePlanAction(
   workspaceId: string,
-  plan: string
+  plan: string,
+  billingIntervalInput?: string
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -51,12 +59,21 @@ export async function adminSetWorkspacePlanAction(
       return { ok: false, error: "Invalid plan" };
     }
 
+    let billingInterval = parseBillingInterval(billingIntervalInput) ?? "monthly";
+    if (billingIntervalInput && !parseBillingInterval(billingIntervalInput)) {
+      return { ok: false, error: "Invalid billing interval" };
+    }
+    if (!isPaidAssignablePlan(targetPlan)) {
+      billingInterval = "monthly";
+    }
+
     const result = await changeWorkspacePlan({
       workspaceId,
       targetPlan,
       source: "founder_admin",
       actorUserId: ctx.user.id,
       allowAdminOverride: true,
+      billingInterval,
     });
 
     if (!result.ok) {
@@ -70,6 +87,7 @@ export async function adminSetWorkspacePlanAction(
       targetId: workspaceId,
       metadata: {
         plan: targetPlan,
+        billingInterval: isPaidAssignablePlan(targetPlan) ? billingInterval : "monthly",
         previousEffectivePlan: result.previousEffectivePlan,
         previousStoredPlan: result.previousStoredPlan,
         newEffectivePlan: result.newEffectivePlan,
@@ -409,15 +427,20 @@ export async function markWorkspaceRenewedAction(
     }
     const admin = supabaseAdmin();
     const now = new Date();
-    const nextPeriod = new Date(now);
-    nextPeriod.setDate(nextPeriod.getDate() + 30);
+    const existing = await loadWorkspaceSubscription(workspaceId, admin);
+    const billingInterval = normalizeBillingInterval(existing?.billingInterval);
+    const periodUpdate = computeManualRenewalPeriodUpdate(now, {
+      currentPeriodStartsAt: existing?.currentPeriodStartsAt ?? null,
+      currentPeriodEndsAt: existing?.currentPeriodEndsAt ?? null,
+      billingInterval,
+    });
 
     const { error } = await admin
       .from("workspace_subscriptions")
       .update({
         status: "active",
-        current_period_starts_at: now.toISOString(),
-        current_period_ends_at: nextPeriod.toISOString(),
+        current_period_starts_at: periodUpdate.currentPeriodStartsAt,
+        current_period_ends_at: periodUpdate.currentPeriodEndsAt,
         updated_at: now.toISOString(),
       })
       .eq("workspace_id", workspaceId);
