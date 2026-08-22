@@ -167,6 +167,138 @@ describe("annual billing lifecycle V1", () => {
     assert.equal(state.plans[0]?.plan, "free");
   });
 
+  it("same plan + same interval is a no-op for founder admin", async () => {
+    const state = installMock();
+    seedPlan(state, WORKSPACE_ID, "pro");
+    seedSubscription(state, WORKSPACE_ID, {
+      plan: "pro",
+      status: "active",
+      billing_interval: "annual",
+      trial_starts_at: null,
+      trial_ends_at: null,
+      current_period_starts_at: "2026-08-22T02:22:15.052Z",
+      current_period_ends_at: "2027-08-22T02:22:15.052Z",
+    });
+    const subscriptionsBefore = state.subscriptions.length;
+
+    const result = await changeWorkspacePlan({
+      workspaceId: WORKSPACE_ID,
+      targetPlan: "pro",
+      source: "founder_admin",
+      actorUserId: ACTOR_ID,
+      billingInterval: "annual",
+      now: NOW,
+    });
+
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.transitionType, "no_op");
+    }
+    assert.equal(state.subscriptions.length, subscriptionsBefore);
+    assert.equal(state.subscriptions[0]?.billing_interval, "annual");
+    assert.equal(state.subscriptions[0]?.current_period_ends_at, "2027-08-22T02:22:15.052Z");
+  });
+
+  it("Pro Annual → Pro Monthly persists interval and recalculates monthly period", async () => {
+    const state = installMock();
+    seedPlan(state, WORKSPACE_ID, "pro");
+    seedSubscription(state, WORKSPACE_ID, {
+      plan: "pro",
+      status: "active",
+      billing_interval: "annual",
+      trial_starts_at: null,
+      trial_ends_at: null,
+      current_period_starts_at: "2026-08-22T02:22:15.052Z",
+      current_period_ends_at: "2027-08-22T02:22:15.052Z",
+    });
+
+    const result = await changeWorkspacePlan({
+      workspaceId: WORKSPACE_ID,
+      targetPlan: "pro",
+      source: "founder_admin",
+      actorUserId: ACTOR_ID,
+      billingInterval: "monthly",
+      now: NOW,
+    });
+
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.transitionType, "admin_assignment");
+      assert.equal(result.newStoredPlan, "pro");
+    }
+    const sub = state.subscriptions[0];
+    assert.equal(sub?.plan, "pro");
+    assert.equal(sub?.status, "active");
+    assert.equal(sub?.billing_interval, "monthly");
+    assert.equal(sub?.current_period_starts_at, NOW.toISOString());
+    assert.equal(
+      sub?.current_period_ends_at,
+      computePaidPeriodEnd(NOW, "monthly").toISOString()
+    );
+  });
+
+  it("Pro Monthly → Pro Annual persists interval and recalculates annual period", async () => {
+    const state = installMock();
+    seedPlan(state, WORKSPACE_ID, "pro");
+    seedSubscription(state, WORKSPACE_ID, {
+      plan: "pro",
+      status: "active",
+      billing_interval: "monthly",
+      trial_starts_at: null,
+      trial_ends_at: null,
+      current_period_starts_at: NOW.toISOString(),
+      current_period_ends_at: computePaidPeriodEnd(NOW, "monthly").toISOString(),
+    });
+
+    const result = await changeWorkspacePlan({
+      workspaceId: WORKSPACE_ID,
+      targetPlan: "pro",
+      source: "founder_admin",
+      actorUserId: ACTOR_ID,
+      billingInterval: "annual",
+      now: NOW,
+    });
+
+    assert.equal(result.ok, true);
+    const sub = state.subscriptions[0];
+    assert.equal(sub?.plan, "pro");
+    assert.equal(sub?.billing_interval, "annual");
+    assert.equal(sub?.current_period_starts_at, NOW.toISOString());
+    assert.equal(
+      sub?.current_period_ends_at,
+      computePaidPeriodEnd(NOW, "annual").toISOString()
+    );
+  });
+
+  it("customer interval-only change on current paid plan remains blocked", async () => {
+    const state = installMock();
+    seedPlan(state, WORKSPACE_ID, "pro");
+    seedSubscription(state, WORKSPACE_ID, {
+      plan: "pro",
+      status: "active",
+      billing_interval: "annual",
+      trial_starts_at: null,
+      trial_ends_at: null,
+      current_period_starts_at: NOW.toISOString(),
+      current_period_ends_at: computePaidPeriodEnd(NOW, "annual").toISOString(),
+    });
+
+    const result = await changeWorkspacePlan({
+      workspaceId: WORKSPACE_ID,
+      targetPlan: "pro",
+      source: "customer_settings",
+      actorUserId: ACTOR_ID,
+      billingInterval: "monthly",
+      now: NOW,
+    });
+
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.code, "PAYMENT_PROVIDER_REQUIRED");
+    }
+    assert.equal(state.subscriptions[0]?.billing_interval, "annual");
+  });
+
   it("monthly and annual share the same entitlement limits per plan", () => {
     for (const plan of ["starter", "pro", "business"] as const) {
       const limits = getPlanStorageLimits(plan);

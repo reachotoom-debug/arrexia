@@ -1,5 +1,5 @@
-import type { WorkspacePlan } from "./plans";
-import { getWorkspacePlanRank } from "./plans";
+import type { WorkspacePlan, BillingInterval } from "./plans";
+import { getWorkspacePlanRank, normalizeBillingInterval } from "./plans";
 import {
   resolveEffectiveWorkspacePlan,
   type EffectivePlanEntitlementSource,
@@ -144,6 +144,27 @@ export function needsSubscriptionRepair(
     return true;
   }
   return false;
+}
+
+/** True when founder-admin requests a paid cadence change on an active subscription. */
+export function needsBillingIntervalMutation(
+  subscription: WorkspaceSubscriptionSnapshot | null,
+  targetBillingInterval: BillingInterval,
+  targetPlan: WorkspacePlan
+): boolean {
+  if (!isPaidAssignablePlan(targetPlan)) {
+    return false;
+  }
+  if (
+    !subscription ||
+    (subscription.status !== "active" && subscription.status !== "past_due")
+  ) {
+    return false;
+  }
+  if (subscription.plan !== targetPlan) {
+    return false;
+  }
+  return normalizeBillingInterval(subscription.billingInterval) !== targetBillingInterval;
 }
 
 export function assertCustomerPlanChangeAllowed(

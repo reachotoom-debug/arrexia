@@ -19,13 +19,14 @@ import {
   isPaidAssignablePlan,
   needsSubscriptionRepair,
   resolveSubscriptionSyncMode,
+  needsBillingIntervalMutation,
   successMessageForTransition,
   type PlanMutationSource,
   type PlanTransitionType,
   type EffectivePlanEntitlementSource,
 } from "./planMutationPolicy";
 import { buildSubscriptionUpsertPayload } from "./subscriptionSyncPayload";
-import { isWorkspacePlan, type BillingInterval, type WorkspacePlan } from "./plans";
+import { isWorkspacePlan, normalizeBillingInterval, type BillingInterval, type WorkspacePlan } from "./plans";
 import { resolveEffectiveWorkspacePlan } from "./resolveEffectiveWorkspacePlan";
 import {
   loadWorkspaceSubscription,
@@ -142,7 +143,8 @@ function resolveExpectedSubscriptionStatus(
   targetPlan: WorkspacePlan,
   syncMode: ReturnType<typeof resolveSubscriptionSyncMode>,
   existing: WorkspaceSubscriptionSnapshot | null,
-  now: Date
+  now: Date,
+  billingInterval: BillingInterval = "monthly"
 ): WorkspaceSubscriptionStatus | null {
   const payload = buildSubscriptionUpsertPayload(
     "00000000-0000-0000-0000-000000000000",
@@ -150,7 +152,7 @@ function resolveExpectedSubscriptionStatus(
     syncMode,
     existing,
     now,
-    { billingInterval: "monthly" }
+    { billingInterval }
   );
   if (!payload || typeof payload.status !== "string") {
     return null;
@@ -183,6 +185,14 @@ export async function changeWorkspacePlan(
     now
   );
 
+  const billingInterval: BillingInterval = command.billingInterval ?? "monthly";
+
+  const billingIntervalChange = needsBillingIntervalMutation(
+    before.subscription,
+    billingInterval,
+    targetPlan
+  );
+
   if (command.source === "customer_settings") {
     const policy = assertCustomerPlanChangeAllowed(
       before.effectivePlan,
@@ -213,6 +223,14 @@ export async function changeWorkspacePlan(
       };
     }
 
+    if (billingIntervalChange) {
+      return {
+        ok: false,
+        code: "PAYMENT_PROVIDER_REQUIRED",
+        error: CUSTOMER_PAID_ACTIVATION_BLOCKED_MESSAGE,
+      };
+    }
+
     if (!isPaidAssignablePlan(targetPlan)) {
       return unsupportedPlanFailure();
     }
@@ -230,7 +248,7 @@ export async function changeWorkspacePlan(
     transition === "no_op" &&
     needsSubscriptionRepair(resolution, targetPlan, now);
 
-  if (transition === "no_op" && !repairOnly) {
+  if (transition === "no_op" && !repairOnly && !billingIntervalChange) {
     return {
       ok: true,
       previousEffectivePlan: before.effectivePlan,
@@ -245,13 +263,14 @@ export async function changeWorkspacePlan(
     };
   }
 
-  const billingInterval: BillingInterval = command.billingInterval ?? "monthly";
+  const effectiveSyncMode =
+    billingIntervalChange && syncMode === "none" ? "activate_paid" : syncMode;
 
   const atomicResult = await executeAtomicWorkspacePlanChange(
     {
       workspaceId: command.workspaceId,
       targetPlan,
-      syncMode,
+      syncMode: effectiveSyncMode,
       existingSubscription: before.subscription,
       billingInterval,
       now,
@@ -272,16 +291,19 @@ export async function changeWorkspacePlan(
   const after = await loadBillingSnapshot(command.workspaceId, now);
   const expectedStatus = resolveExpectedSubscriptionStatus(
     targetPlan,
-    syncMode,
+    effectiveSyncMode,
     before.subscription,
-    now
+    now,
+    billingInterval
   );
 
   if (
     after.storedPlan !== targetPlan ||
     after.subscription?.plan !== targetPlan ||
     (expectedStatus !== null && after.subscriptionStatus !== expectedStatus) ||
-    after.effectivePlan !== targetPlan
+    after.effectivePlan !== targetPlan ||
+    (billingIntervalChange &&
+      normalizeBillingInterval(after.subscription?.billingInterval) !== billingInterval)
   ) {
     console.error("[changeWorkspacePlan] post-mutation verification failed", {
       workspaceId: command.workspaceId,
@@ -308,8 +330,15 @@ export async function changeWorkspacePlan(
     newEffectivePlan: after.effectivePlan,
     subscriptionStatus: after.subscriptionStatus,
     entitlementSource: after.entitlementSource,
-    transitionType: repairOnly ? "reactivation" : transition,
-    message: successMessageForTransition(targetPlan, repairOnly ? "reactivation" : transition),
+    transitionType: repairOnly
+      ? "reactivation"
+      : billingIntervalChange
+        ? "admin_assignment"
+        : transition,
+    message: successMessageForTransition(
+      targetPlan,
+      repairOnly ? "reactivation" : billingIntervalChange ? "admin_assignment" : transition
+    ),
   };
 }
 
