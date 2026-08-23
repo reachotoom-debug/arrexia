@@ -2,7 +2,6 @@
 
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 import { formatCurrency } from "@/lib/format/currency";
-import { buildAppUrl } from "@/lib/config/appUrl";
 import { upgradeLegacyCanonicalReminderCopy } from "./canonicalDefaults";
 import { computeReminderDaysOverdue } from "./calendarOverdue";
 
@@ -41,15 +40,13 @@ export type ReminderTemplateContext = {
 export function buildReminderTemplateContext(args: {
   invoiceView: InvoiceForRender;
   client: { name?: string | null; email?: string | null } | null;
-  workspaceId?: string;
-  invoiceId?: string;
-  /** Workspace-local or rule occurrence reference date (YYYY-MM-DD). */
-  referenceDate?: string | null;
+  /** Public customer-safe invoice URL (/i/{token}). Required for link template variables. */
+  publicInvoiceUrl?: string | null;
   /** Precomputed overdue days; must match email shell when provided by send.ts. */
+  referenceDate?: string | null;
   daysOverdue?: number;
 }): ReminderTemplateContext {
-  const { invoiceView, client, workspaceId, invoiceId, referenceDate, daysOverdue } =
-    args;
+  const { invoiceView, client, publicInvoiceUrl, referenceDate, daysOverdue } = args;
 
   const clientName = client?.name ?? "";
   const clientEmail = client?.email ?? "";
@@ -75,10 +72,9 @@ export function buildReminderTemplateContext(args: {
       referenceDate: referenceDate ?? null,
     });
 
-  const paymentLink =
-    workspaceId && invoiceId
-      ? buildAppUrl(`/${workspaceId}/invoices/${invoiceId}`)
-      : "";
+  // Legacy {{payment_link}} alias: previously pointed at authenticated workspace URLs.
+  // Now resolves to the public invoice URL for backward compatibility with saved templates.
+  const publicLink = publicInvoiceUrl?.trim() ?? "";
 
   const replacements: Record<string, string> = {
     client_name: clientName,
@@ -92,7 +88,9 @@ export function buildReminderTemplateContext(args: {
     currency: currency,
     workspace_name: workspaceName,
     days_overdue: String(resolvedDaysOverdue),
-    payment_link: paymentLink,
+    payment_link: publicLink,
+    invoice_link: publicLink,
+    view_invoice_link: publicLink,
   };
 
   return {

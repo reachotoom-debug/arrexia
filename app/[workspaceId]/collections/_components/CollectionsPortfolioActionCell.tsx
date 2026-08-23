@@ -66,6 +66,8 @@ export function CollectionsPortfolioActionCell({
           </>
         ) : null}
         <WhatsAppCollectionLink
+          workspaceId={workspaceId}
+          invoiceId={invoiceId}
           phone={clientPhone}
           clientCountry={clientCountry}
           clientName={clientName}

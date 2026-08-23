@@ -48,6 +48,8 @@ export function CollectionActionCell({
 
   const whatsAppLink = (
     <WhatsAppCollectionLink
+      workspaceId={workspaceId}
+      invoiceId={invoiceId}
       phone={clientPhone}
       clientCountry={clientCountry}
       clientName={clientName}

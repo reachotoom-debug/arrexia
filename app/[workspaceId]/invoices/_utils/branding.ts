@@ -5,6 +5,7 @@
 
 import type { Database } from "@/types/supabase/index";
 import { formatAddressLines } from "@/lib/invoices/invoiceDisplay";
+import type { PublicInvoiceSettingsRow } from "@/lib/invoices/publicInvoiceSettingsSelect";
 
 type SettingsRow = Database["public"]["Tables"]["settings"]["Row"];
 
@@ -34,7 +35,9 @@ export type InvoiceBranding = {
   currencyCode: string;
 };
 
-export function buildInvoiceBranding(settings: SettingsRow | null): InvoiceBranding {
+export function buildInvoiceBranding(
+  settings: PublicInvoiceSettingsRow | SettingsRow | null
+): InvoiceBranding {
   const s = settings;
 
   const fromName =

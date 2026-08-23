@@ -434,6 +434,7 @@ export type Database = {
           payment_terms_days: number | null
           pdf_url: string | null
           po_number: string | null
+          public_access_token: string | null
           status: string
           subtotal: number | null
           tax_amount: number | null
@@ -463,6 +464,7 @@ export type Database = {
           payment_terms_days?: number | null
           pdf_url?: string | null
           po_number?: string | null
+          public_access_token?: string | null
           status?: string
           subtotal?: number | null
           tax_amount?: number | null
@@ -492,6 +494,7 @@ export type Database = {
           payment_terms_days?: number | null
           pdf_url?: string | null
           po_number?: string | null
+          public_access_token?: string | null
           status?: string
           subtotal?: number | null
           tax_amount?: number | null

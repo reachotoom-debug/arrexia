@@ -5,6 +5,7 @@ import {
   COLLECTION_MESSAGE_CTA,
   formatCollectionMessageStatusLine,
 } from "@/lib/collections/collectionMessageFormat";
+import { formatPublicInvoiceLinkBlock } from "@/lib/invoices/publicInvoiceMessageLink";
 import { formatMoney } from "@/lib/utils/format-money";
 
 export type CollectionWhatsAppMessageInput = {
@@ -17,6 +18,8 @@ export type CollectionWhatsAppMessageInput = {
   daysOverdue: number;
   /** Workspace calendar date (YYYY-MM-DD) from server-side evaluation. Required when daysOverdue is 0. */
   evaluationDate?: string;
+  /** Customer-safe public invoice URL (/i/{token}). */
+  publicInvoiceUrl?: string | null;
 };
 
 export function buildCollectionWhatsAppMessage(input: CollectionWhatsAppMessageInput): string {
@@ -43,8 +46,13 @@ export function buildCollectionWhatsAppMessage(input: CollectionWhatsAppMessageI
     COLLECTION_MESSAGE_CTA,
     COLLECTION_MESSAGE_ALREADY_PAID_DISCLAIMER,
     "",
-    ...buildCollectionMessageFooterLines(businessName),
   ];
+
+  if (input.publicInvoiceUrl?.trim()) {
+    lines.push(formatPublicInvoiceLinkBlock(input.publicInvoiceUrl.trim()), "");
+  }
+
+  lines.push(...buildCollectionMessageFooterLines(businessName));
 
   return lines.join("\n");
 }

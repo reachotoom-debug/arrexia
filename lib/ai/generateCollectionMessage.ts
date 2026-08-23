@@ -7,6 +7,7 @@ import {
 import { generateOpenAiCollectionMessage } from "./providers/openai";
 import type { CollectionMessageFacts, CollectionMessageTone, GenerateCollectionMessageResult } from "./types";
 import { validateCollectionMessageOutput } from "./validateCollectionMessageOutput";
+import { appendPublicInvoiceLinkToCollectionMessage } from "@/lib/invoices/publicInvoiceMessageLink";
 
 const CONFIG_ERROR =
   "Arrexia AI is temporarily unavailable. Please try again.";
@@ -27,7 +28,8 @@ function mapProviderFailure(
 
 async function requestValidatedMessage(
   facts: CollectionMessageFacts,
-  tone: CollectionMessageTone
+  tone: CollectionMessageTone,
+  allowedPublicInvoiceUrl?: string | null
 ): Promise<GenerateCollectionMessageResult> {
   const providerResult = await generateOpenAiCollectionMessage({
     systemPrompt: COLLECTION_MESSAGE_SYSTEM_PROMPT,
@@ -44,20 +46,46 @@ async function requestValidatedMessage(
     outstandingFormatted: facts.outstandingFormatted,
     dueDateFormatted: facts.dueDateFormatted,
     statusLine: facts.statusLine,
+    allowedPublicInvoiceUrl,
   });
 
   if (!validation.ok) {
     return { ok: false, code: "unsafe_output", userMessage: UNSAFE_OUTPUT_ERROR };
   }
 
-  return { ok: true, message: validation.message };
+  let message = validation.message;
+  if (allowedPublicInvoiceUrl?.trim()) {
+    message = appendPublicInvoiceLinkToCollectionMessage(
+      message,
+      allowedPublicInvoiceUrl.trim()
+    );
+    const postAppendValidation = validateCollectionMessageOutput({
+      message,
+      invoiceNumber: facts.invoiceNumber,
+      outstandingFormatted: facts.outstandingFormatted,
+      dueDateFormatted: facts.dueDateFormatted,
+      statusLine: facts.statusLine,
+      allowedPublicInvoiceUrl,
+    });
+    if (!postAppendValidation.ok) {
+      return { ok: false, code: "unsafe_output", userMessage: UNSAFE_OUTPUT_ERROR };
+    }
+    message = postAppendValidation.message;
+  }
+
+  return { ok: true, message };
 }
 
 export async function generateCollectionMessage(params: {
   facts: CollectionMessageFacts;
   tone: CollectionMessageTone;
+  publicInvoiceUrl?: string | null;
 }): Promise<GenerateCollectionMessageResult> {
-  const firstAttempt = await requestValidatedMessage(params.facts, params.tone);
+  const firstAttempt = await requestValidatedMessage(
+    params.facts,
+    params.tone,
+    params.publicInvoiceUrl
+  );
   if (firstAttempt.ok) {
     return firstAttempt;
   }
@@ -66,5 +94,5 @@ export async function generateCollectionMessage(params: {
     return firstAttempt;
   }
 
-  return requestValidatedMessage(params.facts, params.tone);
+  return requestValidatedMessage(params.facts, params.tone, params.publicInvoiceUrl);
 }

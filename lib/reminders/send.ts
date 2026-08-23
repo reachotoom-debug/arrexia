@@ -38,6 +38,7 @@ import {
   type TrialUsageReservation,
 } from "@/lib/billing/entitlementGuard";
 import { EntitlementError } from "@/lib/billing/entitlementErrors";
+import { ensurePublicInvoiceUrl } from "@/lib/invoices/ensurePublicAccessToken";
 
 // Dynamic import for nodemailer
 let nodemailer: typeof import("nodemailer");
@@ -693,6 +694,11 @@ export async function sendReminderForInvoice(
     referenceDate: overdueReferenceDate,
   });
 
+  const publicInvoiceUrl = await ensurePublicInvoiceUrl({
+    workspaceId,
+    invoiceId: invoice.id,
+  });
+
   // Prepare subject and main message (plain text; HTML shell applied below)
   const invoiceNumberLabel = invoice.invoice_number || invoice.id;
   let subject = `Payment reminder: Invoice #${invoiceNumberLabel}`;
@@ -719,8 +725,7 @@ export async function sendReminderForInvoice(
           name: client.name,
           email: client.email || "",
         },
-        workspaceId,
-        invoiceId: invoice.id,
+        publicInvoiceUrl,
         referenceDate: overdueReferenceDate,
         daysOverdue,
       });
@@ -795,6 +800,7 @@ export async function sendReminderForInvoice(
     outstandingAmount: outstandingFormatted,
     daysOverdue,
     mainMessage: sanitizedMainMessage,
+    invoiceViewUrl: publicInvoiceUrl,
   });
 
   const emailHtml = emailContent.html;

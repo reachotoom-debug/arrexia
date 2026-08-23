@@ -98,7 +98,19 @@ describe("buildCollectionWhatsAppMessage", () => {
 
     assert.match(message, /Powered by Arrexia\nhttps:\/\/arrexia\.app$/);
     assert.equal((message.match(/Powered by Arrexia/g) ?? []).length, 1);
-    assert.equal((message.match(/https:\/\/arrexia\.app/g) ?? []).length, 1);
+    assert.equal((message.match(/^https:\/\/arrexia\.app$/gm) ?? []).length, 1);
+  });
+
+  it("includes public invoice URL when provided without duplicating root URL line", () => {
+    const publicUrl = "http://localhost:3000/i/abcdefghijklmnopqrstuvwxyz012345";
+    const message = buildCollectionWhatsAppMessage({
+      ...baseInput,
+      daysOverdue: 5,
+      publicInvoiceUrl: publicUrl,
+    });
+
+    assert.match(message, new RegExp(`View invoice:\\n${publicUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    assert.equal((message.match(/^https:\/\/arrexia\.app$/gm) ?? []).length, 1);
   });
 
   it("partially paid invoice uses outstanding balance in message", () => {

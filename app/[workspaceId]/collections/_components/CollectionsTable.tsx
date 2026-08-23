@@ -280,6 +280,8 @@ export function CollectionsTable({
                   <td className={`${TABLE_TD} whitespace-nowrap`}>
                     <div className="flex flex-wrap items-center gap-2">
                       <WhatsAppCollectionLink
+                        workspaceId={workspaceId}
+                        invoiceId={inv.id}
                         phone={resolveClientWhatsAppPhone(client?.whatsapp_phone)}
                         clientCountry={client?.country ?? null}
                         clientName={client?.name ?? null}

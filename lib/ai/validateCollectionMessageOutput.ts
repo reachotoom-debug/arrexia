@@ -4,6 +4,10 @@ import {
   COLLECTION_MESSAGE_ALREADY_PAID_DISCLAIMER,
   COLLECTION_MESSAGE_CTA,
 } from "@/lib/collections/collectionMessageFormat";
+import {
+  isPublicInvoiceUrl,
+  extractPublicInvoiceTokenFromUrl,
+} from "@/lib/invoices/publicInvoiceUrl";
 
 export const COLLECTION_MESSAGE_MAX_LENGTH = 1200;
 
@@ -16,6 +20,8 @@ export type CollectionMessageValidationInput = {
   outstandingFormatted: string;
   dueDateFormatted: string;
   statusLine: string;
+  /** When set, message may include this public invoice URL in addition to the Arrexia root URL. */
+  allowedPublicInvoiceUrl?: string | null;
 };
 
 export type CollectionMessageValidationResult =
@@ -34,6 +40,51 @@ function countExactMatches(text: string, needle: string): number {
   return count;
 }
 
+function normalizeDiscoveredUrls(text: string): string[] {
+  const discoveredUrls = text.match(URL_PATTERN) ?? [];
+  return discoveredUrls.map((url) =>
+    url.toLowerCase().startsWith("www.") ? `https://${url}` : url
+  );
+}
+
+function validateAllowedUrls(
+  normalizedUrls: string[],
+  allowedPublicInvoiceUrl?: string | null
+): boolean {
+  const allowedPublic = allowedPublicInvoiceUrl?.trim() ?? null;
+
+  let arrexiaRootCount = 0;
+  let publicInvoiceCount = 0;
+
+  for (const url of normalizedUrls) {
+    if (url === ARREXIA_WEBSITE_URL) {
+      arrexiaRootCount += 1;
+      continue;
+    }
+    if (allowedPublic && url === allowedPublic && isPublicInvoiceUrl(url)) {
+      publicInvoiceCount += 1;
+      continue;
+    }
+    if (isPublicInvoiceUrl(url)) {
+      if (allowedPublic && extractPublicInvoiceTokenFromUrl(url) === extractPublicInvoiceTokenFromUrl(allowedPublic)) {
+        publicInvoiceCount += 1;
+        continue;
+      }
+    }
+    return false;
+  }
+
+  if (arrexiaRootCount !== 1) return false;
+  if (allowedPublic) {
+    if (publicInvoiceCount !== 1) return false;
+    if (normalizedUrls.length !== 2) return false;
+  } else if (normalizedUrls.length !== 1) {
+    return false;
+  }
+
+  return true;
+}
+
 export function validateCollectionMessageOutput(
   input: CollectionMessageValidationInput
 ): CollectionMessageValidationResult {
@@ -50,15 +101,9 @@ export function validateCollectionMessageOutput(
     return { ok: false, reason: "html" };
   }
 
-  const discoveredUrls = trimmed.match(URL_PATTERN) ?? [];
-  const normalizedUrls = discoveredUrls.map((url) =>
-    url.toLowerCase().startsWith("www.") ? `https://${url}` : url
-  );
+  const normalizedUrls = normalizeDiscoveredUrls(trimmed);
 
-  if (
-    normalizedUrls.length !== 1 ||
-    normalizedUrls[0] !== ARREXIA_WEBSITE_URL
-  ) {
+  if (!validateAllowedUrls(normalizedUrls, input.allowedPublicInvoiceUrl)) {
     return { ok: false, reason: "url" };
   }
 
@@ -66,7 +111,10 @@ export function validateCollectionMessageOutput(
     return { ok: false, reason: "footer" };
   }
 
-  if (countExactMatches(trimmed, ARREXIA_WEBSITE_URL) !== 1) {
+  const rootUrlLineCount = trimmed
+    .split("\n")
+    .filter((line) => line.trim() === ARREXIA_WEBSITE_URL).length;
+  if (rootUrlLineCount !== 1) {
     return { ok: false, reason: "duplicate_url" };
   }
 

@@ -20,6 +20,7 @@ import { sendEmail } from "@/lib/email/sendEmail";
 import { getEmailIdentity } from "@/lib/email/identities";
 import { formatCurrency } from "@/lib/format/currency";
 import { renderInvoiceEmail } from "@/lib/email/templates";
+import { ensurePublicInvoiceUrl } from "@/lib/invoices/ensurePublicAccessToken";
 
 export interface SendInvoiceEmailResult {
   success: boolean;
@@ -317,6 +318,8 @@ export async function sendInvoiceEmail(options: {
         ? formatCurrency(Number(invoiceView.outstanding), { currency })
         : null;
 
+    const publicInvoiceUrl = await ensurePublicInvoiceUrl({ workspaceId, invoiceId });
+
     const { html: bodyHtml, text: bodyText, subject } = renderInvoiceEmail({
       businessName: workspaceName,
       logoUrl: branding.logoUrl,
@@ -328,6 +331,7 @@ export async function sendInvoiceEmail(options: {
       amountPaid: paidAmount,
       outstandingAmount,
       notes: invoice.notes,
+      invoiceViewUrl: publicInvoiceUrl,
     });
 
     const bodyPreview = bodyText.substring(0, 200);

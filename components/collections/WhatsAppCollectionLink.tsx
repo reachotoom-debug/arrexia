@@ -1,11 +1,15 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import clsx from "clsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { resolvePublicInvoiceUrlAction } from "@/app/[workspaceId]/invoices/publicInvoiceActions";
 import { buildCollectionWhatsAppMessage } from "@/lib/whatsapp/buildCollectionWhatsAppMessage";
 import { buildWhatsAppClickToChatUrl } from "@/lib/whatsapp/buildWhatsAppClickToChatUrl";
 
 type WhatsAppCollectionLinkProps = {
+  workspaceId: string;
+  invoiceId: string;
   phone: string | null | undefined;
   clientCountry?: string | null;
   clientName: string | null;
@@ -17,6 +21,8 @@ type WhatsAppCollectionLinkProps = {
   daysOverdue: number;
   /** Workspace calendar date (YYYY-MM-DD) from server-side evaluation. Required when daysOverdue is 0. */
   evaluationDate?: string;
+  /** Pre-resolved public invoice URL when available from server loaders. */
+  publicInvoiceUrl?: string | null;
   variant?: "button" | "link";
 };
 
@@ -34,6 +40,8 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 export function WhatsAppCollectionLink({
+  workspaceId,
+  invoiceId,
   phone,
   clientCountry,
   clientName,
@@ -44,28 +52,58 @@ export function WhatsAppCollectionLink({
   dueDate,
   daysOverdue,
   evaluationDate,
+  publicInvoiceUrl,
   variant = "link",
 }: WhatsAppCollectionLinkProps) {
-  const message = buildCollectionWhatsAppMessage({
-    clientName,
-    businessName,
-    invoiceNumber,
-    outstanding,
-    currency,
-    dueDate,
-    daysOverdue,
-    evaluationDate,
+  const [isPending, startTransition] = useTransition();
+  const phoneUrl = buildWhatsAppClickToChatUrl({
+    phone,
+    clientCountry,
+    message: buildCollectionWhatsAppMessage({
+      clientName,
+      businessName,
+      invoiceNumber,
+      outstanding,
+      currency,
+      dueDate,
+      daysOverdue,
+      evaluationDate,
+      publicInvoiceUrl,
+    }),
   });
-  const url = buildWhatsAppClickToChatUrl({ phone, clientCountry, message });
-  const isDisabled = !url;
+  const isDisabled = !phoneUrl || isPending;
 
-  const tooltipText = isDisabled
+  const tooltipText = !phoneUrl
     ? "Client WhatsApp number missing or unusable"
-    : "Open WhatsApp with a prefilled message (you send manually)";
+    : isPending
+      ? "Preparing message…"
+      : "Open WhatsApp with a prefilled message (you send manually)";
 
   const handleClick = () => {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (!phoneUrl || isPending) return;
+
+    startTransition(async () => {
+      let resolvedUrl = publicInvoiceUrl?.trim() || null;
+      if (!resolvedUrl) {
+        resolvedUrl = await resolvePublicInvoiceUrlAction(workspaceId, invoiceId);
+      }
+
+      const message = buildCollectionWhatsAppMessage({
+        clientName,
+        businessName,
+        invoiceNumber,
+        outstanding,
+        currency,
+        dueDate,
+        daysOverdue,
+        evaluationDate,
+        publicInvoiceUrl: resolvedUrl,
+      });
+
+      const url = buildWhatsAppClickToChatUrl({ phone, clientCountry, message });
+      if (!url) return;
+      window.open(url, "_blank", "noopener,noreferrer");
+    });
   };
 
   const buttonClassName =

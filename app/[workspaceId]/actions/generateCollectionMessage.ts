@@ -13,6 +13,7 @@ import {
   type TrialUsageReservation,
 } from "@/lib/billing/entitlementGuard";
 import { EntitlementError } from "@/lib/billing/entitlementErrors";
+import { ensurePublicInvoiceUrl } from "@/lib/invoices/ensurePublicAccessToken";
 
 const GenerateCollectionMessageInputSchema = z.object({
   workspaceId: z.string().uuid(),
@@ -88,6 +89,7 @@ export async function generateCollectionMessageAction(
   const result = await generateCollectionMessage({
     facts: contextResult.facts,
     tone,
+    publicInvoiceUrl: await ensurePublicInvoiceUrl({ workspaceId, invoiceId }),
   });
 
   if (!result.ok && aiReservation) {
