@@ -3,11 +3,24 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { assertAdmin } from "@/lib/admin/requireAdmin";
 import { isPostgrestMissingTableError } from "@/lib/admin/postgrestErrors";
 import {
+  getFounderSubscriberSortTimestamp,
+  paginateFounderAdminRows,
+  sortRowsByDescTimestamp,
+  type FounderAdminTableQuery,
+  type FounderAdminTableResult,
+} from "@/lib/admin/founderAdminTablePresentation";
+import {
   getPlanDefinition,
   isWorkspacePlan,
   PLAN_DEFINITIONS,
   type WorkspacePlan,
 } from "@/lib/billing/plans";
+
+export type {
+  FounderAdminTableQuery,
+  FounderAdminTableResult,
+} from "@/lib/admin/founderAdminTablePresentation";
+export { FOUNDER_ADMIN_TABLE_PAGE_SIZE } from "@/lib/admin/founderAdminTablePresentation";
 
 const STARTER_MRR = PLAN_DEFINITIONS.starter.monthlyPrice ?? 39;
 const PRO_MRR = PLAN_DEFINITIONS.pro.monthlyPrice ?? 89;
@@ -49,6 +62,8 @@ export type FounderSubscriberRow = {
   estimatedMonthlyValue: number;
   estimatedYearlyValue: number;
   workspaceCreatedAt: string;
+  /** workspace_subscriptions.updated_at when present — used for recent-first ordering. */
+  subscriptionUpdatedAt: string | null;
   lastSignInAt: string | null;
 };
 
@@ -153,6 +168,8 @@ type WorkspaceSubscriptionRow = {
   trial_ends_at: string | null;
   current_period_starts_at: string | null;
   current_period_ends_at: string | null;
+  updated_at: string | null;
+  created_at: string | null;
 };
 
 function startOfTodayLocal() {
@@ -376,21 +393,24 @@ export async function getFounderOverviewData(): Promise<FounderOverviewData> {
   };
 }
 
-export async function getFounderUsersData(): Promise<FounderUserRow[]> {
-  const core = await loadCorePlatformData();
-  return core.authUsers
-    .map((user) => ({
+function buildFounderUserRows(
+  core: Awaited<ReturnType<typeof loadCorePlatformData>>
+): FounderUserRow[] {
+  return sortRowsByDescTimestamp(
+    core.authUsers.map((user) => ({
       id: user.id,
       email: user.email,
       createdAt: user.created_at,
       lastSignInAt: user.last_sign_in_at,
       workspaceCount: core.workspaceCountByUser.get(user.id) ?? 0,
-    }))
-    .sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? ""));
+    })),
+    (row) => row.createdAt
+  );
 }
 
-export async function getFounderSubscribersData(): Promise<FounderSubscriberRow[]> {
-  const core = await loadCorePlatformData();
+function buildFounderSubscriberRows(
+  core: Awaited<ReturnType<typeof loadCorePlatformData>>
+): FounderSubscriberRow[] {
   const rows: FounderSubscriberRow[] = [];
 
   for (const ws of core.workspaces) {
@@ -420,13 +440,28 @@ export async function getFounderSubscribersData(): Promise<FounderSubscriberRow[
       estimatedMonthlyValue: monthly,
       estimatedYearlyValue: monthly * 12,
       workspaceCreatedAt: ws.created_at,
+      subscriptionUpdatedAt: core.subscriptionsTableAvailable
+        ? sub?.updated_at ?? sub?.created_at ?? null
+        : null,
       lastSignInAt: owner?.lastSignInAt ?? null,
     });
   }
 
-  return rows.sort(
-    (a, b) => Date.parse(b.workspaceCreatedAt) - Date.parse(a.workspaceCreatedAt)
-  );
+  return sortRowsByDescTimestamp(rows, getFounderSubscriberSortTimestamp);
+}
+
+export async function getFounderUsersData(
+  query: FounderAdminTableQuery = {}
+): Promise<FounderAdminTableResult<FounderUserRow>> {
+  const core = await loadCorePlatformData();
+  return paginateFounderAdminRows(buildFounderUserRows(core), query);
+}
+
+export async function getFounderSubscribersData(
+  query: FounderAdminTableQuery = {}
+): Promise<FounderAdminTableResult<FounderSubscriberRow>> {
+  const core = await loadCorePlatformData();
+  return paginateFounderAdminRows(buildFounderSubscriberRows(core), query);
 }
 
 export async function getFounderRevenueData(): Promise<FounderRevenueData> {
@@ -811,7 +846,7 @@ export async function getFounderSettingsData(
 /** @deprecated Use getFounderOverviewData and page-specific loaders instead. */
 export async function getAdminDashboardData() {
   const overview = await getFounderOverviewData();
-  const subscribers = await getFounderSubscribersData();
+  const subscribers = buildFounderSubscriberRows(await loadCorePlatformData());
   const revenue = await getFounderRevenueData();
   const productUsage = await getFounderProductUsageData();
   return { overview, subscribers, revenue, productUsage };
