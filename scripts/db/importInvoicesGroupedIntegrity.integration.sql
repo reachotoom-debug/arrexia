@@ -2,7 +2,7 @@
 -- STAGING / LOCAL ONLY — NEVER RUN ON PRODUCTION
 -- Integration: import_invoices_grouped financial integrity + atomicity
 -- Usage: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/db/importInvoicesGroupedIntegrity.integration.sql
--- Requires: migrations through 20260817120000_invoice_import_paid_total_guard.sql applied
+-- Requires: migrations through 20260823150000_invoice_import_no_client_auto_create.sql applied
 -- ============================================================================
 
 BEGIN;
@@ -33,6 +33,9 @@ DECLARE
   v_dup_client_a uuid := gen_random_uuid();
   v_dup_client_b uuid := gen_random_uuid();
   v_other_client_id uuid := gen_random_uuid();
+  v_archived_client_id uuid := gen_random_uuid();
+  v_temp_client_id uuid := gen_random_uuid();
+  v_client_count_before integer;
   v_invoice_id uuid;
   v_result jsonb;
   v_rows jsonb;
@@ -57,6 +60,9 @@ BEGIN
     (v_dup_client_a, v_workspace_id, v_org_id, 'Duplicate Name Co', 'dup-a@example.com', true),
     (v_dup_client_b, v_workspace_id, v_org_id, 'Duplicate Name Co', 'dup-b@example.com', true),
     (v_other_client_id, v_other_workspace_id, v_org_id, 'Other Client', 'other@example.com', true);
+
+  INSERT INTO public.clients (id, workspace_id, organization_id, name, email, is_active, archived_at)
+  VALUES (v_archived_client_id, v_workspace_id, v_org_id, 'Archived Co', 'archived@example.com', true, NOW());
 
   -- --------------------------------------------------------------------------
   -- Dry-run writes nothing
@@ -467,6 +473,97 @@ BEGIN
     SELECT 1 FROM public.invoices WHERE workspace_id = v_other_workspace_id AND invoice_number = 'INV-OTHER'
   ) THEN
     RAISE EXCEPTION 'other workspace import failed';
+  END IF;
+
+  -- --------------------------------------------------------------------------
+  -- missing-client dry-run rejects
+  -- --------------------------------------------------------------------------
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-MISSING-CLIENT', 'client_email', 'missing@example.com', 'client_name', 'Missing Co', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-MISSING-CLIENT', 'item_description', 'Item', 'quantity', '1', 'unit_price', '10')
+  );
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, true);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'missing-client dry-run rejects: %', v_result;
+  END IF;
+
+  SELECT count(*) INTO v_client_count_before FROM public.clients WHERE workspace_id = v_workspace_id;
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'missing-client execute should fail: %', v_result;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.invoices WHERE workspace_id = v_workspace_id AND invoice_number = 'INV-MISSING-CLIENT') THEN
+    RAISE EXCEPTION 'missing-client execute leaves zero invoices';
+  END IF;
+
+  IF (SELECT count(*) FROM public.clients WHERE workspace_id = v_workspace_id) <> v_client_count_before THEN
+    RAISE EXCEPTION 'zero clients created on missing-client failure';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.invoice_items ii JOIN public.invoices i ON i.id = ii.invoice_id WHERE i.workspace_id = v_workspace_id AND i.invoice_number = 'INV-MISSING-CLIENT') THEN
+    RAISE EXCEPTION 'zero invoices/items created on missing-client failure';
+  END IF;
+
+  -- --------------------------------------------------------------------------
+  -- archived client fails
+  -- --------------------------------------------------------------------------
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-ARCHIVED-CLIENT', 'client_email', 'archived@example.com', 'client_name', 'Archived Co', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-ARCHIVED-CLIENT', 'item_description', 'Item', 'quantity', '1', 'unit_price', '10')
+  );
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'archived client fails: %', v_result;
+  END IF;
+
+  -- --------------------------------------------------------------------------
+  -- cross-workspace client reference fails
+  -- --------------------------------------------------------------------------
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-CROSS-WORKSPACE-CLIENT', 'client_email', 'other@example.com', 'client_name', 'Other Client', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-CROSS-WORKSPACE-CLIENT', 'item_description', 'Item', 'quantity', '1', 'unit_price', '10')
+  );
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'cross-workspace client reference fails: %', v_result;
+  END IF;
+
+  -- --------------------------------------------------------------------------
+  -- client removed between dry-run and execute
+  -- --------------------------------------------------------------------------
+  INSERT INTO public.clients (id, workspace_id, organization_id, name, email, is_active)
+  VALUES (v_temp_client_id, v_workspace_id, v_org_id, 'Temp Client', 'temp-race@example.com', true);
+
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-CLIENT-RACE', 'client_email', 'temp-race@example.com', 'client_name', 'Temp Client', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-CLIENT-RACE', 'item_description', 'Item', 'quantity', '1', 'unit_price', '10')
+  );
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, true);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'client race dry-run should pass: %', v_result;
+  END IF;
+
+  DELETE FROM public.clients WHERE id = v_temp_client_id;
+
+  SELECT count(*) INTO v_invoice_count FROM public.invoices WHERE workspace_id = v_workspace_id;
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'client removed between dry-run and execute should fail: %', v_result;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.invoices WHERE workspace_id = v_workspace_id AND invoice_number = 'INV-CLIENT-RACE') THEN
+    RAISE EXCEPTION 'client race failure committed invoice';
+  END IF;
+
+  IF (SELECT count(*) FROM public.invoices WHERE workspace_id = v_workspace_id) <> v_invoice_count THEN
+    RAISE EXCEPTION 'client race failure changed invoice count';
   END IF;
 END;
 $$;
