@@ -15,8 +15,9 @@ export function getConfiguredAppUrl(): string {
     return DEFAULT_LOCAL_APP_URL;
   }
 
+  const vercelEnv = process.env.VERCEL_ENV?.trim();
   const vercelUrl = process.env.VERCEL_URL?.trim();
-  if (vercelUrl) {
+  if (vercelEnv === "preview" && vercelUrl) {
     return `https://${vercelUrl.replace(/\/+$/, "")}`;
   }
 

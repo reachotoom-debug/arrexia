@@ -47,6 +47,7 @@ async function requestValidatedMessage(
     dueDateFormatted: facts.dueDateFormatted,
     statusLine: facts.statusLine,
     allowedPublicInvoiceUrl,
+    requirePublicInvoiceUrlInMessage: false,
   });
 
   if (!validation.ok) {
@@ -66,6 +67,7 @@ async function requestValidatedMessage(
       dueDateFormatted: facts.dueDateFormatted,
       statusLine: facts.statusLine,
       allowedPublicInvoiceUrl,
+      requirePublicInvoiceUrlInMessage: true,
     });
     if (!postAppendValidation.ok) {
       return { ok: false, code: "unsafe_output", userMessage: UNSAFE_OUTPUT_ERROR };

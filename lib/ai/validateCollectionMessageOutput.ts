@@ -13,6 +13,7 @@ export const COLLECTION_MESSAGE_MAX_LENGTH = 1200;
 
 const HTML_TAG_PATTERN = /<[^>]+>/;
 const URL_PATTERN = /https?:\/\/[^\s]+|www\./gi;
+const DANGEROUS_URL_SCHEME_PATTERN = /(?:javascript|data|vbscript):/i;
 
 export type CollectionMessageValidationInput = {
   message: string;
@@ -22,6 +23,11 @@ export type CollectionMessageValidationInput = {
   statusLine: string;
   /** When set, message may include this public invoice URL in addition to the Arrexia root URL. */
   allowedPublicInvoiceUrl?: string | null;
+  /**
+   * When validating AI prose before the app appends a trusted public invoice link, set false so
+   * only the Arrexia root URL is required. Defaults to true when allowedPublicInvoiceUrl is set.
+   */
+  requirePublicInvoiceUrlInMessage?: boolean;
 };
 
 export type CollectionMessageValidationResult =
@@ -49,7 +55,8 @@ function normalizeDiscoveredUrls(text: string): string[] {
 
 function validateAllowedUrls(
   normalizedUrls: string[],
-  allowedPublicInvoiceUrl?: string | null
+  allowedPublicInvoiceUrl?: string | null,
+  requirePublicInvoiceUrlInMessage = false
 ): boolean {
   const allowedPublic = allowedPublicInvoiceUrl?.trim() ?? null;
 
@@ -66,7 +73,11 @@ function validateAllowedUrls(
       continue;
     }
     if (isPublicInvoiceUrl(url)) {
-      if (allowedPublic && extractPublicInvoiceTokenFromUrl(url) === extractPublicInvoiceTokenFromUrl(allowedPublic)) {
+      if (
+        allowedPublic &&
+        extractPublicInvoiceTokenFromUrl(url) ===
+          extractPublicInvoiceTokenFromUrl(allowedPublic)
+      ) {
         publicInvoiceCount += 1;
         continue;
       }
@@ -75,13 +86,20 @@ function validateAllowedUrls(
   }
 
   if (arrexiaRootCount !== 1) return false;
-  if (allowedPublic) {
+
+  if (allowedPublic && requirePublicInvoiceUrlInMessage) {
     if (publicInvoiceCount !== 1) return false;
     if (normalizedUrls.length !== 2) return false;
-  } else if (normalizedUrls.length !== 1) {
-    return false;
+    return true;
   }
 
+  if (allowedPublic && !requirePublicInvoiceUrlInMessage) {
+    if (publicInvoiceCount !== 0) return false;
+    if (normalizedUrls.length !== 1) return false;
+    return true;
+  }
+
+  if (normalizedUrls.length !== 1) return false;
   return true;
 }
 
@@ -101,9 +119,22 @@ export function validateCollectionMessageOutput(
     return { ok: false, reason: "html" };
   }
 
-  const normalizedUrls = normalizeDiscoveredUrls(trimmed);
+  if (DANGEROUS_URL_SCHEME_PATTERN.test(trimmed)) {
+    return { ok: false, reason: "url" };
+  }
 
-  if (!validateAllowedUrls(normalizedUrls, input.allowedPublicInvoiceUrl)) {
+  const normalizedUrls = normalizeDiscoveredUrls(trimmed);
+  const allowedPublic = input.allowedPublicInvoiceUrl?.trim() ?? null;
+  const requirePublicInvoiceUrlInMessage =
+    input.requirePublicInvoiceUrlInMessage ?? Boolean(allowedPublic);
+
+  if (
+    !validateAllowedUrls(
+      normalizedUrls,
+      input.allowedPublicInvoiceUrl,
+      requirePublicInvoiceUrlInMessage
+    )
+  ) {
     return { ok: false, reason: "url" };
   }
 
