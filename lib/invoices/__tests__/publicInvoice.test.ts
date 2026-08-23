@@ -737,6 +737,69 @@ describe("communication integration contracts", () => {
   });
 });
 
+describe("invoices anon privilege hardening migration", () => {
+  const migrationPath =
+    "supabase/migrations/20260823140000_revoke_invoices_anon_privileges.sql";
+
+  it("revokes all direct table privileges from anon on public.invoices", () => {
+    const src = readFileSync(migrationPath, "utf8");
+    assert.match(src, /REVOKE ALL ON TABLE public\.invoices FROM anon;/);
+  });
+
+  it("revokes PUBLIC table privileges on public.invoices for defense-in-depth", () => {
+    const src = readFileSync(migrationPath, "utf8");
+    assert.match(src, /REVOKE ALL ON TABLE public\.invoices FROM PUBLIC;/);
+  });
+
+  it("does not grant anon any invoice table privilege", () => {
+    const src = readFileSync(migrationPath, "utf8");
+    assert.doesNotMatch(src, /GRANT[\s\S]*TO\s+anon/i);
+  });
+
+  it("does not modify RLS policies on public.invoices", () => {
+    const src = readFileSync(migrationPath, "utf8");
+    assert.doesNotMatch(src, /CREATE POLICY|DROP POLICY|ALTER POLICY|ENABLE ROW LEVEL SECURITY/i);
+  });
+
+  it("does not change authenticated or service_role grants explicitly", () => {
+    const src = readFileSync(migrationPath, "utf8");
+    assert.doesNotMatch(src, /GRANT[\s\S]*TO\s+authenticated/i);
+    assert.doesNotMatch(src, /GRANT[\s\S]*TO\s+service_role/i);
+    assert.doesNotMatch(src, /REVOKE[\s\S]*FROM\s+authenticated/i);
+    assert.doesNotMatch(src, /REVOKE[\s\S]*FROM\s+service_role/i);
+  });
+
+  it("public loader still uses supabaseAdmin server-side only", () => {
+    const src = readFileSync("lib/invoices/publicInvoiceLoader.ts", "utf8");
+    assert.match(src, /supabaseAdmin\(\)/);
+    assert.doesNotMatch(src, /supabaseServer\(\)/);
+  });
+
+  it("authenticated invoice access remains RLS-based via workspace policies", () => {
+    const rlsSrc = readFileSync(
+      "supabase/migrations/20250107000000_harden_rls_for_workspace_tables.sql",
+      "utf8"
+    );
+    const detailSrc = readFileSync(
+      "app/[workspaceId]/invoices/[invoiceId]/page.tsx",
+      "utf8"
+    );
+    assert.match(rlsSrc, /CREATE POLICY "invoices_select_own_workspace"/);
+    assert.match(rlsSrc, /ALTER TABLE public\.invoices ENABLE ROW LEVEL SECURITY/);
+    assert.match(detailSrc, /requireWorkspace\(workspaceId\)/);
+    assert.match(detailSrc, /supabaseServer\(\)/);
+  });
+
+  it("invoices_view anon SELECT remains revoked in financial-view migration", () => {
+    const src = readFileSync(
+      "supabase/migrations/20260729000000_financial_views_security_invoker.sql",
+      "utf8"
+    );
+    assert.match(src, /REVOKE SELECT ON public\.invoices_view FROM anon;/);
+    assert.doesNotMatch(src, /GRANT SELECT ON public\.invoices_view TO anon/i);
+  });
+});
+
 describe("WhatsApp and AI URL validation", () => {
   const baseValidation = {
     invoiceNumber: "INV-100",
