@@ -709,12 +709,40 @@ export default async function ClientsPage({
   const { clients: safeClients, totalCount, page, view: viewParam, status: statusParam, sort, dir, q: searchTerm } = clientData;
 
   const hasAnyClients = (workspaceClientCount ?? 0) > 0;
+  const isClientLimitReached = limitCodeParam === "PLAN_LIMIT_CLIENTS";
+
   if (skipWorkspaceClientCount && isPerfEnabled()) {
     perfLog(
       "clients-list",
       `allClientsCount=reused count=${workspaceClientCount ?? 0}`
     );
   }
+
+  const clientsPageHeader = (
+    <CommandBar>
+      <PageHeader
+        title="Clients"
+        description="Manage your customers and their billing profiles."
+        primaryAction={
+          isClientLimitReached ? (
+            <button
+              type="button"
+              className={primaryCtaDisabledClass}
+              disabled
+              title="Upgrade to create more"
+            >
+              New Client
+            </button>
+          ) : (
+            <Link href={`/${workspaceId}/clients/new`} className={primaryCtaClass}>
+              New Client
+            </Link>
+          )
+        }
+        headerTrailing={<ExportCsvButton workspaceId={workspaceId} module="clients" />}
+      />
+    </CommandBar>
+  );
 
   // Show global empty state ONLY when workspace has zero clients
   if (!hasAnyClients) {
@@ -725,15 +753,14 @@ export default async function ClientsPage({
           workspaceId={workspaceId}
           searchParams={resolvedSearchParams}
         />
-        <div className="w-full min-w-0">
-          <div className="p-6">
-            <EmptyState
-              title="No clients yet"
-              message="Add your first client to start tracking invoices and payments."
-              actionLabel="New client"
-              actionHref={`/${workspaceId}/clients/new`}
-            />
-          </div>
+        <div className="w-full min-w-0 space-y-4 md:space-y-6">
+          {clientsPageHeader}
+          <EmptyState
+            title="No clients yet"
+            message="Add your first client to start tracking invoices and payments."
+            actionLabel="New client"
+            actionHref={`/${workspaceId}/clients/new`}
+          />
         </div>
       </>
     );
@@ -841,7 +868,6 @@ export default async function ClientsPage({
   const viewClients = clientsWithMetrics;
 
   const safePage = Math.min(page, totalPages);
-  const isClientLimitReached = limitCodeParam === "PLAN_LIMIT_CLIENTS";
 
   const filterSummaryParts: string[] = [];
   if (viewParam !== "default") {
