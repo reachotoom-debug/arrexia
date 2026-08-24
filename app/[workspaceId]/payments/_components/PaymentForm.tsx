@@ -38,6 +38,8 @@ interface PaymentFormProps {
   prefillInvoiceId?: string;
   /** Optional post-save redirect target (create mode) */
   returnTo?: string;
+  /** Server-side submission error (edit mode redirect-back) */
+  submitError?: string;
 }
 
 export function PaymentForm({
@@ -53,6 +55,7 @@ export function PaymentForm({
   defaultPaymentDate,
   prefillInvoiceId,
   returnTo,
+  submitError,
 }: PaymentFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -227,6 +230,11 @@ export function PaymentForm({
       action={action}
       className="mx-auto w-full max-w-3xl min-w-0 space-y-6"
     >
+      {submitError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {submitError}
+        </div>
+      ) : null}
       {/* In edit mode, include hidden fields for clientId/invoiceId to preserve them (server will ignore changes) */}
       {isEdit && initialData?.clientId && (
         <input type="hidden" name="clientId" value={initialData.clientId} />

@@ -17,14 +17,11 @@ import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
 import { EntitlementError } from "@/lib/billing/entitlementErrors";
 import { revalidateFinancialSurfacesAfterPayment } from "@/lib/payments/revalidateFinancialSurfaces";
 import {
-  getPaymentCreationBlockReason,
-  paymentCreationBlockMessage,
-} from "@/lib/receivables/operationalEligibility";
-import {
   formatPaymentUnarchiveOverpayError,
   validatePaymentUnarchiveBatchOverpay,
   wouldRestorePaymentCauseOverpay,
 } from "@/lib/payments/paymentUnarchiveOverpay";
+import { mapCreatePaymentRpcError, mapUpdatePaymentRpcError } from "@/lib/payments/mapCreatePaymentRpcError";
 
 /**
  * Server action to load eligible invoices for a specific client (for payment recording)
@@ -148,165 +145,35 @@ export async function createPayment(
   const parsed = PaymentFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
 
-  // 1) Query invoices table directly to check archived status (invoices_view excludes archived)
-  const { data: invoiceRow, error: invoiceRowError } = await supabase
-    .from("invoices")
-    .select("id, archived_at, client_id")
-    .eq("id", parsed.invoiceId)
-    .eq("workspace_id", workspaceId)
-    .single();
-
-  // Validate: invoice exists and is not archived
-  if (invoiceRowError || !invoiceRow) {
-    const errorDetails = {
-      message: invoiceRowError?.message || "Unknown error",
-      code: invoiceRowError?.code || null,
-      details: invoiceRowError?.details || null,
-      hint: invoiceRowError?.hint || null,
-    };
-    console.error("[createPayment] failed to load invoice", errorDetails);
-    return { 
-      error: `Invoice not found: ${errorDetails.message}`,
-      code: errorDetails.code,
-      details: errorDetails.details,
-      hint: errorDetails.hint,
-    };
-  }
-
-  if (invoiceRow.archived_at) {
-    return { error: "Cannot create payment for archived invoice" };
-  }
-
-  // 2) Query invoices_view for invoice validation (canonical contract)
-  const { data: invoiceView, error: invoiceViewError } = await supabase
-    .from("invoices_view")
-    .select("id, workspace_id, client_id, currency, total, paid, outstanding, base_status, display_status")
-    .eq("id", parsed.invoiceId)
-    .eq("workspace_id", workspaceId)
-    // Explicit filter (even if invoices_view excludes archived invoices at SQL layer)
-    .is("archived_at", null)
-    .single();
-
-  // Validate: invoice exists in view (should exist since not archived)
-  if (invoiceViewError || !invoiceView) {
-    const errorDetails = {
-      message: invoiceViewError?.message || "Unknown error",
-      code: invoiceViewError?.code || null,
-      details: invoiceViewError?.details || null,
-      hint: invoiceViewError?.hint || null,
-    };
-    console.error("[createPayment] failed to load invoice from invoices_view", errorDetails);
-    return { 
-      error: `Invoice not found: ${errorDetails.message}`,
-      code: errorDetails.code,
-      details: errorDetails.details,
-      hint: errorDetails.hint,
-    };
-  }
-
-  // Validate: invoice.client_id === values.clientId
-  if (invoiceView.client_id !== parsed.clientId) {
-    return { error: "Selected invoice does not belong to selected client." };
-  }
-
-  // 3) Validate client eligibility (archived_at IS NULL, is_active = true)
-  const { data: clientRow, error: clientRowError } = await supabase
-    .from("clients")
-    .select("id, archived_at, is_active")
-    .eq("id", parsed.clientId)
-    .eq("workspace_id", workspaceId)
-    .single();
-
-  if (clientRowError || !clientRow) {
-    return { error: `Client not found: ${clientRowError?.message || "Unknown error"}` };
-  }
-
-  if (clientRow.archived_at) {
-    return { error: paymentCreationBlockMessage("archived_client") };
-  }
-
-  if (!clientRow.is_active) {
-    return { error: paymentCreationBlockMessage("inactive_client") };
-  }
-
-  const paymentBlockReason = getPaymentCreationBlockReason({
-    clientArchived: Boolean(clientRow.archived_at),
-    clientIsActive: clientRow.is_active,
-    invoiceArchived: Boolean(invoiceRow.archived_at),
-    baseStatus: invoiceView.base_status,
-    outstanding: invoiceView.outstanding,
+  const { data: rpcData, error: rpcError } = await supabase.rpc("rpc_create_payment_manual", {
+    p_workspace_id: validatedWorkspaceId,
+    p_client_id: parsed.clientId,
+    p_invoice_id: parsed.invoiceId,
+    p_amount: parsed.amount,
+    p_payment_date: parsed.date,
+    p_method: parsed.method,
+    p_status: parsed.status,
+    p_transaction_id: parsed.transactionId ?? null,
+    p_notes: parsed.notes ?? null,
+    p_payment_provider: parsed.payment_provider || null,
   });
 
-  if (paymentBlockReason === "void_invoice" || paymentBlockReason === "draft_invoice" || paymentBlockReason === "fully_paid") {
-    if (paymentBlockReason === "fully_paid") {
-      const currentOutstanding = Number(invoiceView.outstanding ?? 0);
-      return {
-        error: `Invoice has no outstanding balance (${currentOutstanding.toFixed(2)}). Cannot record payment.`,
-      };
-    }
-    return { error: paymentCreationBlockMessage(paymentBlockReason) };
-  }
-
-  // Validate: outstanding > 0
-  const currentOutstanding = Number(invoiceView.outstanding ?? 0);
-  if (currentOutstanding <= 0) {
-    return { error: `Invoice has no outstanding balance (${currentOutstanding.toFixed(2)}). Cannot record payment.` };
-  }
-
-  // Validate payment amount against outstanding balance (overpayment guard)
-  // When payment amount > outstanding: Reject with clear error message
-  const paymentAmount = Number(parsed.amount);
-  const tolerance = 0.01; // Allow small floating point differences
-
-  if (paymentAmount > currentOutstanding + tolerance) {
-    return { 
-      error: `Payment amount (${paymentAmount.toFixed(2)}) exceeds the invoice outstanding balance (${currentOutstanding.toFixed(2)}). Please enter an amount less than or equal to ${currentOutstanding.toFixed(2)}.` 
-    };
-  }
-
-  // 2) Get currency from invoices_view (canonical contract includes currency)
-  const currency = invoiceView.currency || "USD";
-
-  // 3) Insert payment, INCLUDING currency and payment_date
-  const { data, error } = await supabase
-    .from("payments")
-    .insert({
-      organization_id: organizationId,
-      workspace_id: validatedWorkspaceId, // Use validated workspace_id
-      client_id: parsed.clientId,
-      invoice_id: parsed.invoiceId,
-      amount: parsed.amount,
-      payment_date: parsed.date, // Map form's 'date' to database's 'payment_date'
-      method: parsed.method,
-      status: parsed.status,
-      transaction_id: parsed.transactionId ?? null,
-      notes: parsed.notes ?? null,
-      payment_provider: parsed.payment_provider || null,
-      currency, // Set currency from invoices table (or default to USD)
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) {
-    const errorDetails = {
-      message: error?.message || "Unknown error",
-      code: error?.code || null,
-      details: (error as { details?: string | null })?.details || null,
-      hint: (error as { hint?: string | null })?.hint || null,
-    };
-    logPostgresUniqueViolation("createPayment", error, {
+  if (rpcError) {
+    logPostgresUniqueViolation("createPayment", rpcError, {
       workspaceId: validatedWorkspaceId,
       organizationId,
       invoiceId: parsed.invoiceId,
     });
-    console.error("[createPayment] insert failed", errorDetails);
-    return { 
-      error: `Failed to create payment: ${errorDetails.message}`,
-      code: errorDetails.code,
-      details: errorDetails.details,
-      hint: errorDetails.hint,
-    };
+    console.error("[createPayment] rpc_create_payment_manual failed:", rpcError);
+    return mapCreatePaymentRpcError(rpcError);
   }
+
+  const paymentId = (rpcData as { payment_id?: string } | null)?.payment_id;
+  if (!paymentId) {
+    return { error: "Failed to create payment: missing payment_id from RPC" };
+  }
+
+  const data = { id: paymentId };
 
   // REMOVED: recalculateInvoiceState call
   // invoices_view computes paid/outstanding automatically from payments
@@ -364,151 +231,35 @@ export async function updatePayment(
   const parsed = PaymentFormSchema.parse(rawValues);
   const supabase = await supabaseServer();
 
-  // 1) Get existing payment to know old amount, invoice_id, client_id, and workspace_id
-  const { data: existingPayment, error: existingPaymentError } = await supabase
-    .from("payments")
-    .select("invoice_id, client_id, amount, status, workspace_id")
-    .eq("id", paymentId)
-    .eq("workspace_id", validatedWorkspaceId)
-    .single();
+  const { data: rpcData, error: rpcError } = await supabase.rpc("rpc_update_payment_manual", {
+    p_workspace_id: validatedWorkspaceId,
+    p_payment_id: paymentId,
+    p_client_id: parsed.clientId,
+    p_invoice_id: parsed.invoiceId,
+    p_amount: parsed.amount,
+    p_payment_date: parsed.date,
+    p_method: parsed.method,
+    p_status: parsed.status,
+    p_transaction_id: parsed.transactionId ?? null,
+    p_notes: parsed.notes ?? null,
+    p_payment_provider: parsed.payment_provider || null,
+  });
 
-  if (existingPaymentError || !existingPayment) {
-    const errorDetails = {
-      message: existingPaymentError?.message || "Unknown error",
-      code: existingPaymentError?.code || null,
-      details: (existingPaymentError as any)?.details || null,
-      hint: (existingPaymentError as any)?.hint || null,
-    };
-    console.error("[updatePayment] failed to load existing payment:", errorDetails);
-    return { error: `Payment not found: ${errorDetails.message}` };
+  if (rpcError) {
+    logPostgresUniqueViolation("updatePayment", rpcError, {
+      workspaceId: validatedWorkspaceId,
+      paymentId,
+      invoiceId: parsed.invoiceId,
+    });
+    console.error("[updatePayment] rpc_update_payment_manual failed:", rpcError);
+    return mapUpdatePaymentRpcError(rpcError);
   }
 
-  // Financial integrity: Prevent changing client_id or invoice_id
-  const oldClientId = existingPayment.client_id;
-  const oldInvoiceId = existingPayment.invoice_id;
-  const newClientId = parsed.clientId;
-  const newInvoiceId = parsed.invoiceId;
-  
-  if (oldClientId && newClientId && oldClientId !== newClientId) {
-    return { error: "Cannot change client for an existing payment" };
-  }
-  
-  if (oldInvoiceId && newInvoiceId && oldInvoiceId !== newInvoiceId) {
-    return { error: "Cannot change invoice for an existing payment" };
+  const updatedPaymentId = (rpcData as { payment_id?: string } | null)?.payment_id;
+  if (!updatedPaymentId) {
+    return { error: "Failed to update payment: missing payment_id from RPC" };
   }
 
-  const oldAmount = Number(existingPayment.amount ?? 0);
-  const newAmount = Number(parsed.amount);
-
-  // 2) Use existing invoice_id (cannot be changed)
-  const targetInvoiceId = oldInvoiceId;
-  
-  if (!targetInvoiceId) {
-    return { error: "Invalid payment: missing invoice_id" };
-  }
-
-  // 3) Load invoice state for validation (canonical contract)
-  // If invoice changed, we need to validate both old and new invoices
-  // If only amount changed, validate against the same invoice
-  const { data: invoiceView, error: invoiceViewError } = await supabase
-    .from("invoices_view")
-    .select("id, total, paid, outstanding")
-    .eq("id", targetInvoiceId)
-    .eq("workspace_id", workspaceId)
-    // Explicit filter (even if invoices_view excludes archived invoices at SQL layer)
-    .is("archived_at", null)
-    .single();
-
-  if (invoiceViewError || !invoiceView) {
-    const errorDetails = {
-      message: invoiceViewError?.message || "Unknown error",
-      code: invoiceViewError?.code || null,
-      details: (invoiceViewError as any)?.details || null,
-      hint: (invoiceViewError as any)?.hint || null,
-    };
-    console.error("[updatePayment] failed to load invoice:", errorDetails);
-    return { error: `Invoice not found: ${errorDetails.message}` };
-  }
-
-  // 4) Calculate what the new outstanding will be after this update
-  // Only count payments with status "completed" (or null, which we treat as completed)
-  // IMPORTANT: invoices_view is the source of truth for outstanding.
-  // This logic must stay in sync with its definition (which excludes archived payments and
-  // only counts completed/paid/null statuses in the paid sum).
-  // Note: invoices_view.outstanding = total - paid, where paid includes all completed payments
-  // Note: Database may have "paid" status, but form schema only allows "completed"
-  const oldPaymentWasCompleted = 
-    !existingPayment.status || 
-    existingPayment.status === "completed" || 
-    (existingPayment.status as string) === "paid"; // Database may have "paid" even if form doesn't
-  
-  const newPaymentWillBeCompleted = 
-    !parsed.status || 
-    parsed.status === "completed";
-
-  // Current outstanding from the view (this already accounts for all completed payments)
-  const currentOutstanding = Number(invoiceView.outstanding ?? 0);
-
-  // Calculate effective change in total_paid:
-  // - If old payment was completed: it's currently in total_paid, so removing it increases outstanding
-  // - If new payment will be completed: it will be added to total_paid, so it decreases outstanding
-  // Therefore: newOutstanding = currentOutstanding + oldAmount (if completed) - newAmount (if will be completed)
-  let effectiveDelta = 0;
-  if (oldPaymentWasCompleted) {
-    effectiveDelta -= oldAmount; // Removing from total_paid increases outstanding
-  }
-  if (newPaymentWillBeCompleted) {
-    effectiveDelta += newAmount; // Adding to total_paid decreases outstanding
-  }
-
-  // Calculate new outstanding after update
-  // effectiveDelta is negative when we're reducing total_paid (increasing outstanding)
-  // effectiveDelta is positive when we're increasing total_paid (decreasing outstanding)
-  const newOutstanding = currentOutstanding - effectiveDelta;
-
-  // 5) Validate: new outstanding cannot be negative
-  if (newOutstanding < 0) {
-    const currentOutstandingFormatted = currentOutstanding.toFixed(2);
-    const amountChange = effectiveDelta > 0 ? `+${effectiveDelta.toFixed(2)}` : effectiveDelta.toFixed(2);
-    return { 
-      error: `Updating this payment would result in overpayment. Current outstanding: ${currentOutstandingFormatted}, payment change: ${amountChange}.` 
-    };
-  }
-
-  // 6) Invoice cannot be changed (already validated above), so skip new invoice validation
-
-  // 6) Perform the update (only safe fields - client_id and invoice_id cannot be changed)
-  const { error } = await supabase
-    .from("payments")
-    .update({
-      // Do NOT update client_id or invoice_id (financial integrity)
-      amount: parsed.amount,
-      payment_date: parsed.date, // Map form's 'date' to database's 'payment_date'
-      method: parsed.method,
-      status: parsed.status,
-      transaction_id: parsed.transactionId ?? null,
-      notes: parsed.notes ?? null,
-      payment_provider: parsed.payment_provider || null,
-    })
-    .eq("id", paymentId)
-    .eq("workspace_id", validatedWorkspaceId);
-
-  if (error) {
-    const errorDetails = {
-      message: error?.message || "Unknown error",
-      code: error?.code || null,
-      details: (error as any)?.details || null,
-      hint: (error as any)?.hint || null,
-    };
-    console.error("[updatePayment] update failed:", errorDetails);
-    return { error: `Failed to update payment: ${errorDetails.message}` };
-  }
-
-  // REMOVED: recalculateInvoiceState call
-  // invoices_view computes paid/outstanding automatically from payments
-
-  // 7) Log audit event with user.id and workspace_id
-  // Use workspaceId param (guaranteed valid after requireWorkspace validation) - never use optional fields
   // Audit log failure must never break payment update (logAuditEvent is non-blocking)
   await logAuditEvent({
     workspaceId,
@@ -517,18 +268,18 @@ export async function updatePayment(
     entityId: paymentId,
     action: "updated",
     metadata: {
-      invoice_id: oldInvoiceId, // Use existing invoice_id (cannot be changed)
+      invoice_id: parsed.invoiceId,
       amount: parsed.amount,
       method: parsed.method,
       status: parsed.status,
       payment_date: parsed.date,
-      invoice_changed: false, // Invoice cannot be changed
+      invoice_changed: false,
     },
   });
 
   revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath, {
-    invoiceId: oldInvoiceId,
-    clientId: oldClientId,
+    invoiceId: parsed.invoiceId,
+    clientId: parsed.clientId,
     paymentId,
   });
   return { success: true };

@@ -39,6 +39,10 @@ function assertEntitlementBeforeMutation(block: string, label: string) {
       block.indexOf('.from("payments")'),
       block.indexOf(".from('payments')"),
       block.indexOf('.update({ archived_at'),
+      block.indexOf('"rpc_create_payment_manual"'),
+      block.indexOf("'rpc_create_payment_manual'"),
+      block.indexOf('"rpc_update_payment_manual"'),
+      block.indexOf("'rpc_update_payment_manual'"),
     ].filter((idx) => idx >= 0)
   );
   if (mutationIdx >= 0) {
@@ -138,7 +142,16 @@ describe("payment mutation entitlement parity", () => {
   it("L — payment overpay and unarchive overpay guards remain intact", () => {
     assert.match(actionsSrc, /wouldRestorePaymentCauseOverpay/);
     assert.match(actionsSrc, /validatePaymentUnarchiveBatchOverpay/);
-    assert.match(actionsSrc, /Payment amount \(\$\{paymentAmount\.toFixed\(2\)\}\) exceeds the invoice outstanding balance/);
+    assert.match(actionsSrc, /rpc_create_payment_manual/);
+    assert.match(actionsSrc, /rpc_update_payment_manual/);
+    assert.match(
+      readFileSync("supabase/migrations/20260825120000_rpc_create_payment_manual.sql", "utf8"),
+      /Payment amount \(%\) exceeds the invoice outstanding balance/
+    );
+    assert.match(
+      readFileSync("supabase/migrations/20260825120000_rpc_create_payment_manual.sql", "utf8"),
+      /Updating this payment would result in overpayment/
+    );
   });
 });
 

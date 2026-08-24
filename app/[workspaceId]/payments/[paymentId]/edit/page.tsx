@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { PaymentForm } from "../../_components/PaymentForm";
 import { PaymentFormSchema, type PaymentFormValues } from "@/lib/payments/schema";
 import { updatePayment } from "../../actions";
+import { isExpectedPaymentManualRpcError } from "@/lib/payments/mapCreatePaymentRpcError";
 import { getEligibleInvoicesForClient } from "../../_lib/eligible";
 import { getPaymentClients } from "../../_lib/getPaymentClients";
 import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
@@ -10,12 +11,23 @@ import { resolvePaymentBusinessDate } from "@/lib/payments/paymentBusinessDate";
 
 interface EditPaymentPageProps {
   params: Promise<{ workspaceId: string; paymentId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function readSearchParam(
+  value: string | string[] | undefined
+): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
 }
 
 export default async function EditPaymentPage({
   params,
+  searchParams,
 }: EditPaymentPageProps) {
   const { workspaceId, paymentId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const submitError = readSearchParam(resolvedSearchParams.error);
   const supabase = await supabaseServer();
   const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
 
@@ -184,6 +196,11 @@ export default async function EditPaymentPage({
 
     const result = await updatePayment(workspaceId, paymentId, parsed.data as PaymentFormValues);
     if (result && "error" in result) {
+      if (isExpectedPaymentManualRpcError(result)) {
+        redirect(
+          `/${workspaceId}/payments/${paymentId}/edit?error=${encodeURIComponent(result.error)}`
+        );
+      }
       throw new Error(result.error);
     }
     redirect(`/${workspaceId}/payments`);
@@ -244,6 +261,7 @@ export default async function EditPaymentPage({
             cancelUrl={`/${workspaceId}/payments/${paymentId}`}
             clientName={clientName || undefined}
             invoiceNumber={invoiceNumber || undefined}
+            submitError={submitError}
           />
         </>
       )}

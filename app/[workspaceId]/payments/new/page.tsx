@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { PaymentForm } from "../_components/PaymentForm";
 import { PaymentFormSchema, type PaymentFormValues } from "@/lib/payments/schema";
 import { createPayment } from "../actions";
+import { isExpectedPaymentManualRpcError } from "@/lib/payments/mapCreatePaymentRpcError";
 import { getEligibleClientsForPayments } from "../_lib/eligible";
 import { loadWorkspaceSettings } from "@/lib/settings/loadSettings";
 import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
@@ -28,6 +29,7 @@ export default async function NewPaymentPage({
   const prefillClientId = readSearchParam(resolvedSearchParams.clientId);
   const prefillInvoiceId = readSearchParam(resolvedSearchParams.invoiceId);
   const returnTo = readSearchParam(resolvedSearchParams.returnTo);
+  const submitError = readSearchParam(resolvedSearchParams.error);
 
   const settings = await loadWorkspaceSettings(workspaceId);
   const defaultPaymentDate =
@@ -84,6 +86,23 @@ export default async function NewPaymentPage({
 
     const result = await createPayment(workspaceId, parsed.data as PaymentFormValues);
     if ("error" in result) {
+      if (isExpectedPaymentManualRpcError(result)) {
+        const params = new URLSearchParams();
+        params.set("error", result.error);
+        if (parsed.data.clientId) {
+          params.set("clientId", parsed.data.clientId);
+        }
+        if (parsed.data.invoiceId) {
+          params.set("invoiceId", parsed.data.invoiceId);
+        }
+        const returnToParam = readSearchParam(
+          formData.get("returnTo")?.toString() as string | undefined
+        );
+        if (returnToParam && returnToParam.startsWith(`/${workspaceId}/`)) {
+          params.set("returnTo", returnToParam);
+        }
+        redirect(`/${workspaceId}/payments/new?${params.toString()}`);
+      }
       throw new Error(result.error);
     }
 
@@ -136,6 +155,7 @@ export default async function NewPaymentPage({
           initialData={initialData}
           prefillInvoiceId={prefillClientAllowed ? prefillInvoiceId : undefined}
           returnTo={returnTo}
+          submitError={submitError}
         />
       )}
     </div>

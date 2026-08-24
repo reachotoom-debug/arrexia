@@ -2039,6 +2039,37 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_create_payment_manual: {
+        Args: {
+          p_amount: number
+          p_client_id: string
+          p_invoice_id: string
+          p_method: string
+          p_notes: string | null
+          p_payment_date: string
+          p_payment_provider: string | null
+          p_status: string
+          p_transaction_id: string | null
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      rpc_update_payment_manual: {
+        Args: {
+          p_amount: number
+          p_client_id: string
+          p_invoice_id: string
+          p_method: string
+          p_notes: string | null
+          p_payment_date: string
+          p_payment_provider: string | null
+          p_payment_id: string
+          p_status: string
+          p_transaction_id: string | null
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       rpc_import_payments:
         | {
             Args: { p_dry_run: boolean; p_rows: Json; p_workspace_id: string }
