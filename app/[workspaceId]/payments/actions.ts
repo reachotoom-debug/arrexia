@@ -17,11 +17,10 @@ import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
 import { EntitlementError } from "@/lib/billing/entitlementErrors";
 import { revalidateFinancialSurfacesAfterPayment } from "@/lib/payments/revalidateFinancialSurfaces";
 import {
-  formatPaymentUnarchiveOverpayError,
-  validatePaymentUnarchiveBatchOverpay,
-  wouldRestorePaymentCauseOverpay,
-} from "@/lib/payments/paymentUnarchiveOverpay";
-import { mapCreatePaymentRpcError, mapUpdatePaymentRpcError } from "@/lib/payments/mapCreatePaymentRpcError";
+  mapCreatePaymentRpcError,
+  mapUpdatePaymentRpcError,
+  mapUnarchivePaymentRpcError,
+} from "@/lib/payments/mapCreatePaymentRpcError";
 
 /**
  * Server action to load eligible invoices for a specific client (for payment recording)
@@ -120,6 +119,61 @@ async function getPaymentMutationEntitlementBlock(workspaceId: string): Promise<
     }
     throw error;
   }
+}
+
+type RestorePaymentRpcSuccess = {
+  ok: true;
+  paymentId: string;
+  alreadyUnarchived: boolean;
+  invoiceId: string | null;
+  clientId: string | null;
+};
+
+type RestorePaymentRpcFailure = {
+  ok: false;
+  error: string;
+  code?: string;
+};
+
+async function restorePaymentViaRpc(
+  supabase: Awaited<ReturnType<typeof supabaseServer>>,
+  workspaceId: string,
+  paymentId: string
+): Promise<RestorePaymentRpcSuccess | RestorePaymentRpcFailure> {
+  const { data, error } = await supabase.rpc("rpc_unarchive_payment_manual", {
+    p_workspace_id: workspaceId,
+    p_payment_id: paymentId,
+  });
+
+  if (error) {
+    console.error("[restorePaymentViaRpc] rpc_unarchive_payment_manual failed:", {
+      workspaceId,
+      paymentId,
+      code: error.code,
+      message: error.message,
+    });
+    const mapped = mapUnarchivePaymentRpcError(error);
+    return { ok: false, error: mapped.error, code: mapped.code };
+  }
+
+  const payload = data as {
+    payment_id?: string;
+    already_unarchived?: boolean;
+    invoice_id?: string | null;
+    client_id?: string | null;
+  } | null;
+
+  if (!payload?.payment_id) {
+    return { ok: false, error: "Failed to restore payment: missing payment_id from RPC" };
+  }
+
+  return {
+    ok: true,
+    paymentId: payload.payment_id,
+    alreadyUnarchived: payload.already_unarchived === true,
+    invoiceId: payload.invoice_id ?? null,
+    clientId: payload.client_id ?? null,
+  };
 }
 
 export async function createPayment(
@@ -477,121 +531,20 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
   }
 
   const supabase = await supabaseServer();
+  const restoreResult = await restorePaymentViaRpc(supabase, workspaceId, paymentId);
 
-  // Step 1: Fetch existing row to check state and get invoice_id
-  const { data: existing, error: fetchError } = await supabase
-    .from("payments")
-    .select("id, workspace_id, invoice_id, client_id, archived_at, amount, status")
-    .eq("id", paymentId)
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
-
-  if (fetchError) {
-    console.error("[unarchivePayment] fetch failed", {
-      code: fetchError.code,
-      message: fetchError.message,
-      workspaceId,
-      paymentId,
-    });
-    throw new Error(`Failed to fetch payment: ${fetchError.message}`);
+  if (!restoreResult.ok) {
+    throw new Error(restoreResult.error);
   }
 
-  if (!existing) {
-    console.error("[unarchivePayment] payment not found", { workspaceId, paymentId });
-    throw new Error("Payment not found");
+  if (restoreResult.alreadyUnarchived) {
+    return {
+      ok: true,
+      alreadyUnarchived: true,
+      invoiceId: restoreResult.invoiceId,
+    };
   }
 
-  // Step 2: Check if already unarchived (idempotent)
-  if (!existing.archived_at) {
-    // Already unarchived - return success without updating
-    return { ok: true, alreadyUnarchived: true, invoiceId: existing.invoice_id || null };
-  }
-
-  // Step 3: Block restore when re-including this payment would overpay the invoice
-  if (existing.invoice_id) {
-    const { data: invoiceView, error: invoiceViewError } = await supabase
-      .from("invoices_view")
-      .select("outstanding")
-      .eq("id", existing.invoice_id)
-      .eq("workspace_id", workspaceId)
-      .is("archived_at", null)
-      .maybeSingle();
-
-    if (invoiceViewError) {
-      console.error("[unarchivePayment] invoice load failed", {
-        code: invoiceViewError.code,
-        message: invoiceViewError.message,
-        workspaceId,
-        paymentId,
-        invoiceId: existing.invoice_id,
-      });
-      throw new Error(`Failed to validate invoice outstanding: ${invoiceViewError.message}`);
-    }
-
-    const currentOutstanding = Number(invoiceView?.outstanding ?? 0);
-    const paymentAmount = Number(existing.amount ?? 0);
-
-    if (
-      wouldRestorePaymentCauseOverpay({
-        paymentAmount,
-        paymentStatus: existing.status,
-        currentOutstanding,
-      })
-    ) {
-      throw new Error(
-        formatPaymentUnarchiveOverpayError({
-          paymentAmount,
-          availableOutstanding: currentOutstanding,
-        })
-      );
-    }
-  }
-
-  // Step 4: Update archived_at = null (filter by BOTH id AND workspace_id, use select to verify update)
-  const { error: updateError, data: updatedPayments } = await supabase
-    .from("payments")
-    .update({ archived_at: null })
-    .eq("id", paymentId)
-    .eq("workspace_id", workspaceId)
-    .not("archived_at", "is", null)
-    .select("id, invoice_id");
-
-  if (updateError) {
-    console.error("[unarchivePayment] update failed", {
-      code: updateError.code,
-      message: updateError.message,
-      workspaceId,
-      paymentId,
-    });
-    throw new Error(`Failed to unarchive payment: ${updateError.message}`);
-  }
-
-  // Check if update affected exactly one row (should always be 1 for single ID update)
-  if (!updatedPayments || updatedPayments.length === 0) {
-    // No rows updated - payment was already unarchived (race condition) or doesn't exist in workspace
-    // Since we already checked it exists and is archived, this is a race condition - treat as idempotent
-    return { ok: true, alreadyUnarchived: true, invoiceId: existing.invoice_id || null };
-  }
-
-  // If more than 1 row updated (shouldn't happen with single ID), log warning but proceed
-  if (updatedPayments.length > 1) {
-    console.warn("[unarchivePayment] update affected multiple rows (unexpected)", {
-      workspaceId,
-      paymentId,
-      count: updatedPayments.length,
-    });
-  }
-
-  // Step 5: Recalculate invoice state if payment was linked to an invoice
-  if (existing.invoice_id) {
-    try {
-      await recalculateInvoiceState(existing.invoice_id);
-    } catch (recalcError) {
-      console.error("[unarchivePayment] invoice recalculation failed (non-blocking):", recalcError);
-    }
-  }
-
-  // Step 6: Log audit event (non-blocking)
   try {
     await logAuditEvent({
       workspaceId,
@@ -605,8 +558,8 @@ export async function unarchivePayment(workspaceId: string, paymentId: string) {
   }
 
   revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath, {
-    invoiceId: existing.invoice_id,
-    clientId: existing.client_id,
+    invoiceId: restoreResult.invoiceId,
+    clientId: restoreResult.clientId,
     paymentId,
   });
 }
@@ -716,11 +669,8 @@ export async function bulkArchivePayments(workspaceId: string, paymentIds: strin
 }
 
 /**
- * Bulk unarchive payments: sets archived_at = null for multiple payments
- * Workspace-scoped and id-scoped (eq workspace_id + in ids)
- * Idempotent: skips already unarchived payments via .not("archived_at", "is", null) filter
- * 
- * Financial integrity: Recalculates invoice states for affected invoices
+ * Bulk unarchive payments via atomic restore RPC (one payment per transaction).
+ * Successful restores remain committed; failures return a clean message without rollback.
  */
 export async function bulkUnarchivePayments(workspaceId: string, paymentIds: string[]) {
   const { user } = await requireUser();
@@ -737,131 +687,48 @@ export async function bulkUnarchivePayments(workspaceId: string, paymentIds: str
     return { ok: false, message: "No payments selected" };
   }
 
-  // Step 1: Fetch existing payments to get invoice_ids before unarchiving
-  const { data: existingPayments, error: fetchError } = await supabase
-    .from("payments")
-    .select("id, invoice_id, amount, status")
-    .eq("workspace_id", workspaceId)
-    .in("id", paymentIds)
-    .not("archived_at", "is", null);
+  const sortedPaymentIds = [...paymentIds].sort();
+  let restoredCount = 0;
+  let firstError: string | null = null;
+  const invoiceIds = new Set<string>();
 
-  if (fetchError) {
-    console.error("[bulkUnarchivePayments] fetch failed", {
-      code: fetchError.code,
-      message: fetchError.message,
-      workspaceId,
-      paymentIds,
-    });
-    return { ok: false, message: `Failed to fetch payments: ${fetchError.message}` };
-  }
+  for (const paymentId of sortedPaymentIds) {
+    const restoreResult = await restorePaymentViaRpc(supabase, workspaceId, paymentId);
 
-  if (!existingPayments || existingPayments.length === 0) {
-    // All payments are already unarchived or don't exist - idempotent success
-    return { ok: true, count: 0, message: "No payments to unarchive" };
-  }
+    if (!restoreResult.ok) {
+      if (!firstError) {
+        firstError = restoreResult.error;
+      }
+      continue;
+    }
 
-  const idsToUnarchive = existingPayments.map((p) => p.id);
+    if (restoreResult.alreadyUnarchived) {
+      continue;
+    }
 
-  const linkedInvoiceIds = Array.from(
-    new Set(
-      existingPayments
-        .map((payment) => payment.invoice_id)
-        .filter((invoiceId): invoiceId is string => Boolean(invoiceId))
-    )
-  );
+    restoredCount += 1;
+    if (restoreResult.invoiceId) {
+      invoiceIds.add(restoreResult.invoiceId);
+    }
 
-  const outstandingByInvoice = new Map<string, number>();
-
-  if (linkedInvoiceIds.length > 0) {
-    const { data: invoiceRows, error: invoiceRowsError } = await supabase
-      .from("invoices_view")
-      .select("id, outstanding")
-      .eq("workspace_id", workspaceId)
-      .in("id", linkedInvoiceIds)
-      .is("archived_at", null);
-
-    if (invoiceRowsError) {
-      console.error("[bulkUnarchivePayments] invoice load failed", {
-        code: invoiceRowsError.code,
-        message: invoiceRowsError.message,
+    try {
+      await logAuditEvent({
         workspaceId,
-        paymentIds: idsToUnarchive,
+        userId: user.id,
+        entityType: "payment",
+        entityId: paymentId,
+        action: "unarchived",
       });
-      return {
-        ok: false,
-        message: `Failed to validate invoice outstanding: ${invoiceRowsError.message}`,
-      };
-    }
-
-    for (const invoiceRow of invoiceRows ?? []) {
-      outstandingByInvoice.set(invoiceRow.id, Number(invoiceRow.outstanding ?? 0));
+    } catch (auditError) {
+      console.error("[bulkUnarchivePayments] audit log failed (non-blocking):", auditError);
     }
   }
 
-  const overpayErrors = validatePaymentUnarchiveBatchOverpay({
-    payments: existingPayments
-      .filter((payment) => payment.invoice_id)
-      .map((payment) => ({
-        paymentId: payment.id,
-        invoiceId: payment.invoice_id as string,
-        amount: Number(payment.amount ?? 0),
-        status: payment.status,
-      })),
-    outstandingByInvoice,
-  });
-
-  if (overpayErrors.size > 0) {
-    const firstError = overpayErrors.values().next().value as string;
-    return { ok: false, message: firstError };
-  }
-
-  // Step 2: Update archived_at = null (using select array is safe, no single() here)
-  const { error: updateError, data: updatedPayments } = await supabase
-    .from("payments")
-    .update({ archived_at: null })
-    .eq("workspace_id", workspaceId)
-    .in("id", idsToUnarchive)
-    .not("archived_at", "is", null)
-    .select("id, invoice_id");
-
-  if (updateError) {
-    console.error("[bulkUnarchivePayments] update failed", {
-      code: updateError.code,
-      message: updateError.message,
-      workspaceId,
-      paymentIds: idsToUnarchive,
-    });
-    return { ok: false, message: `Failed to unarchive payments: ${updateError.message}` };
-  }
-
-  if (!updatedPayments || updatedPayments.length === 0) {
-    // Race condition: payments were unarchived between fetch and update - idempotent success
-    return { ok: true, count: 0, message: "No payments updated" };
-  }
-
-  // Step 3: Recalculate invoice states for affected invoices (financial integrity)
-  const invoiceIds = Array.from(new Set(updatedPayments.map((p) => p.invoice_id).filter(Boolean) as string[]));
-  try {
-    await Promise.all(invoiceIds.map((invoiceId) => recalculateInvoiceState(invoiceId)));
-  } catch (recalcError) {
-    console.error("[bulkUnarchivePayments] invoice recalculation failed (non-blocking):", recalcError);
-  }
-
-  // Step 4: Log audit events for each payment (non-blocking)
-  try {
-    await Promise.all(
-      updatedPayments.map((p) =>
-        logAuditEvent({
-          workspaceId,
-          userId: user.id,
-          entityType: "payment",
-          entityId: p.id,
-          action: "unarchived",
-        })
-      )
-    );
-  } catch (auditError) {
-    console.error("[bulkUnarchivePayments] audit log failed (non-blocking):", auditError);
+  if (restoredCount === 0) {
+    if (firstError) {
+      return { ok: false, message: firstError };
+    }
+    return { ok: true, count: 0, message: "No payments to unarchive" };
   }
 
   revalidateFinancialSurfacesAfterPayment(workspaceId, revalidatePath);
@@ -869,5 +736,13 @@ export async function bulkUnarchivePayments(workspaceId: string, paymentIds: str
     revalidatePath(`/${workspaceId}/invoices/${invoiceId}`);
   });
 
-  return { ok: true, count: updatedPayments.length };
+  if (firstError) {
+    return {
+      ok: true,
+      count: restoredCount,
+      message: `${restoredCount} payment${restoredCount !== 1 ? "s" : ""} restored. Some restores failed: ${firstError}`,
+    };
+  }
+
+  return { ok: true, count: restoredCount };
 }

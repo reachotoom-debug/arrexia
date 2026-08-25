@@ -149,6 +149,7 @@ describe("payment unarchive action wiring", () => {
   const actionsSrc = readFileSync("app/[workspaceId]/payments/actions.ts", "utf8");
 
   it("E — cross-workspace authorization remains on unarchive paths", () => {
+    const actionsSrc = readFileSync("app/[workspaceId]/payments/actions.ts", "utf8");
     const unarchiveBlock = actionsSrc.slice(
       actionsSrc.indexOf("export async function unarchivePayment"),
       actionsSrc.indexOf("export async function bulkArchivePayments")
@@ -157,11 +158,15 @@ describe("payment unarchive action wiring", () => {
       actionsSrc.indexOf("export async function bulkUnarchivePayments"),
       actionsSrc.length
     );
+    const restoreHelper = actionsSrc.slice(
+      actionsSrc.indexOf("async function restorePaymentViaRpc"),
+      actionsSrc.indexOf("export async function createPayment")
+    );
 
     assert.match(unarchiveBlock, /requireWorkspace\(workspaceId\)/);
-    assert.match(unarchiveBlock, /\.eq\("workspace_id", workspaceId\)/);
+    assert.match(restoreHelper, /p_workspace_id: workspaceId/);
+    assert.match(restoreHelper, /rpc_unarchive_payment_manual/);
     assert.match(bulkUnarchiveBlock, /requireWorkspace\(workspaceId\)/);
-    assert.match(bulkUnarchiveBlock, /\.eq\("workspace_id", workspaceId\)/);
   });
 
   it("F — archive operation itself remains unchanged (no unarchive overpay guard)", () => {
@@ -175,9 +180,9 @@ describe("payment unarchive action wiring", () => {
     assert.match(archiveBlock, /\.update\(\{ archived_at: new Date\(\)\.toISOString\(\) \}\)/);
   });
 
-  it("unarchive paths invoke unarchive overpay guard before restore", () => {
-    assert.match(actionsSrc, /wouldRestorePaymentCauseOverpay/);
-    assert.match(actionsSrc, /validatePaymentUnarchiveBatchOverpay/);
-    assert.match(actionsSrc, /formatPaymentUnarchiveOverpayError/);
+  it("unarchive paths delegate to atomic restore RPC", () => {
+    assert.match(actionsSrc, /restorePaymentViaRpc/);
+    assert.match(actionsSrc, /rpc_unarchive_payment_manual/);
+    assert.match(actionsSrc, /mapUnarchivePaymentRpcError/);
   });
 });

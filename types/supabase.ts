@@ -2070,6 +2070,13 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_unarchive_payment_manual: {
+        Args: {
+          p_payment_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       rpc_import_payments:
         | {
             Args: { p_dry_run: boolean; p_rows: Json; p_workspace_id: string }

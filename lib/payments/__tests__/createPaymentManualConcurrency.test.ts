@@ -173,6 +173,17 @@ describe("manual payment create + update concurrency hardening", () => {
       );
     });
 
+    it("update RPC new_effective includes legacy paid status (PAY-002)", () => {
+      const hardeningMigration = readFileSync(
+        "supabase/migrations/20260825140000_rpc_unarchive_payment_manual_and_legacy_paid.sql",
+        "utf8"
+      );
+      assert.match(
+        hardeningMigration,
+        /v_new_effective := CASE[\s\S]*v_status IN \('completed', 'paid'\)/
+      );
+    });
+
     it("update RPC lock ordering is invoice FOR UPDATE then payment FOR UPDATE", () => {
       const updateFn = migration.slice(
         migration.indexOf("CREATE OR REPLACE FUNCTION public.rpc_update_payment_manual")

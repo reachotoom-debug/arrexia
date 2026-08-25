@@ -15,6 +15,9 @@ export type PaymentManualActionError = {
 const EXPECTED_UPDATE_OVERPAY_MESSAGE =
   "Payment exceeds the invoice outstanding balance.";
 
+export const EXPECTED_RESTORE_OVERPAY_MESSAGE =
+  "Restoring this payment would exceed the invoice outstanding balance.";
+
 function normalizeRpcMessage(message: string): string {
   return message.replace(/\s+/g, " ").trim();
 }
@@ -28,6 +31,15 @@ function mapPaymentManualRpcBase(rpcError: RpcErrorLike, actionLabel: string): P
       error:
         "A payment with this transaction reference already exists in this workspace.",
       code: "23505",
+      details: rpcError.details ?? null,
+      hint: rpcError.hint ?? null,
+    };
+  }
+
+  if (message === EXPECTED_RESTORE_OVERPAY_MESSAGE) {
+    return {
+      error: EXPECTED_RESTORE_OVERPAY_MESSAGE,
+      code: code ?? "P0001",
       details: rpcError.details ?? null,
       hint: rpcError.hint ?? null,
     };
@@ -126,6 +138,7 @@ export function isExpectedPaymentManualRpcError(result: PaymentManualActionError
 
   if (
     error === EXPECTED_UPDATE_OVERPAY_MESSAGE ||
+    error === EXPECTED_RESTORE_OVERPAY_MESSAGE ||
     error.includes("would result in overpayment") ||
     error.includes("exceeds the invoice outstanding balance") ||
     error.includes("transaction reference already exists") ||
@@ -170,4 +183,13 @@ export function mapUpdatePaymentRpcError(rpcError: RpcErrorLike): PaymentManualA
     return { ...mapped, error: `Failed to update payment: ${rpcError.message ?? "Unknown error"}` };
   }
   return mapped;
+}
+
+/**
+ * Maps rpc_unarchive_payment_manual errors to restore action responses.
+ */
+export function mapUnarchivePaymentRpcError(
+  rpcError: RpcErrorLike
+): PaymentManualActionError {
+  return mapPaymentManualRpcBase(rpcError, "restore");
 }
