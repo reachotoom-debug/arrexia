@@ -32,6 +32,7 @@ import {
   buildInvoiceLineAmountMismatchWarning,
   resolveImportedInvoiceStatus,
 } from "@/lib/import/invoiceImportPreviewWarnings";
+import { validateInvoiceGroupsForExecute } from "@/lib/import/invoiceImportExecuteValidation";
 
 /**
  * Dev-only logging helper
@@ -1214,6 +1215,21 @@ export async function executeInvoicesImport(
       };
     }
     throw error;
+  }
+
+  const executeValidationErrors = validateInvoiceGroupsForExecute(invoiceGroups);
+  if (executeValidationErrors.length > 0) {
+    return {
+      ok: false,
+      results: invoiceGroups.map((group) => ({
+        rowId: group.rowId,
+        invoice_number: group.invoice_number,
+        status: "failed" as const,
+        invoice_id: null,
+        error: executeValidationErrors.find((e) => e.includes(group.invoice_number)) ?? executeValidationErrors[0],
+      })),
+      errors: executeValidationErrors,
+    };
   }
 
   // Convert invoice groups to raw rows format (row_type invoice|item)

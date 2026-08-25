@@ -2,7 +2,7 @@
 -- STAGING / LOCAL ONLY — NEVER RUN ON PRODUCTION
 -- Integration: import_invoices_grouped financial integrity + atomicity
 -- Usage: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/db/importInvoicesGroupedIntegrity.integration.sql
--- Requires: migrations through 20260823150000_invoice_import_no_client_auto_create.sql applied
+-- Requires: migrations through 20260825150000_invoice_import_financial_hardening.sql applied
 -- ============================================================================
 
 BEGIN;
@@ -565,6 +565,31 @@ BEGIN
   IF (SELECT count(*) FROM public.invoices WHERE workspace_id = v_workspace_id) <> v_invoice_count THEN
     RAISE EXCEPTION 'client race failure changed invoice count';
   END IF;
+
+  -- --------------------------------------------------------------------------
+  -- IMP-002: zero quantity rejected before mutations (craft execute bypass)
+  -- --------------------------------------------------------------------------
+  v_rows := jsonb_build_array(
+    jsonb_build_object('row_type', 'invoice', 'invoice_number', 'INV-ZERO-QTY', 'client_email', 'acme@example.com', 'client_name', 'Acme Corp', 'issue_date', '2026-01-01', 'due_date', '2026-02-01', 'currency', 'USD', 'status', 'sent'),
+    jsonb_build_object('row_type', 'item', 'invoice_number', 'INV-ZERO-QTY', 'item_description', 'Item', 'quantity', '0', 'unit_price', '10')
+  );
+
+  v_result := public.internal_import_invoices_grouped(v_workspace_id, v_rows, false);
+  IF COALESCE((v_result->>'ok')::boolean, false) IS TRUE THEN
+    RAISE EXCEPTION 'zero quantity execute should fail: %', v_result;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.invoices WHERE workspace_id = v_workspace_id AND invoice_number = 'INV-ZERO-QTY') THEN
+    RAISE EXCEPTION 'zero quantity failure committed invoice';
+  END IF;
+
+  -- --------------------------------------------------------------------------
+  -- IMP-001 concurrency proof (manual two-session test — not automated here)
+  -- Session A: internal_import_invoices_grouped(..., false) on existing invoice re-import
+  -- Session B: rpc_create_payment_manual / rpc_update_payment_manual on same invoice
+  -- Both serialize on public.invoices FOR UPDATE; only financially valid orderings commit.
+  -- Verify with two psql sessions holding locks; no committed state may have paid > total.
+  -- --------------------------------------------------------------------------
 END;
 $$;
 
