@@ -35,6 +35,8 @@ interface InvoiceFormProps {
   currency?: string;
   /** Workspace-local today (YYYY-MM-DD) for create-mode defaults */
   defaultIssueDate?: string;
+  /** Server-mapped submit error (edit mode redirect query param) */
+  submitError?: string;
 }
 
 export function InvoiceForm({
@@ -51,6 +53,7 @@ export function InvoiceForm({
   initialClientId,
   currency = "USD",
   defaultIssueDate,
+  submitError,
 }: InvoiceFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -212,6 +215,11 @@ export function InvoiceForm({
       onSubmit={handleSubmit(submitHandler)}
       className="mx-auto w-full max-w-6xl min-w-0 space-y-6"
     >
+      {submitError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {submitError}
+        </div>
+      ) : null}
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

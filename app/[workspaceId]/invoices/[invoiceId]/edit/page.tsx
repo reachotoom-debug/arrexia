@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { normalizeDateOnlyString } from "@/lib/datetime/formatDateTime";
@@ -7,18 +7,32 @@ import { InvoiceForm } from "../../_components/InvoiceForm";
 import { type InvoiceFormValues } from "@/lib/invoices/schema";
 import { updateInvoice } from "../../actions";
 import { isInvoiceFullyPaid } from "@/lib/invoices/invoiceFinancialState";
+import { isExpectedUpdateInvoiceError } from "@/lib/invoices/mapUpdateInvoiceError";
 import Link from "next/link";
 
 interface EditInvoicePageProps {
   params: Promise<{ workspaceId: string; invoiceId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 const isUuid = (value: string): boolean =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
-export default async function EditInvoicePage({ params }: EditInvoicePageProps) {
+function readSearchParam(
+  value: string | string[] | undefined
+): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+export default async function EditInvoicePage({
+  params,
+  searchParams,
+}: EditInvoicePageProps) {
   const perf = createRoutePerf("invoice-edit");
   const { workspaceId, invoiceId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const submitError = readSearchParam(resolvedSearchParams.error);
 
   await perf.time("requireWorkspace", () => requireWorkspace(workspaceId));
   const supabase = await supabaseServer();
@@ -185,13 +199,15 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
 
   async function handleUpdate(values: InvoiceFormValues) {
     "use server";
-    // updateInvoice will redirect on success, so we just call it
-    // If it returns an error, it will return { error: string } and we throw
     const result = await updateInvoice(workspaceId, resolvedInvoiceId, values);
     if (result && "error" in result) {
+      if (isExpectedUpdateInvoiceError(result)) {
+        redirect(
+          `/${workspaceId}/invoices/${invoiceId}/edit?error=${encodeURIComponent(result.error)}`
+        );
+      }
       throw new Error(result.error);
     }
-    // If we reach here, there was an error (redirect throws, so we never get here on success)
   }
 
   perf.finish({ items: (invoiceItems || []).length });
@@ -214,6 +230,7 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
         isPaid={false}
         isArchived={isArchived}
         currency={invoice.currency || "USD"}
+        submitError={submitError}
       />
     </div>
   );

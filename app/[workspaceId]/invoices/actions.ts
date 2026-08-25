@@ -513,7 +513,8 @@ export async function updateInvoice(
     }
     if (
       message === "Cannot edit an archived invoice. Unarchive it first." ||
-      message === "Cannot edit a fully paid invoice."
+      message === "Cannot edit a fully paid invoice." ||
+      message === "Invoice total cannot be less than the amount already paid."
     ) {
       return { error: message };
     }
