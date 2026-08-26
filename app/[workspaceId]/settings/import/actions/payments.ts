@@ -221,14 +221,6 @@ export async function previewPaymentsImport(
 
     let errorReason: string | undefined = undefined;
 
-    // Validate invoice_number format: must match /^INV-\d+/
-    if (!errorReason && invoiceNumberRaw) {
-      const invoiceNumberPattern = /^INV-\d+/;
-      if (!invoiceNumberPattern.test(invoiceNumberRaw)) {
-        errorReason = `Invalid invoice number format: "${invoiceNumberRaw}". Expected format: INV-#### (e.g., INV-0001, INV-1234).`;
-      }
-    }
-
     // Detect shifted columns: if invoice_number equals 'completed' or status equals a method, columns are shifted
     if (!errorReason) {
       const commonMethods = ["cash", "bank_transfer", "card", "check", "other"];
@@ -276,7 +268,7 @@ export async function previewPaymentsImport(
       }
     }
 
-    // Validate invoice number (format already checked above)
+    // Validate invoice number (any non-empty workspace-scoped identifier)
     if (!errorReason) {
       if (!invoiceNumberRaw) {
         errorReason = "Invoice Number is required";
@@ -340,13 +332,12 @@ export async function previewPaymentsImport(
     }
 
     // At this point, paymentDateISO, amount, and invoiceNumber are guaranteed to be defined
-    // Resolve invoice by invoice_number (workspace scoped)
+    // Resolve invoice by exact workspace_id + invoice_number (matches rpc_import_payments)
     const { data: invoice, error: invoiceError } = await supabase
-      .from("invoices")
-      .select("id, client_id")
+      .from("invoices_view")
+      .select("id, client_id, base_status")
       .eq("workspace_id", workspaceId)
       .eq("invoice_number", invoiceNumber)
-      .is("archived_at", null)
       .maybeSingle();
 
     if (invoiceError || !invoice) {
@@ -366,6 +357,52 @@ export async function previewPaymentsImport(
           payment_provider: providerRaw || null,
           invoice_id: null,
           client_id: null,
+        },
+      });
+      continue;
+    }
+
+    // Lifecycle parity with rpc_create_payment_manual (preview UX; RPC is authoritative)
+    let lifecycleError: string | undefined;
+    if (invoice.base_status === "void") {
+      lifecycleError = "Cannot create payment for void invoice";
+    } else if (invoice.base_status === "draft") {
+      lifecycleError =
+        "Cannot create payment for draft invoice. Invoice must be sent first.";
+    } else {
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .select("id, is_active, archived_at")
+        .eq("workspace_id", workspaceId)
+        .eq("id", invoice.client_id)
+        .maybeSingle();
+
+      if (clientError || !client) {
+        lifecycleError = "Client not found";
+      } else if (client.archived_at) {
+        lifecycleError = "Cannot create payment for archived client";
+      } else if (client.is_active !== true) {
+        lifecycleError = "Cannot create payment for inactive client";
+      }
+    }
+
+    if (lifecycleError) {
+      results.push({
+        rowId,
+        rowIndex: originalRowIndex + 1,
+        action: "fail",
+        reason: lifecycleError,
+        data: {
+          invoice_number: invoiceNumber,
+          amount,
+          currency: currency,
+          payment_date: paymentDateISO,
+          method: methodRaw || null,
+          status: status,
+          transaction_id: transactionIdRaw || "",
+          payment_provider: providerRaw || null,
+          invoice_id: invoice.id,
+          client_id: invoice.client_id,
         },
       });
       continue;
