@@ -20,14 +20,14 @@ const REMINDERS = [
   { title: "Follow-up — Summit Legal", when: "Wed" },
 ] as const;
 
-const SIDEBAR_ITEMS = ["Dashboard", "Clients", "Invoices", "Payments", "Collections"] as const;
+const SIDEBAR_ITEMS = ["Actions", "Dashboard", "Collections", "Invoices", "Payments"] as const;
 
 export function DashboardMockup() {
   return (
       <div
         className="relative mx-auto w-full max-w-xl lg:max-w-none"
         role="img"
-        aria-label="Preview of the Arrexia accounts receivable dashboard showing invoices, cash flow, and payment reminders"
+        aria-label="Preview of the Arrexia accounts receivable platform showing Daily Action Center priorities, collections, and payment follow-up"
       >
       <div
         aria-hidden="true"
@@ -57,10 +57,10 @@ export function DashboardMockup() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-slate-600">
-                  Dashboard
+                  Daily Action Center
                 </p>
                 <p className="text-sm font-semibold text-slate-900 sm:text-base">
-                  Cash flow overview
+                  Today&apos;s collection priorities
                 </p>
               </div>
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">

@@ -1,56 +1,64 @@
 import Link from "next/link";
 import {
+  AlertTriangle,
+  BarChart3,
   Bell,
-  FileText,
   LayoutDashboard,
-  Mail,
-  Shield,
-  Users,
+  ListChecks,
+  MessageCircle,
+  Sparkles,
   Wallet,
-  History,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const FEATURES: { title: string; description: string; icon: LucideIcon }[] = [
   {
-    title: "Professional invoices",
-    description: "Create polished invoices with clear payment terms and branded PDFs.",
-    icon: FileText,
+    title: "Daily Action Center",
+    description:
+      "See what needs attention today with a prioritized list of collection actions across your receivables.",
+    icon: ListChecks,
   },
   {
-    title: "Smart reminders",
-    description: "Automate follow-ups for due and overdue invoices before cash flow slips.",
-    icon: Bell,
-  },
-  {
-    title: "Payment tracking",
-    description: "Record payments, reconcile balances, and see what is still outstanding.",
-    icon: Wallet,
-  },
-  {
-    title: "Collections dashboard",
-    description: "Prioritize overdue accounts and work the queue that needs attention now.",
+    title: "Collections prioritization",
+    description:
+      "Work overdue accounts in order of risk and outstanding balance — not spreadsheet guesswork.",
     icon: LayoutDashboard,
   },
   {
-    title: "Risk insights",
-    description: "Spot clients and invoices that need earlier follow-up or tighter terms.",
-    icon: Shield,
+    title: "Arrexia AI",
+    description:
+      "Draft collection emails and messages grounded in invoice facts. You review and send — AI assists the decision.",
+    icon: Sparkles,
   },
   {
-    title: "Branded PDFs",
-    description: "Send invoices that look professional and match your business identity.",
-    icon: Mail,
+    title: "Automated email reminders",
+    description:
+      "Schedule due and overdue reminder sequences so follow-up stays consistent without manual tracking.",
+    icon: Bell,
   },
   {
-    title: "Reminder history",
-    description: "Keep a clear audit trail of every reminder sent and every follow-up.",
-    icon: History,
+    title: "WhatsApp click-to-send",
+    description:
+      "Open pre-filled WhatsApp messages for faster client follow-up when email is not enough.",
+    icon: MessageCircle,
   },
   {
-    title: "Client management",
-    description: "Organize clients, invoice history, and AR activity in one workspace.",
-    icon: Users,
+    title: "Overdue invoice management",
+    description:
+      "Track aging, status, and follow-up history for every overdue balance in one workspace.",
+    icon: AlertTriangle,
+  },
+  {
+    title: "Payment tracking",
+    description:
+      "Record payments, reconcile balances, and see what is still outstanding after each collection.",
+    icon: Wallet,
+  },
+  {
+    title: "Accounts receivable visibility",
+    description:
+      "Dashboards for receivables, cash flow, and collection performance — built for recovery, not bookkeeping.",
+    icon: BarChart3,
   },
 ];
 
@@ -60,11 +68,11 @@ export function LandingFeatures() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Cash collection operations to get paid faster
+            Collections workflow built to recover cash
           </h2>
           <p className="mt-4 text-lg text-slate-600">
-            Accounts receivable automation, payment follow-up, and collections visibility — built
-            for finance teams that need clarity without accounting complexity. See{" "}
+            Accounts receivable automation, prioritized follow-up, and AI-assisted communication —
+            built for teams that need to act on overdue receivables, not just report on them. See{" "}
             <Link href="/pricing" className="font-medium text-blue-700 hover:text-blue-800">
               pricing
             </Link>{" "}

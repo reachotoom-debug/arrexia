@@ -38,6 +38,7 @@ export function buildWebsiteSchema() {
 export function buildSoftwareApplicationSchema() {
   const starterPrice = PLAN_DEFINITIONS.starter.monthlyPrice;
   const proPrice = PLAN_DEFINITIONS.pro.monthlyPrice;
+  const businessPrice = PLAN_DEFINITIONS.business.monthlyPrice;
 
   return {
     "@context": "https://schema.org",
@@ -63,13 +64,21 @@ export function buildSoftwareApplicationSchema() {
         priceCurrency: "USD",
         url: absoluteUrl("/pricing"),
       },
+      {
+        "@type": "Offer",
+        name: "Business Plan",
+        price: businessPrice ?? 0,
+        priceCurrency: "USD",
+        url: absoluteUrl("/pricing"),
+      },
     ],
     featureList: [
-      "Receivables tracking",
-      "Payment reminder automation",
-      "Overdue collections management",
-      "Cash flow visibility",
-      "Collections dashboard",
+      "Daily Action Center for prioritized collection follow-up",
+      "Collections queue and overdue account prioritization",
+      "AI-assisted collection message drafting",
+      "Automated email reminder schedules",
+      "WhatsApp click-to-send collection messages",
+      "Payment tracking and receivables visibility",
     ],
     creator: {
       "@type": "Person",

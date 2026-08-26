@@ -3,21 +3,21 @@ import Link from "next/link";
 const STEPS = [
   {
     step: "1",
-    title: "Add clients and invoices",
+    title: "See what needs attention today",
     description:
-      "Import or create clients, issue invoices, and keep every balance in one organized workspace.",
+      "Daily Action Center surfaces prioritized collection actions from your receivables — overdue balances, follow-ups due, and accounts at risk.",
   },
   {
     step: "2",
-    title: "Track payments and overdue balances",
+    title: "Prioritize overdue accounts",
     description:
-      "See paid, outstanding, and overdue amounts at a glance with dashboards built for AR teams.",
+      "Use collections views and AI-assisted message drafts to decide the next follow-up for each client and invoice.",
   },
   {
     step: "3",
-    title: "Send reminders and recover cash",
+    title: "Follow up and track recovery",
     description:
-      "Use smart reminders and collections workflows to follow up consistently and get paid sooner.",
+      "Send email or WhatsApp reminders, record payments, and monitor cash flow as overdue receivables turn into collected cash.",
   },
 ] as const;
 
@@ -34,8 +34,8 @@ export function LandingHowItWorks() {
             How it works
           </h2>
           <p className="mt-4 text-lg text-slate-600">
-            A simple flow from receivables tracking to payment follow-up and cash collection — without
-            the spreadsheet chaos. Questions? Visit our{" "}
+            From overdue visibility to prioritized follow-up and payment recovery — without the
+            spreadsheet chaos. Questions? Visit our{" "}
             <Link href="/contact" className="font-medium text-blue-700 hover:text-blue-800">
               contact page
             </Link>

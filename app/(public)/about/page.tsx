@@ -26,10 +26,11 @@ const VALUES = [
 ] as const;
 
 const DELIVERS_TODAY = [
-  "Receivables visibility and aging dashboards",
-  "Automated payment reminders and follow-up",
-  "Collections workflows and risk insights",
-  "Payment tracking and cash flow reporting",
+  "Daily Action Center for prioritized collection follow-up",
+  "Collections queue and overdue account prioritization",
+  "AI-assisted collection message drafting",
+  "Automated email reminders and WhatsApp click-to-send",
+  "Payment tracking and accounts receivable visibility",
 ] as const;
 
 export default function AboutPage() {
@@ -40,11 +41,12 @@ export default function AboutPage() {
           <div className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 sm:py-20">
             <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">About Arrexia</p>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl lg:text-5xl">
-              Cash Collection Operations for healthier cash flow.
+              AI-powered accounts receivable &amp; collections for healthier cash flow.
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
-              Arrexia helps businesses improve cash flow through better accounts receivable and
-              collection operations — with clarity over overdue balances, payments, and follow-up.
+              Arrexia helps businesses recover overdue receivables through prioritized follow-up,
+              automated reminders, and AI-assisted collection communication — not general ledger
+              work.
             </p>
           </div>
         </section>
@@ -62,9 +64,9 @@ export default function AboutPage() {
           <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
             <h2 className="text-2xl font-semibold text-slate-900">Why Arrexia</h2>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            Many tools stop at creating invoices. Arrexia is built for Cash Collection Operations:
-            tracking receivables, automating payment follow-up, managing collections, and improving
-            cash flow visibility.
+            Many tools stop at creating invoices. Arrexia is built for accounts receivable and
+            collections: prioritized follow-up, automated reminders, AI-assisted communication,
+            and cash recovery visibility.
           </p>
           </div>
         </section>

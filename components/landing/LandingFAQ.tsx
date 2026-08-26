@@ -1,28 +1,28 @@
 const FAQ_ITEMS = [
   {
-    question: "Is Arrexia accounting or billing software?",
+    question: "Is Arrexia accounting or invoicing software?",
     answer:
-      "No. Arrexia is a Cash Collection Operations Platform focused on receivables visibility, automated payment follow-up, reminders, and cash flow — not general ledger or billing.",
+      "No. Arrexia is an AI-powered accounts receivable and collections platform. Invoices and payments support the workflow — the product focus is overdue visibility, prioritized follow-up, reminders, and cash recovery.",
   },
   {
     question: "Can I send invoice reminders by email?",
     answer:
-      "Arrexia supports reminder workflows and email templates so you can automate payment follow-up on due and overdue receivables.",
+      "Yes. Arrexia supports automated reminder schedules and manual email follow-up for due and overdue receivables, with a clear history of what was sent.",
   },
   {
-    question: "Do I need Stripe?",
+    question: "Do I need Stripe or a payment processor?",
     answer:
-      "No. Arrexia helps you track receivables and automate collections follow-up without requiring a payment processor.",
+      "No. Arrexia helps you track receivables, prioritize collections, and follow up on overdue invoices. You record payments in Arrexia — it does not process card payments natively.",
   },
   {
     question: "Can I change plans later?",
     answer:
-      "Yes. You can move between Starter and Pro as your client and invoice volume grows.",
+      "Yes. You can move between Starter, Pro, and Business as your client and invoice volume grows. Enterprise plans are available via Contact Sales.",
   },
   {
     question: "Can I get started for free?",
     answer:
-      "Yes. Create a free Arrexia account with no credit card required. You can upgrade to Starter or Pro when your business needs more capacity.",
+      "Yes. Create a free Arrexia account with no credit card required. You can upgrade to Starter, Pro, or Business when your business needs more capacity.",
   },
 ] as const;
 

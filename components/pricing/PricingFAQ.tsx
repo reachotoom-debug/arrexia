@@ -4,7 +4,7 @@ import { formatPublicTrialMicrocopy } from "@/lib/billing/plans";
 const FAQ = [
   {
     q: "Is Arrexia just for creating invoices?",
-    a: "No. Arrexia is a Cash Collection Operations Platform built around receivables tracking, automated payment follow-up, overdue visibility, and cash flow recovery.",
+    a: "No. Arrexia is an AI-powered accounts receivable and collections platform built around receivables tracking, automated payment follow-up, overdue visibility, and cash recovery.",
   },
   {
     q: "Do I need a credit card to get started?",

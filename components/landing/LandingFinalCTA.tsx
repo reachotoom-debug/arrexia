@@ -8,11 +8,10 @@ export function LandingFinalCTA() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-6 py-14 text-center shadow-xl sm:px-12 sm:py-16">
           <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Ready to reduce overdue invoices?
+            Ready to recover more overdue cash?
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-200">
-            Start with Arrexia and build a healthier cash flow process. Stop leaving money on
-            the table.
+            Start with Arrexia and turn overdue receivables into prioritized collection actions.
           </p>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-300">
             Explore{" "}

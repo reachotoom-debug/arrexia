@@ -18,7 +18,7 @@ const DashboardMockup = dynamic(
 );
 
 const TRUST_BULLETS = [
-  "Try Arrexia free",
+  "14-day free trial",
   "No credit card required",
   "Setup in minutes",
 ] as const;
@@ -33,23 +33,31 @@ export function LandingHero() {
       <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:gap-16 lg:py-24">
         <div className="max-w-xl lg:max-w-none">
           <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-sm font-semibold text-blue-800">
-            Cash Collection Operations Platform
+            AI-Powered Accounts Receivable &amp; Collections Platform
           </span>
 
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl lg:leading-[1.08]">
-            Help your business{" "}
+            Recover more cash with{" "}
             <span className="bg-gradient-to-r from-blue-700 via-cyan-700 to-violet-700 bg-clip-text text-transparent">
-              collect cash faster.
+              less manual effort.
             </span>
           </h1>
 
           <p className="mt-6 text-lg leading-relaxed text-slate-600 sm:text-xl">
-            Arrexia is a Cash Collection Operations Platform for tracking receivables, automating
-            payment follow-up, reducing overdue invoices, and improving cash flow.{" "}
+            Arrexia turns overdue receivables into prioritized collection actions — so your team
+            knows what to follow up on today, not just what is overdue in a report.{" "}
             <Link href="/about" className="font-medium text-blue-700 hover:text-blue-800">
               Learn about Arrexia
             </Link>
             .
+          </p>
+
+          <p className="mt-4 text-base font-medium text-slate-800">
+            Arrexia starts where accounting software stops.
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
+            Your accounting software shows you what&apos;s overdue. Arrexia helps you decide what
+            to do next.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">

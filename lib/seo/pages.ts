@@ -25,31 +25,31 @@ export type SeoPageConfig = {
 export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
   home: {
     path: "/",
-    title: "Arrexia | Cash Collection Operations Platform",
+    title: "Arrexia | AI-Powered Accounts Receivable & Collections Platform",
     description:
-      "Reduce overdue receivables, automate payment follow-up, track collections, and improve cash flow with Arrexia — a modern Cash Collection Operations Platform.",
+      "Recover more cash with less manual effort. Prioritize overdue receivables, automate payment follow-up, and act on collections with AI-assisted communication.",
     keywords: [
-      "cash collection operations",
-      "accounts receivable automation",
-      "payment reminder software",
-      "cash flow management",
+      "accounts receivable software",
+      "collections software",
+      "overdue invoice management",
+      "AI collections",
     ],
     priority: 1,
     changeFrequency: "weekly",
   },
   about: {
     path: "/about",
-    title: "About Arrexia | Cash Collection Operations Platform",
+    title: "About Arrexia | Accounts Receivable & Collections Platform",
     description:
-      "Learn how Arrexia helps businesses improve cash flow through accounts receivable automation, collections workflows, and payment follow-up.",
+      "Learn how Arrexia helps businesses recover overdue receivables through collections prioritization, automated follow-up, and AI-assisted communication.",
     priority: 0.8,
     changeFrequency: "monthly",
   },
   pricing: {
     path: "/pricing",
-    title: "Arrexia Pricing | Cash Collection Operations Plans",
+    title: "Arrexia Pricing | Accounts Receivable & Collections Plans",
     description:
-      "Compare Arrexia pricing for collections workflows, payment reminders, and accounts receivable operations. Get started free.",
+      "Compare Arrexia pricing for accounts receivable automation, collections workflows, and payment follow-up. 14-day free trial on every plan.",
     priority: 0.9,
     changeFrequency: "weekly",
   },
