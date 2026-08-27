@@ -1,21 +1,9 @@
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { StartTrialLink } from "@/components/analytics/StartTrialLink";
 import { trialHref } from "@/lib/billing/plans";
 import { Button } from "@/components/ui/button";
-
-const DashboardMockup = dynamic(
-  () => import("./DashboardMockup").then((module) => ({ default: module.DashboardMockup })),
-  {
-    loading: () => (
-      <div
-        className="mx-auto aspect-[4/3] w-full max-w-xl animate-pulse rounded-2xl bg-slate-100 lg:max-w-none"
-        aria-hidden="true"
-      />
-    ),
-  },
-);
+import { ProductScreenshot } from "./ProductScreenshot";
 
 const TRUST_BULLETS = [
   "14-day free trial",
@@ -88,7 +76,28 @@ export function LandingHero() {
           </ul>
         </div>
 
-        <DashboardMockup />
+        <div className="relative mx-auto w-full max-w-xl lg:max-w-none">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-blue-500/15 via-cyan-400/10 to-violet-500/15 blur-2xl"
+          />
+          <div className="relative">
+            <p className="mb-3 text-sm font-semibold text-slate-900">
+              Your collection priorities, already organized.
+            </p>
+            <p className="mb-4 max-w-xl text-sm leading-relaxed text-slate-600">
+              Start each day with the invoices, customers and follow-ups that need attention most.
+            </p>
+            <ProductScreenshot
+              src="/product/action-center.png"
+              alt="Arrexia Daily Action Center with prioritized overdue invoices, reminder opportunities, and high-risk accounts in one work queue"
+              width={1919}
+              height={908}
+              priority
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
+          </div>
+        </div>
       </div>
     </section>
   );

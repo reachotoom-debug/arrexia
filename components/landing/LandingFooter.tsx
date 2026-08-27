@@ -50,18 +50,16 @@ export function LandingFooter() {
                 className="block h-14 w-auto sm:h-16"
               />
             </Link>
-            <p className="mt-2 text-sm font-medium leading-snug text-slate-700">
-              Cash Flow. Clarity. Confidence.
+            <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-600">
+              AI-powered accounts receivable and collections for teams that want to recover more
+              cash with less manual effort.
             </p>
             <a
               href="https://arrexia.app"
-              className={`mt-3 ${FOOTER_LINK_CLASS} text-slate-600`}
+              className={`mt-4 ${FOOTER_LINK_CLASS} text-slate-600`}
             >
               arrexia.app
             </a>
-            <p className="mt-3 text-xs font-normal leading-snug text-slate-500">
-              Recover more cash with less manual effort.
-            </p>
           </div>
         </div>
 

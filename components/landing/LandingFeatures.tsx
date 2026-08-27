@@ -68,11 +68,11 @@ export function LandingFeatures() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Collections workflow built to recover cash
+            The capabilities behind stronger collections
           </h2>
           <p className="mt-4 text-lg text-slate-600">
-            Accounts receivable automation, prioritized follow-up, and AI-assisted communication —
-            built for teams that need to act on overdue receivables, not just report on them. See{" "}
+            Automated reminders, AI-assisted drafting, WhatsApp follow-up, payment tracking, and
+            receivables visibility — the tools that support every stage of recovery. See{" "}
             <Link href="/pricing" className="font-medium text-blue-700 hover:text-blue-800">
               pricing
             </Link>{" "}

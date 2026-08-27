@@ -11,6 +11,12 @@ const LandingAudience = dynamic(() =>
   })),
 );
 
+const LandingProductProof = dynamic(() =>
+  import("@/components/landing/LandingProductProof").then((module) => ({
+    default: module.LandingProductProof,
+  })),
+);
+
 const LandingFeatures = dynamic(() =>
   import("@/components/landing/LandingFeatures").then((module) => ({
     default: module.LandingFeatures,
@@ -69,6 +75,7 @@ export default function HomePage() {
       <main>
         <LandingHero />
         <LandingAudience />
+        <LandingProductProof />
         <LandingFeatures />
         <LandingValueStrip />
         <LandingHowItWorks />
