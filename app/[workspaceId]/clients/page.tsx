@@ -1,7 +1,12 @@
 import { requireWorkspace } from "@/lib/auth/server";
 import {
+  aggregateClientInvoiceMetrics,
   canUseFilteredCountAsWorkspaceTotal,
+  isComputedClientSortKey,
+  mapClientSortKeyToDbColumn,
+  needsClientInvoiceAggregation,
   shouldReusePageInvoiceMetricsFromLoadClients,
+  sortClientsByComputedKey,
   type ClientPageInvoiceMetricRow,
 } from "@/lib/clients/listQueryPlan";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -288,7 +293,7 @@ async function loadClients(
   // IMPORTANT: For views that need invoice data, we fetch ALL matching clients first,
   // then apply view filtering/sorting, then paginate in memory
   // For simple views, we can paginate directly in SQL
-  const needsInvoiceData = view === "highest-outstanding-first" || view === "with-overdue-invoices";
+  const needsInvoiceAggregation = needsClientInvoiceAggregation({ view, sort });
   
   let query = supabase
     .from("clients")
@@ -341,23 +346,24 @@ async function loadClients(
   let appliedOrder: string | null = null;
   let appliedView: string | null = null;
   
-  // Map sort key to database column name
-  const getSortColumn = (sortKey: ClientSortKey | null): string | null => {
-    if (!sortKey) return null;
-    // Map client_name to name in database
-    if (sortKey === "client_name") return "name";
-    // Other keys map directly (but outstanding/invoices_count need special handling)
-    return sortKey;
-  };
-  
   // Determine what ordering to apply based on view and sort params
   if (view === "default") {
-    // Default view: use header sort if present, otherwise default to created_at desc
-    const sortColumn = sort ? getSortColumn(sort) : "created_at";
+    const sortColumn = sort ? mapClientSortKeyToDbColumn(sort) : "created_at";
     if (sortColumn) {
-      query = query.order(sortColumn, { ascending: sort ? (dir === "asc") : false, nullsFirst: false });
+      query = query.order(sortColumn, {
+        ascending: sort ? dir === "asc" : false,
+        nullsFirst: false,
+      });
       appliedOrder = sort ? `${sort} ${dir}` : "created_at desc";
-      query = query.order("id", { ascending: true }); // Stable secondary sort
+      query = query.order("id", { ascending: true });
+    } else if (isComputedClientSortKey(sort)) {
+      query = query.order("name", { ascending: true });
+      query = query.order("id", { ascending: true });
+      appliedOrder = `${sort} ${dir} (computed from invoices_view)`;
+    } else {
+      query = query.order("created_at", { ascending: false, nullsFirst: false });
+      appliedOrder = "created_at desc";
+      query = query.order("id", { ascending: true });
     }
     appliedView = "default";
   } else {
@@ -372,8 +378,8 @@ async function loadClients(
   // Otherwise, paginate directly in SQL
   const { data: clientsFromDb, error, count } = await perfTime(
     "clients-list",
-    needsInvoiceData ? "clientRowsAll" : "clientRows",
-    async () => (needsInvoiceData ? query : query.range(from, to)),
+    needsInvoiceAggregation ? "clientRowsAll" : "clientRows",
+    async () => (needsInvoiceAggregation ? query : query.range(from, to)),
     (result) => `rows=${result.data?.length ?? 0} count=${result.count ?? 0}`
   );
 
@@ -415,7 +421,7 @@ async function loadClients(
         workspaceId,
         appliedOrder,
         appliedView,
-        needsInvoiceData,
+        needsInvoiceAggregation,
       },
     });
     
@@ -429,7 +435,7 @@ async function loadClients(
   // 2. Compute metrics per client (outstanding, hasOverdue)
   // 3. Apply view filtering/sorting
   // 4. Paginate in memory
-  if (needsInvoiceData && clientsFromDb) {
+  if (needsInvoiceAggregation && clientsFromDb) {
     // Fetch all invoices for computing metrics (exclude void and draft)
     // NOTE: Use invoices_view for outstanding field (outstanding_amount was dropped from invoices table)
     const { data: invoiceRows, error: invoiceError } = await perfTime(
@@ -451,32 +457,11 @@ async function loadClients(
     }
 
     const safeInvoiceRows = invoiceRows ?? [];
-
-    // Compute metrics per client using deterministic logic
-    const clientMetrics = new Map<string, { outstandingSum: number; isOverdue: boolean }>();
-    
-    for (const inv of safeInvoiceRows) {
-      if (!inv.client_id) continue;
-      
-      // Sum outstanding_sum: COALESCE(outstanding, 0) for invoices where status NOT IN ("Draft","Void")
-      const outstanding = Number(inv.outstanding ?? 0);
-      const existing = clientMetrics.get(inv.client_id) ?? { outstandingSum: 0, isOverdue: false };
-      
-      // Sum all outstanding amounts (including 0 and negative)
-      existing.outstandingSum += outstanding;
-      
-      // Determine overdue signal from canonical invoices_view fields only.
-      if (inv.display_status === "overdue" || inv.risk_level != null) {
-        existing.isOverdue = true;
-      }
-      
-      clientMetrics.set(inv.client_id, existing);
-    }
+    const clientMetrics = aggregateClientInvoiceMetrics(safeInvoiceRows);
 
     // Enrich clients with metrics (preserve existing values if query failed)
     let enrichedClients = clientsFromDb.map((client) => {
       const metrics = clientMetrics.get(client.id);
-      // If query failed and no metrics, preserve existing values or use defaults
       const existingOutstanding = typeof (client as any).outstanding === "number" ? (client as any).outstanding : undefined;
       const existingHasOverdue = typeof (client as any).hasOverdueInvoices === "boolean" ? (client as any).hasOverdueInvoices : undefined;
       
@@ -484,12 +469,11 @@ async function loadClients(
         ...client,
         outstanding: metrics?.outstandingSum ?? existingOutstanding ?? 0,
         hasOverdueInvoices: metrics?.isOverdue ?? existingHasOverdue ?? false,
+        invoices_count: metrics?.invoiceCount ?? 0,
       };
     });
 
     // Apply view-specific filtering and sorting
-    // IMPORTANT: View presets map to (sort,dir) - sort by numeric outstanding from DB
-    // Ensure outstanding is always numeric (not formatted strings)
     if (view === "highest-outstanding-first") {
       // Sort by outstanding descending (numeric comparison)
       // Force sort to outstanding desc regardless of UI sort selection
@@ -513,6 +497,10 @@ async function loadClients(
       });
       appliedView = "with-overdue-invoices (filtered, sorted by outstanding desc)";
       appliedOrder = "outstanding desc";
+    } else if (view === "default" && isComputedClientSortKey(sort)) {
+      enrichedClients = sortClientsByComputedKey(enrichedClients, sort, dir);
+      appliedView = "default (sorted by computed invoice metrics)";
+      appliedOrder = `${sort} ${dir} (computed from invoices_view)`;
     }
 
     // Paginate in memory
@@ -560,32 +548,11 @@ async function loadClients(
     }
 
     const safeInvoiceRows = invoiceRows ?? [];
-
-    // Compute metrics per client using deterministic logic
-    const clientMetrics = new Map<string, { outstandingSum: number; isOverdue: boolean }>();
-    
-    for (const inv of safeInvoiceRows) {
-      if (!inv.client_id) continue;
-      
-      // Sum outstanding_sum: COALESCE(outstanding, 0) for invoices where status NOT IN ("Draft","Void")
-      const outstanding = Number(inv.outstanding ?? 0);
-      const existing = clientMetrics.get(inv.client_id) ?? { outstandingSum: 0, isOverdue: false };
-      
-      // Sum all outstanding amounts (including 0 and negative)
-      existing.outstandingSum += outstanding;
-      
-      // Determine overdue signal from canonical invoices_view fields only.
-      if (inv.display_status === "overdue" || inv.risk_level != null) {
-        existing.isOverdue = true;
-      }
-      
-      clientMetrics.set(inv.client_id, existing);
-    }
+    const clientMetrics = aggregateClientInvoiceMetrics(safeInvoiceRows);
 
     // Enrich clients with metrics (preserve existing values if query failed)
     const enrichedClients = clientsFromDb.map((client) => {
       const metrics = clientMetrics.get(client.id);
-      // If query failed and no metrics, preserve existing values or use defaults
       const existingOutstanding = typeof (client as any).outstanding === "number" ? (client as any).outstanding : undefined;
       const existingHasOverdue = typeof (client as any).hasOverdueInvoices === "boolean" ? (client as any).hasOverdueInvoices : undefined;
       
@@ -593,6 +560,7 @@ async function loadClients(
         ...client,
         outstanding: metrics?.outstandingSum ?? existingOutstanding ?? 0,
         hasOverdueInvoices: metrics?.isOverdue ?? existingHasOverdue ?? false,
+        invoices_count: metrics?.invoiceCount ?? 0,
       };
     });
 
@@ -687,6 +655,13 @@ export default async function ClientsPage({
       ? clientData.totalCount
       : workspaceClientCountResult?.count ?? 0;
   } catch (error) {
+    console.error("[ClientsPage] failed to render clients page", {
+      workspaceId,
+      message: error instanceof Error ? error.message : String(error),
+      code: error && typeof error === "object" ? (error as { code?: string }).code ?? null : null,
+      details: error && typeof error === "object" ? (error as { details?: string }).details ?? null : null,
+      hint: error && typeof error === "object" ? (error as { hint?: string }).hint ?? null : null,
+    });
     perf.finish({ status: "error" });
     return (
       <>
@@ -772,7 +747,7 @@ export default async function ClientsPage({
   let safeInvoiceRows: ClientPageInvoiceMetricRow[] = [];
 
   if (
-    shouldReusePageInvoiceMetricsFromLoadClients({ view: viewParam }) &&
+    shouldReusePageInvoiceMetricsFromLoadClients({ view: viewParam, sort }) &&
     clientData.pageInvoiceMetrics
   ) {
     safeInvoiceRows = clientData.pageInvoiceMetrics;
