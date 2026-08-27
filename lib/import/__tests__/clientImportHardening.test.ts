@@ -18,6 +18,8 @@ import {
 
 const MIGRATION_PATH =
   "supabase/migrations/20260812120000_harden_client_import_atomic.sql";
+const PARITY_MIGRATION_PATH =
+  "supabase/migrations/20260827120000_client_import_preview_classification_parity.sql";
 const CLIENTS_ACTION_PATH =
   "app/[workspaceId]/settings/import/actions/clients.ts";
 const VERIFICATION_SQL_PATH =
@@ -254,8 +256,12 @@ describe("client import actions wiring", () => {
     assert.match(actions, /CLIENT_IMPORT_ROW_LIMIT_MESSAGE/);
   });
 
-  it("22 — batched workspace client lookup (no per-row N\+1)", () => {
-    assert.match(actions, /buildWorkspaceClientIndexes/);
+  it("22 — preview classifies via RPC dry-run (no TS workspace index lookup)", () => {
+    assert.match(actions, /classifyClientImportRowsViaRpc/);
+    assert.match(actions, /internal_rpc_import_clients/);
+    assert.match(actions, /p_dry_run:\s*true/);
+    assert.doesNotMatch(actions, /buildWorkspaceClientIndexes/);
+    assert.doesNotMatch(actions, /resolveClientImportIdentity/);
     assert.doesNotMatch(actions, /allClientsWithEmail/);
   });
 
@@ -274,6 +280,100 @@ describe("client import actions wiring", () => {
   it("25 — revalidate only after successful execute", () => {
     const executeBlock = actions.slice(actions.indexOf("export async function executeClientsImport"));
     assert.match(executeBlock, /if \(ok\) \{[\s\S]*revalidatePath/);
+  });
+});
+
+describe("client import parity migration", () => {
+  const parityMigration = readFileSync(PARITY_MIGRATION_PATH, "utf8");
+
+  it("30 — parity migration file exists with authoritative classifier", () => {
+    assert.match(parityMigration, /internal_resolve_client_import_identity/);
+    assert.match(parityMigration, /internal_canonical_client_import_email/);
+    assert.match(parityMigration, /internal_canonical_client_import_phone/);
+  });
+
+  it("31 — dry_run returns computed INSERT/UPDATE/FAIL actions", () => {
+    assert.match(parityMigration, /IF COALESCE\(p_dry_run, false\) THEN/);
+    assert.match(parityMigration, /v_resolved := public\.internal_resolve_client_import_identity/);
+    assert.match(parityMigration, /'action', v_resolved_action/);
+    assert.match(parityMigration, /RETURN v_results;/);
+  });
+
+  it("32 — canonical email and phone helpers use hardened search_path", () => {
+    assert.match(
+      parityMigration,
+      /CREATE OR REPLACE FUNCTION public\.internal_canonical_client_import_email[\s\S]*SET search_path = pg_catalog, public/
+    );
+    assert.match(
+      parityMigration,
+      /CREATE OR REPLACE FUNCTION public\.internal_canonical_client_import_phone[\s\S]*SET search_path = pg_catalog, public/
+    );
+  });
+
+  it("33 — internal helpers revoked from anon/authenticated; service_role granted", () => {
+    assert.match(
+      parityMigration,
+      /REVOKE EXECUTE ON FUNCTION public\.internal_resolve_client_import_identity\(uuid, text, text, text\) FROM authenticated/
+    );
+    assert.match(
+      parityMigration,
+      /GRANT EXECUTE ON FUNCTION public\.internal_resolve_client_import_identity\(uuid, text, text, text\) TO service_role/
+    );
+    assert.match(
+      parityMigration,
+      /REVOKE EXECUTE ON FUNCTION public\.internal_canonical_client_import_email\(text\) FROM anon/
+    );
+    assert.match(
+      parityMigration,
+      /GRANT EXECUTE ON FUNCTION public\.internal_canonical_client_import_phone\(text\) TO service_role/
+    );
+  });
+
+  it("34 — workspace scoping on identity resolution", () => {
+    const resolver = parityMigration.slice(
+      parityMigration.indexOf("CREATE OR REPLACE FUNCTION public.internal_resolve_client_import_identity"),
+      parityMigration.indexOf("$resolve$;")
+    );
+    assert.match(resolver, /c\.workspace_id = p_workspace_id/g);
+  });
+
+  it("35 — archived clients rejected; conflicting identities fail", () => {
+    assert.match(parityMigration, /Client is archived \(email:/);
+    assert.match(parityMigration, /Client is archived \(WhatsApp:/);
+    assert.match(
+      parityMigration,
+      /Email and WhatsApp resolve to different existing clients; use a single identity key/
+    );
+  });
+
+  it("36 — execute re-resolves identity and preserves duplicate INSERT defense", () => {
+    const executeBlock = parityMigration.slice(
+      parityMigration.indexOf("-- Execute all rows (any failure rolls back entire transaction)")
+    );
+    assert.match(executeBlock, /internal_resolve_client_import_identity/);
+    assert.match(parityMigration, /Insert requested but matching client already exists/);
+    assert.match(executeBlock, /RAISE EXCEPTION 'client_import_failed'/);
+  });
+
+  it("37 — canonical phone returns NULL for blank input (no shared empty identity)", () => {
+    assert.match(parityMigration, /IF p_raw IS NULL THEN[\s\S]*RETURN NULL/);
+    assert.match(parityMigration, /IF v_trimmed = '' THEN[\s\S]*RETURN NULL/);
+    assert.match(parityMigration, /IF v_digits IS NULL THEN[\s\S]*RETURN NULL/);
+    assert.match(
+      parityMigration,
+      /p_canonical IS NOT NULL[\s\S]*AND p_canonical <> ''/
+    );
+  });
+
+  it("38 — no name/company-based dedupe; unique constraints untouched", () => {
+    const resolver = parityMigration.slice(
+      parityMigration.indexOf("CREATE OR REPLACE FUNCTION public.internal_resolve_client_import_identity"),
+      parityMigration.indexOf("$resolve$;")
+    );
+    assert.doesNotMatch(resolver, /\bc\.name\b/);
+    assert.doesNotMatch(resolver, /\bc\.company\b/);
+    assert.doesNotMatch(parityMigration, /ALTER TABLE public\.clients/);
+    assert.doesNotMatch(parityMigration, /CREATE UNIQUE INDEX/);
   });
 });
 

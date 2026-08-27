@@ -16,7 +16,6 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireWorkspace } from "@/lib/auth/server";
 import { assertImportEntitlement } from "@/lib/billing/entitlementGuard";
@@ -24,13 +23,10 @@ import { EntitlementError } from "@/lib/billing/entitlementErrors";
 import {
   MAX_CLIENT_IMPORT_ROWS,
   CLIENT_IMPORT_ROW_LIMIT_MESSAGE,
-  buildWorkspaceClientIndexes,
-  detectInFileClientDuplicates,
   normalizeClientImportEmail,
   normalizeClientImportPhone,
   parseClientImportPaymentTermsDays,
   parseClientImportStatus,
-  resolveClientImportIdentity,
   type ClientImportRowData,
 } from "@/lib/import/clientImportContract";
 import Papa from "papaparse";
@@ -191,13 +187,63 @@ function isEmptyRow(row: Record<string, string>, headerMap: Map<string, string>)
  * - Duplicate detection by email or whatsapp_phone (workspace-scoped)
  * - For each row return: { rowId, rowIndex, action: insert|update|skip|fail, reason?, warnings?, data }
  */
+type ClientImportRpcClassifyRow = {
+  rowId: string;
+  status: "ok" | "failed";
+  action: "insert" | "update" | "fail";
+  client_id?: string | null;
+  error?: string | null;
+};
+
+function buildClientImportRpcPayload(row: {
+  rowId: string;
+  data: ClientImportRowData;
+}): Record<string, unknown> {
+  return {
+    rowId: row.rowId,
+    name: row.data.name,
+    email: row.data.email,
+    phone: row.data.phone,
+    whatsapp_phone: row.data.whatsapp,
+    company_name: row.data.company,
+    country: row.data.country,
+    payment_terms: row.data.payment_terms_days,
+    status: row.data.status,
+    archived_at: row.data.archived_at,
+  };
+}
+
+async function classifyClientImportRowsViaRpc(
+  workspaceId: string,
+  rows: Array<{ rowId: string; data: ClientImportRowData }>
+): Promise<{ ok: true; rows: ClientImportRpcClassifyRow[] } | { ok: false; error: string }> {
+  if (rows.length === 0) {
+    return { ok: true, rows: [] };
+  }
+
+  const { data, error } = await supabaseAdmin().rpc("internal_rpc_import_clients", {
+    p_workspace_id: workspaceId,
+    p_rows: rows.map(buildClientImportRpcPayload),
+    p_dry_run: true,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message || "Client import classification failed" };
+  }
+
+  if (!Array.isArray(data)) {
+    return { ok: false, error: "Client import classification returned invalid data" };
+  }
+
+  return { ok: true, rows: data as ClientImportRpcClassifyRow[] };
+}
+
 export async function previewClientsImport(
   workspaceId: string,
   fileText: string,
   fileName?: string
 ): Promise<PreviewResult> {
   await requireWorkspace(workspaceId);
-  const supabase = await supabaseServer();
 
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -362,23 +408,6 @@ export async function previewClientsImport(
 
   const rawLines = fileText.split(/\r?\n/).slice(1).filter((line) => line.trim() !== "");
 
-  const { data: workspaceClients, error: clientsLoadError } = await supabase
-    .from("clients")
-    .select("id, email, whatsapp, whatsapp_phone, archived_at")
-    .eq("workspace_id", workspaceId);
-
-  if (clientsLoadError) {
-    errors.push(`Failed to load workspace clients: ${clientsLoadError.message}`);
-    return {
-      header_ok: true,
-      ok: false,
-      errors,
-      rows: [],
-    };
-  }
-
-  const indexes = buildWorkspaceClientIndexes(workspaceClients ?? []);
-
   type ParsedImportRow = {
     lineNumber: number;
     rowId: string;
@@ -512,59 +541,63 @@ export async function previewClientsImport(
     });
   }
 
-  const inFileDuplicateErrors = detectInFileClientDuplicates(
-    parsedRows.map((row) => ({
-      lineNumber: row.lineNumber,
-      email: row.data.email,
-      whatsapp: row.data.whatsapp,
-      phone: row.data.phone,
-    }))
+  const classification = await classifyClientImportRowsViaRpc(workspaceId, parsedRows);
+  if (!classification.ok) {
+    errors.push(classification.error);
+    return {
+      header_ok: true,
+      ok: false,
+      errors,
+      rows: results,
+    };
+  }
+
+  const classificationByRowId = new Map(
+    classification.rows.map((row) => [row.rowId, row])
   );
 
   for (const parsed of parsedRows) {
-    const duplicateReason = inFileDuplicateErrors.get(parsed.lineNumber);
-    if (duplicateReason) {
+    const classified = classificationByRowId.get(parsed.rowId);
+    if (!classified) {
       results.push({
         rowId: parsed.rowId,
         rowIndex: parsed.rowIndex,
         action: "fail",
-        reason: duplicateReason,
-        data: parsed.data,
-      });
-      continue;
-    }
-
-    const identity = resolveClientImportIdentity({
-      email: parsed.data.email,
-      whatsapp: parsed.data.whatsapp,
-      phone: parsed.data.phone,
-      indexes,
-    });
-
-    if (identity.kind === "fail") {
-      results.push({
-        rowId: parsed.rowId,
-        rowIndex: parsed.rowIndex,
-        action: "fail",
-        reason: identity.reason,
+        reason: `No classification result for ${parsed.rowId}`,
         data: parsed.data,
       });
       continue;
     }
 
     const rowWarnings: string[] = [];
-    if (!parsed.data.email && !parsed.data.whatsapp && !parsed.data.phone) {
+    const isFail =
+      classified.action === "fail" || classified.status === "failed";
+    const action: PreviewRow["action"] = isFail
+      ? "fail"
+      : classified.action === "update"
+        ? "update"
+        : "insert";
+
+    if (
+      action === "insert" &&
+      !parsed.data.email &&
+      !parsed.data.whatsapp &&
+      !parsed.data.phone
+    ) {
       rowWarnings.push("No email or WhatsApp; cannot dedupe on re-import");
     }
 
     results.push({
       rowId: parsed.rowId,
       rowIndex: parsed.rowIndex,
-      action: identity.kind === "update" ? "update" : "insert",
+      action,
+      reason: isFail ? classified.error ?? "Import row rejected" : undefined,
       warnings: rowWarnings.length > 0 ? rowWarnings : undefined,
       data: parsed.data,
     });
   }
+
+  results.sort((a, b) => a.rowIndex - b.rowIndex);
 
   if (columnCountErrors.length > 0) {
     const limitedErrors = columnCountErrors.slice(0, 10);
@@ -680,7 +713,7 @@ export async function executeClientsImport(
     throw error;
   }
 
-  // Prepare JSONB rows for RPC call
+  // Prepare JSONB rows for RPC call (action from authoritative preview classification)
   const rowsJsonb = rowsToProcess.map((row) => ({
     rowId: row.rowId,
     action: row.action,

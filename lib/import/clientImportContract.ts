@@ -1,6 +1,13 @@
 /**
- * Client import V1 contract: normalization, identity matching, and limits.
- * Shared by preview (app) and tested against RPC migration semantics.
+ * Client import V1 contract: CSV normalization, syntactic validation, and limits.
+ *
+ * Authoritative INSERT / UPDATE / FAIL classification lives in PostgreSQL:
+ * `internal_resolve_client_import_identity` via `internal_rpc_import_clients(..., p_dry_run)`.
+ * Preview (`previewClientsImport`) must call that RPC dry-run path — not this module.
+ *
+ * TS helpers below (`buildWorkspaceClientIndexes`, `resolveClientImportIdentity`,
+ * `detectInFileClientDuplicates`) are non-authoritative legacy/test utilities retained
+ * for unit-test coverage of normalization semantics and backward-compatible tooling.
  */
 
 import { normalizeEmail, normalizePhone } from "./normalize";
@@ -102,6 +109,7 @@ export function normalizeClientImportPhone(raw: string): string | null {
   return normalizePhone(raw);
 }
 
+/** @deprecated Non-authoritative. Production preview uses RPC dry-run classification. */
 export function buildWorkspaceClientIndexes(clients: WorkspaceClientRecord[]) {
   const activeByEmail = new Map<string, string[]>();
   const archivedEmails = new Set<string>();
@@ -152,7 +160,8 @@ export function buildWorkspaceClientIndexes(clients: WorkspaceClientRecord[]) {
 }
 
 /**
- * Resolve client identity for one import row against workspace indexes.
+ * Resolve client identity for one import row against in-memory indexes.
+ * @deprecated Non-authoritative. Do not use for preview classification — use RPC dry-run.
  */
 export function resolveClientImportIdentity(params: {
   email: string | null;
@@ -223,7 +232,8 @@ export function resolveClientImportIdentity(params: {
 }
 
 /**
- * Detect duplicate identity keys within the same import file.
+ * Detect duplicate identity keys within the same import file (TS-side helper).
+ * In-file duplicate detection for production import is enforced in `internal_rpc_import_clients`.
  */
 export function detectInFileClientDuplicates(
   rows: Array<{
