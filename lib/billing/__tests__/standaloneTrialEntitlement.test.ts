@@ -254,11 +254,12 @@ describe("trial usage metering semantics", () => {
 });
 
 describe("billing CTA semantics", () => {
-  it("trial CTAs route to contact instead of self-submit", () => {
+  it("trial CTAs open Paddle checkout instead of self-submit", () => {
     const ctx = { entitlementState: "trial" as const, paidPlan: null };
-    assert.equal(getBillingPlanCardCta(ctx, "starter").label, "Request Upgrade");
-    assert.equal(getBillingPlanCardCta(ctx, "business").canSubmit, false);
-    assert.equal(getBillingPlanCardCta(ctx, "business").href, "/contact");
+    assert.equal(getBillingPlanCardCta(ctx, "starter").label, "Subscribe to Starter");
+    assert.equal(getBillingPlanCardCta(ctx, "starter").action, "checkout");
+    assert.equal(getBillingPlanCardCta(ctx, "business").canSubmit, true);
+    assert.equal(getBillingPlanCardCta(ctx, "business").action, "checkout");
   });
 
   it("paid downgrade CTAs are disabled with support message", () => {

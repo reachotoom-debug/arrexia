@@ -799,3 +799,64 @@ export function renderTrialLifecycleEmail(
       return renderTrialExpiredPlusSevenEmail(context);
   }
 }
+
+export type PaidSubscriptionActivatedEmailContext = {
+  workspaceName: string;
+  workspaceUrl: string;
+  ownerDisplayName?: string | null;
+  planName: string;
+  billingIntervalLabel: string;
+  priceLabel: string;
+  renewalDate: string | null;
+  planLimits: readonly string[];
+};
+
+function formatPaidActivationLimitsSection(planName: string, limits: readonly string[]): string {
+  if (limits.length === 0) {
+    return "";
+  }
+  return [
+    "",
+    `${planName} includes:`,
+    ...limits.map((line) => `- ${line}`),
+  ].join("\n");
+}
+
+export function renderPaidSubscriptionActivatedEmail(
+  context: PaidSubscriptionActivatedEmailContext
+): { html: string; text: string; subject: string } {
+  const limitsSection = formatPaidActivationLimitsSection(context.planName, context.planLimits);
+  const renewalValue = context.renewalDate
+    ? formatDisplayDatePlain(context.renewalDate)
+    : "—";
+
+  const rendered = renderEmailShell({
+    businessName: "Arrexia",
+    logoUrl: ARREXIA_EMAIL_LOGO_URL,
+    badge: "trial_lifecycle",
+    greeting: renderTrialLifecycleGreeting(context.ownerDisplayName),
+    mainMessage: [
+      `Your Arrexia ${context.planName} subscription is active.`,
+      "",
+      "Your workspace is ready.",
+      limitsSection,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    summaryRows: [
+      { label: "Plan", value: context.planName },
+      { label: "Billing", value: context.billingIntervalLabel },
+      { label: "Price", value: context.priceLabel },
+      { label: "Next renewal", value: renewalValue },
+    ],
+    ctaButton: {
+      label: "Go to Arrexia",
+      url: context.workspaceUrl,
+    },
+  });
+
+  return {
+    ...rendered,
+    subject: `Your Arrexia ${context.planName} subscription is active`,
+  };
+}

@@ -63,18 +63,20 @@ describe("Business plan catalog", () => {
 });
 
 describe("billing plan card CTA matrix", () => {
-  it("legacy paid free context routes upgrades to contact", () => {
-    assert.equal(getBillingPlanCardCta("free", "starter").label, "Request Upgrade");
-    assert.equal(getBillingPlanCardCta("free", "starter").canSubmit, false);
-    assert.equal(getBillingPlanCardCta("free", "starter").href, "/contact");
+  it("legacy paid free context routes upgrades to Paddle checkout", () => {
+    const cta = getBillingPlanCardCta("free", "starter");
+    assert.equal(cta.label, "Subscribe to Starter");
+    assert.equal(cta.canSubmit, true);
+    assert.equal(cta.action, "checkout");
+    assert.equal(cta.href, undefined);
   });
 
-  it("Starter shows Current plan on Starter and Contact Sales for Pro", () => {
+  it("Starter shows Current plan on Starter and checkout for Pro", () => {
     assert.equal(getBillingPlanCardCta("starter", "starter").label, "Current plan");
     const proCta = getBillingPlanCardCta("starter", "pro");
-    assert.equal(proCta.label, "Contact Sales");
-    assert.equal(proCta.canSubmit, false);
-    assert.equal(proCta.href, "/contact");
+    assert.equal(proCta.label, "Upgrade to Pro");
+    assert.equal(proCta.canSubmit, true);
+    assert.equal(proCta.action, "checkout");
   });
 
   it("Pro shows disabled Contact Sales for Starter and Current plan on Pro", () => {
@@ -84,25 +86,25 @@ describe("billing plan card CTA matrix", () => {
     assert.equal(getBillingPlanCardCta("pro", "pro").label, "Current plan");
   });
 
-  it("Free shows Contact Sales for Business", () => {
+  it("Free shows checkout for Business", () => {
     const cta = getBillingPlanCardCta("free", "business");
-    assert.equal(cta.label, "Request Upgrade");
-    assert.equal(cta.canSubmit, false);
-    assert.equal(cta.href, "/contact");
+    assert.equal(cta.label, "Subscribe to Business");
+    assert.equal(cta.canSubmit, true);
+    assert.equal(cta.action, "checkout");
   });
 
-  it("Starter shows Contact Sales for Business", () => {
+  it("Starter shows checkout for Business", () => {
     const cta = getBillingPlanCardCta("starter", "business");
-    assert.equal(cta.label, "Contact Sales");
-    assert.equal(cta.canSubmit, false);
-    assert.equal(cta.href, "/contact");
+    assert.equal(cta.label, "Upgrade to Business");
+    assert.equal(cta.canSubmit, true);
+    assert.equal(cta.action, "checkout");
   });
 
-  it("Pro shows Contact Sales for Business", () => {
+  it("Pro shows checkout for Business", () => {
     const cta = getBillingPlanCardCta("pro", "business");
-    assert.equal(cta.label, "Contact Sales");
-    assert.equal(cta.canSubmit, false);
-    assert.equal(cta.href, "/contact");
+    assert.equal(cta.label, "Upgrade to Business");
+    assert.equal(cta.canSubmit, true);
+    assert.equal(cta.action, "checkout");
   });
 
   it("Business shows Current plan on Business card", () => {
@@ -156,13 +158,13 @@ describe("Business entitlements", () => {
 });
 
 describe("BillingPlansClient CTA wiring", () => {
-  it("uses contact sales links instead of self-service plan submission", () => {
+  it("uses Paddle checkout for self-service upgrades without local plan mutation", () => {
     const src = readFileSync(
       "app/[workspaceId]/settings/_components/BillingPlansClient.tsx",
       "utf8"
     );
     assert.match(src, /getBillingPlanCardCta/);
-    assert.match(src, /cta\.href/);
+    assert.match(src, /PaddleCheckoutButton/);
     assert.doesNotMatch(src, /setWorkspacePlanAction/);
     assert.doesNotMatch(src, /handlePlanChange/);
   });

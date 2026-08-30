@@ -49,3 +49,4 @@ supabase/.temp/
 
 # Local reports/logs
 typecheck.txt
+.cursor/mcp.json

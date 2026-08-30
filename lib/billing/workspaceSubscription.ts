@@ -24,6 +24,10 @@ export type WorkspaceSubscriptionSnapshot = {
   trialConsumedAt: string | null;
   currentPeriodStartsAt: string | null;
   currentPeriodEndsAt: string | null;
+  cancelAtPeriodEnd?: boolean;
+  paymentProvider?: string | null;
+  providerCustomerId?: string | null;
+  providerSubscriptionId?: string | null;
 };
 
 type SubscriptionAdmin = Pick<ReturnType<typeof supabaseAdmin>, "from">;
@@ -37,6 +41,10 @@ function mapSubscriptionRow(row: {
   trial_consumed_at?: string | null;
   current_period_starts_at: string | null;
   current_period_ends_at: string | null;
+  cancel_at_period_end?: boolean | null;
+  payment_provider?: string | null;
+  provider_customer_id?: string | null;
+  provider_subscription_id?: string | null;
 }): WorkspaceSubscriptionSnapshot {
   const status = row.status as WorkspaceSubscriptionStatus;
   const plan = isWorkspacePlan(row.plan) ? row.plan : "free";
@@ -50,6 +58,15 @@ function mapSubscriptionRow(row: {
     trialConsumedAt: row.trial_consumed_at ?? row.trial_starts_at ?? null,
     currentPeriodStartsAt: row.current_period_starts_at,
     currentPeriodEndsAt: row.current_period_ends_at,
+    cancelAtPeriodEnd: Boolean(row.cancel_at_period_end ?? false),
+    paymentProvider:
+      typeof row.payment_provider === "string" ? row.payment_provider : null,
+    providerCustomerId:
+      typeof row.provider_customer_id === "string" ? row.provider_customer_id : null,
+    providerSubscriptionId:
+      typeof row.provider_subscription_id === "string"
+        ? row.provider_subscription_id
+        : null,
   };
 }
 
@@ -60,7 +77,7 @@ export async function loadWorkspaceSubscription(
   const { data, error } = await admin
     .from("workspace_subscriptions")
     .select(
-      "status, plan, billing_interval, trial_starts_at, trial_ends_at, trial_consumed_at, current_period_starts_at, current_period_ends_at"
+      "status, plan, billing_interval, trial_starts_at, trial_ends_at, trial_consumed_at, current_period_starts_at, current_period_ends_at, cancel_at_period_end, payment_provider, provider_customer_id, provider_subscription_id"
     )
     .eq("workspace_id", workspaceId)
     .maybeSingle();

@@ -297,6 +297,21 @@ export function formatPaidSubscriptionPrice(
   return `$${plan.monthlyPrice}/mo`;
 }
 
+/** Product activation email copy — explicit /month and /year suffixes. */
+export function formatPaidSubscriptionActivationPrice(
+  planId: WorkspacePlan,
+  interval: BillingInterval
+): string {
+  const plan = getPlanDefinition(planId);
+  if (interval === "annual" && plan.annualPrice) {
+    return `${formatPublicUsd(plan.annualPrice)}/year`;
+  }
+  if (plan.monthlyPrice === null) {
+    return "Contact Sales";
+  }
+  return `$${plan.monthlyPrice}/month`;
+}
+
 export function getPlanStorageLimits(plan: WorkspacePlan): {
   invoice_limit_monthly: number | null;
   client_limit: number | null;

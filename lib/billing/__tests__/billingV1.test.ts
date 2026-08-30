@@ -85,11 +85,12 @@ describe("billing V1 commercial safety", () => {
     }
   });
 
-  it("billing CTA cannot submit paid entitlement changes", () => {
+  it("billing CTA opens Paddle checkout without local paid entitlement mutation", () => {
     const ctx = { entitlementState: "trial" as const, paidPlan: null };
     const cta = getBillingPlanCardCta(ctx, "starter");
-    assert.equal(cta.canSubmit, false);
-    assert.equal(cta.href, "/contact");
+    assert.equal(cta.canSubmit, true);
+    assert.equal(cta.action, "checkout");
+    assert.equal(cta.href, undefined);
   });
 
   it("provider IDs never enter client presentation model", () => {
@@ -120,11 +121,12 @@ describe("billing V1 commercial safety", () => {
 });
 
 describe("billing V1 plan card CTA safety", () => {
-  it("paid upgrade CTA routes to contact instead of self-submit", () => {
+  it("paid upgrade CTA opens Paddle checkout instead of self-submit", () => {
     const ctx = { entitlementState: "paid" as const, paidPlan: "starter" as const };
     const cta = getBillingPlanCardCta(ctx, "pro");
-    assert.equal(cta.canSubmit, false);
-    assert.equal(cta.href, "/contact");
+    assert.equal(cta.canSubmit, true);
+    assert.equal(cta.action, "checkout");
+    assert.equal(cta.label, "Upgrade to Pro");
   });
 
   it("current paid plan remains disabled without href", () => {

@@ -139,9 +139,53 @@ export function mapAuthCallbackExchangeError(message: string): string {
   return AUTH_SESSION_COULD_NOT_BE_ESTABLISHED_MESSAGE;
 }
 
-export function logAuthErrorDev(context: string, error: unknown): void {
+type AuthErrorDevMeta = {
+  httpStatus?: number;
+  contentType?: string | null;
+};
+
+function serializeAuthErrorForDev(
+  error: unknown,
+  meta?: AuthErrorDevMeta,
+): Record<string, unknown> {
+  const details: Record<string, unknown> = {};
+
+  if (error && typeof error === "object") {
+    const authError = error as {
+      name?: string;
+      message?: string;
+      status?: number;
+      code?: string;
+    };
+
+    if (authError.name) details.name = authError.name;
+    if (authError.message) details.message = authError.message;
+    if (typeof authError.status === "number") details.status = authError.status;
+    if (authError.code) details.code = authError.code;
+
+    if (!details.message && error instanceof Error) {
+      details.message = error.message;
+    }
+  } else if (typeof error === "string") {
+    details.message = error;
+  }
+
+  if (!details.message) {
+    details.message = String(error);
+  }
+
+  if (meta?.httpStatus != null) details.httpStatus = meta.httpStatus;
+  if (meta?.contentType) details.contentType = meta.contentType;
+
+  return details;
+}
+
+export function logAuthErrorDev(
+  context: string,
+  error: unknown,
+  meta?: AuthErrorDevMeta,
+): void {
   if (process.env.NODE_ENV !== "development") return;
 
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`[auth/${context}]`, message);
+  console.error(`[auth/${context}]`, serializeAuthErrorForDev(error, meta));
 }

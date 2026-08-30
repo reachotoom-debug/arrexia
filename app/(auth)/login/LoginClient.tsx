@@ -84,7 +84,10 @@ export function LoginClient() {
 
       if (!loginResponse.ok || !loginPayload?.ok) {
         const rawError = loginPayload?.error || "Failed to sign in";
-        logAuthErrorDev("login", rawError);
+        logAuthErrorDev("login", rawError, {
+          httpStatus: loginResponse.status,
+          contentType: loginResponse.headers.get("content-type"),
+        });
         setError("root", {
           message: mapSupabaseAuthError(rawError, "login"),
         });

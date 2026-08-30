@@ -17,8 +17,13 @@ type SubscriptionRow = {
   billing_interval?: string;
   trial_starts_at: string | null;
   trial_ends_at: string | null;
+  trial_consumed_at?: string | null;
   current_period_starts_at: string | null;
   current_period_ends_at: string | null;
+  cancel_at_period_end?: boolean;
+  provider_customer_id?: string | null;
+  provider_subscription_id?: string | null;
+  provider_last_event_at?: string | null;
   updated_at?: string;
 };
 
@@ -48,6 +53,7 @@ export type BillingMockState = {
   subscriptions: SubscriptionRow[];
   templates: TemplateRow[];
   rules: RuleRow[];
+  paddleWebhookEvents: Record<string, unknown>[];
   planUpsertShouldFail?: boolean;
   subscriptionUpsertShouldFail?: boolean;
   subscriptionUpsertNoOp?: boolean;
@@ -66,6 +72,7 @@ export function createBillingMockState(): BillingMockState {
     subscriptions: [],
     templates: [],
     rules: [],
+    paddleWebhookEvents: [],
     nextTemplateId: 1,
     nextRuleId: 1,
   };
@@ -168,6 +175,8 @@ class BillingQueryBuilder {
         return applyFilters(this.state.subscriptions, this.filters);
       case "workspaces":
         return applyFilters(this.state.workspaces, this.filters);
+      case "paddle_webhook_events":
+        return applyFilters(this.state.paddleWebhookEvents, this.filters);
       case "reminder_templates":
         return applyFilters(this.state.templates, this.filters);
       case "reminder_rules":
@@ -219,10 +228,16 @@ class BillingQueryBuilder {
         plan: String(row.plan),
         status: String(row.status),
         payment_provider: row.payment_provider ? String(row.payment_provider) : "manual",
+        billing_interval: row.billing_interval ? String(row.billing_interval) : "monthly",
         trial_starts_at: (row.trial_starts_at as string | null) ?? null,
         trial_ends_at: (row.trial_ends_at as string | null) ?? null,
+        trial_consumed_at: (row.trial_consumed_at as string | null) ?? null,
         current_period_starts_at: (row.current_period_starts_at as string | null) ?? null,
         current_period_ends_at: (row.current_period_ends_at as string | null) ?? null,
+        cancel_at_period_end: Boolean(row.cancel_at_period_end ?? false),
+        provider_customer_id: (row.provider_customer_id as string | null) ?? null,
+        provider_subscription_id: (row.provider_subscription_id as string | null) ?? null,
+        provider_last_event_at: (row.provider_last_event_at as string | null) ?? null,
         updated_at: row.updated_at ? String(row.updated_at) : new Date().toISOString(),
       };
       const existingIndex = this.state.subscriptions.findIndex(
@@ -266,6 +281,15 @@ class BillingQueryBuilder {
       };
       this.state.rules.push(inserted);
       return { data: inserted, error: null };
+    }
+
+    if (this.table === "paddle_webhook_events") {
+      const eventId = String(row.event_id);
+      if (this.state.paddleWebhookEvents.some((entry) => entry.event_id === eventId)) {
+        return { data: null, error: { message: "duplicate", code: "23505" } };
+      }
+      this.state.paddleWebhookEvents.push({ ...row });
+      return { data: { event_id: eventId }, error: null };
     }
 
     return { data: row, error: null };
@@ -342,8 +366,10 @@ function executeAtomicRpc(
     billing_interval: billingInterval,
     trial_starts_at: (params.p_trial_starts_at as string | null) ?? null,
     trial_ends_at: (params.p_trial_ends_at as string | null) ?? null,
+    trial_consumed_at: (params.p_trial_starts_at as string | null) ?? null,
     current_period_starts_at: (params.p_current_period_starts_at as string | null) ?? null,
     current_period_ends_at: (params.p_current_period_ends_at as string | null) ?? null,
+    cancel_at_period_end: Boolean(params.p_cancel_at_period_end ?? false),
     updated_at: nowIso,
   };
 
