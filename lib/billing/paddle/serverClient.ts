@@ -3,10 +3,15 @@ import "server-only";
 import { Environment, LogLevel, Paddle, type PaddleOptions } from "@paddle/paddle-node-sdk";
 
 import { getPaddleApiKey, getPaddleEnvironment } from "./env.server";
+import type { PaddleEnvironment } from "./types";
 
 let paddleServerInstance: Paddle | null = null;
 
-/** Server-only Paddle SDK client (sandbox in this phase). */
+function toSdkEnvironment(environment: PaddleEnvironment): Environment {
+  return environment === "production" ? Environment.production : Environment.sandbox;
+}
+
+/** Server-only Paddle SDK client for the configured environment. */
 export function getPaddleServerClient(): Paddle {
   if (paddleServerInstance) {
     return paddleServerInstance;
@@ -18,12 +23,12 @@ export function getPaddleServerClient(): Paddle {
   }
 
   const configuredEnvironment = getPaddleEnvironment();
-  if (configuredEnvironment !== "sandbox") {
-    throw new Error("Live Paddle server API is not enabled in this phase.");
+  if (!configuredEnvironment) {
+    throw new Error("NEXT_PUBLIC_PADDLE_ENV is not configured.");
   }
 
   const options: PaddleOptions = {
-    environment: Environment.sandbox,
+    environment: toSdkEnvironment(configuredEnvironment),
     logLevel: LogLevel.error,
   };
 

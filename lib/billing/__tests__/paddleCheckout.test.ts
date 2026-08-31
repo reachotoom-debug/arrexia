@@ -73,15 +73,15 @@ describe("Paddle checkout configuration", () => {
     }
   });
 
-  it("returns catalog-not-configured for production until a live catalog exists", () => {
+  it("resolves production starter monthly checkout price from the live catalog", () => {
     const built = buildCheckoutOpenOptions({
       plan: "starter",
       interval: "monthly",
       environment: "production",
     });
-    assert.equal(built.ok, false);
-    if (!built.ok) {
-      assert.equal(built.code, "CATALOG_NOT_CONFIGURED");
+    assert.equal(built.ok, true);
+    if (built.ok) {
+      assert.equal(built.priceId, "pri_01m1at62xv6w2m6qs1phhv9dcr");
     }
   });
 
@@ -105,12 +105,22 @@ describe("Paddle checkout configuration", () => {
     }
   });
 
-  it("blocks production checkout until a live catalog is configured", () => {
+  it("allows production checkout when token and environment are configured", () => {
     process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
+    const config = getPaddleClientConfig();
+    assert.equal(config.ok, true);
+    if (config.ok) {
+      assert.equal(config.environment, "production");
+      assert.equal(config.token, "test_client_token");
+    }
+  });
+
+  it("fails closed when NEXT_PUBLIC_PADDLE_ENV is invalid", () => {
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "staging";
     const config = getPaddleClientConfig();
     assert.equal(config.ok, false);
     if (!config.ok) {
-      assert.equal(config.code, "PRODUCTION_NOT_ENABLED");
+      assert.equal(config.code, "MISSING_ENVIRONMENT");
     }
   });
 

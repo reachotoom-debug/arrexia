@@ -3,8 +3,7 @@ import type { PaddleEnvironment } from "./types";
 
 export type PaddleClientConfigErrorCode =
   | "MISSING_CLIENT_TOKEN"
-  | "MISSING_ENVIRONMENT"
-  | "PRODUCTION_NOT_ENABLED";
+  | "MISSING_ENVIRONMENT";
 
 export type PaddleClientConfig =
   | {
@@ -29,10 +28,6 @@ export function getPaddleClientConfig(): PaddleClientConfig {
     return { ok: false, code: "MISSING_ENVIRONMENT" };
   }
 
-  if (environment === "production") {
-    return { ok: false, code: "PRODUCTION_NOT_ENABLED" };
-  }
-
   return { ok: true, token, environment };
 }
 
@@ -42,8 +37,6 @@ export function getPaddleClientConfigErrorMessage(code: PaddleClientConfigErrorC
       return "Paddle checkout is not configured. Missing NEXT_PUBLIC_PADDLE_CLIENT_TOKEN.";
     case "MISSING_ENVIRONMENT":
       return "Paddle checkout is not configured. Missing NEXT_PUBLIC_PADDLE_ENV.";
-    case "PRODUCTION_NOT_ENABLED":
-      return "Live Paddle checkout is not enabled yet. Use sandbox during development.";
     default:
       return "Paddle checkout is not configured.";
   }

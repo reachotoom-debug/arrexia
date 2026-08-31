@@ -23,17 +23,35 @@ export const PADDLE_SANDBOX_PRICE_CATALOG: Readonly<
   },
 } as const;
 
+/** Verified Paddle Live catalog — centralized for checkout wiring. */
+export const PADDLE_PRODUCTION_PRICE_CATALOG: Readonly<
+  Record<PaddleCheckoutPlan, Readonly<Record<BillingInterval, string>>>
+> = {
+  starter: {
+    monthly: "pri_01m1at62xv6w2m6qs1phhv9dcr",
+    annual: "pri_01m1at9cd7hb9ppq4hg2hj39dj",
+  },
+  pro: {
+    monthly: "pri_01m1ate0g915aeyvcf0y7kwr1z",
+    annual: "pri_01m1atg3nvsrvkqhcfrrww1sdh0",
+  },
+  business: {
+    monthly: "pri_01m1atnep0q6m6a8c77ht58z6h",
+    annual: "pri_01m1atpxgh4t3msdn24hh45htd",
+  },
+} as const;
+
 export function isPaddleCheckoutPlan(plan: string): plan is PaddleCheckoutPlan {
   return plan === "starter" || plan === "pro" || plan === "business";
 }
 
 export function getPaddlePriceCatalog(
   environment: PaddleEnvironment
-): Readonly<Record<PaddleCheckoutPlan, Readonly<Record<BillingInterval, string>>>> | null {
-  if (environment === "sandbox") {
-    return PADDLE_SANDBOX_PRICE_CATALOG;
+): Readonly<Record<PaddleCheckoutPlan, Readonly<Record<BillingInterval, string>>>> {
+  if (environment === "production") {
+    return PADDLE_PRODUCTION_PRICE_CATALOG;
   }
-  return null;
+  return PADDLE_SANDBOX_PRICE_CATALOG;
 }
 
 /**
@@ -58,10 +76,6 @@ export function resolvePaddlePriceId(
   }
 
   const catalog = getPaddlePriceCatalog(environment);
-  if (!catalog) {
-    return { ok: false, code: "CATALOG_NOT_CONFIGURED", plan, interval };
-  }
-
   const priceId = catalog[plan][interval];
   return { ok: true, plan, interval, priceId, environment };
 }
@@ -87,9 +101,6 @@ export function resolvePlanFromPaddlePriceId(
   environment: PaddleEnvironment = "sandbox"
 ): PaddlePriceCatalogResolution {
   const catalog = getPaddlePriceCatalog(environment);
-  if (!catalog) {
-    return { ok: false, code: "UNKNOWN_PRICE_ID", priceId, environment };
-  }
 
   for (const plan of ["starter", "pro", "business"] as const) {
     for (const interval of ["monthly", "annual"] as const) {

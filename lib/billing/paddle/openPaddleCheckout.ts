@@ -37,7 +37,6 @@ export type OpenPaddleCheckoutResult =
       code:
         | "MISSING_CLIENT_TOKEN"
         | "MISSING_ENVIRONMENT"
-        | "PRODUCTION_NOT_ENABLED"
         | "INIT_FAILED"
         | "CONTACT_SALES_ONLY"
         | "FREE_PLAN"
