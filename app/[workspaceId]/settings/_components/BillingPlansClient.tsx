@@ -70,7 +70,7 @@ import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
 
 const CHECKOUT_PENDING_ACTIVATION_MESSAGE =
 
-  "Checkout is connected in sandbox. Your Arrexia plan activates after Paddle webhook confirmation.";
+  "Your plan activates after Paddle confirms your payment. Activation normally happens automatically after checkout.";
 
 
 
