@@ -27,10 +27,17 @@ function hasCssHeightControl(className?: string): boolean {
 
 function hasCssWidthControl(className?: string): boolean {
   if (!className) return false;
-  return /\b(w-|max-w-|min-w-)/.test(className);
+  return className
+    .split(/\s+/)
+    .some(
+      (token) =>
+        token.startsWith("max-w-") ||
+        token.startsWith("min-w-") ||
+        (token.startsWith("w-") && token !== "w-auto")
+    );
 }
 
-function buildLogoStyle(
+export function buildLogoStyle(
   variant: keyof typeof LOGO_SOURCES,
   height: number,
   className?: string,
@@ -42,7 +49,11 @@ function buildLogoStyle(
   const style: CSSProperties = { objectFit: "contain" };
 
   if (cssHeight) {
+    if (!isIcon) {
+      style.aspectRatio = `${FULL_LOGO_WIDTH} / ${FULL_LOGO_HEIGHT}`;
+    }
     style.width = "auto";
+    style.maxWidth = "100%";
     return style;
   }
 

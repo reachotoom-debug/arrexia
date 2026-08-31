@@ -28,12 +28,12 @@ export function PublicNavbar() {
         <div className="flex items-center justify-between gap-4">
           <Link
             href="/"
-            className="inline-flex min-h-11 shrink-0 items-center rounded-md leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+            className="block min-h-11 shrink-0 rounded-md leading-[0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <ArrexiaLogo
               variant="light"
               height={76}
-              className="h-14 w-auto sm:h-[3.75rem] lg:h-16"
+              className="block h-14 w-auto sm:h-[3.75rem] lg:h-16"
               priority
             />
           </Link>
