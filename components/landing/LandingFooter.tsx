@@ -14,6 +14,7 @@ const RESOURCE_LINKS = [
   { href: "/security", label: "Security" },
   { href: "/privacy", label: "Privacy Policy" },
   { href: "/terms", label: "Terms of Service" },
+  { href: "/refund-policy", label: "Refund Policy" },
   { href: "/cookies", label: "Cookie Policy" },
   { href: "/contact", label: "Contact" },
 ] as const;

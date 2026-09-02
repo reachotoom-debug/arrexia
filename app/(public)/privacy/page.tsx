@@ -99,8 +99,10 @@ export default function PrivacyPage() {
                     </li>
                   </ul>
                   <p>
-                    Payment processing providers may be added in the future. If that happens, we
-                    will update this policy to describe how payment information is handled.
+                    <strong>Paddle</strong> - paid Arrexia subscription purchases may be processed
+                    through Paddle, which acts as the Merchant of Record and authorized reseller
+                    for those transactions. Paddle processes payment information in accordance
+                    with its own privacy and payment practices.
                   </p>
                 </>
               ),

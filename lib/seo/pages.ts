@@ -7,6 +7,7 @@ export type SeoPageId =
   | "contact"
   | "privacy"
   | "terms"
+  | "refund-policy"
   | "cookies"
   | "security"
   | "blog"
@@ -77,6 +78,14 @@ export const SEO_PAGES: Record<SeoPageId, SeoPageConfig> = {
     priority: 0.4,
     changeFrequency: "yearly",
   },
+  "refund-policy": {
+    path: "/refund-policy",
+    title: "Arrexia Refund Policy | Subscription Cancellations & Refunds",
+    description:
+      "Review Arrexia subscription cancellation and refund terms, including purchases processed through Paddle.",
+    priority: 0.3,
+    changeFrequency: "yearly",
+  },
   cookies: {
     path: "/cookies",
     title: "Arrexia Cookie Policy | Cookies & Sessions",
@@ -127,6 +136,7 @@ export const PUBLIC_SITEMAP_PAGE_IDS: SeoPageId[] = [
   "contact",
   "privacy",
   "terms",
+  "refund-policy",
   "cookies",
   "security",
   "blog",

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LegalDocument } from "@/components/public/LegalDocument";
 import { PublicPageShell } from "@/components/public/PublicPageShell";
 import { buildPageMetadata } from "@/lib/seo/metadata";
@@ -102,10 +103,12 @@ export default function TermsPage() {
                     website and may be updated from time to time.
                   </p>
                   <p>
-                    Paid subscriptions, billing cycles, and renewals will be described at checkout or
-                    in your account settings when billing is enabled. Payment processing may be added
-                    or changed in the future; applicable payment terms will be provided when that
-                    happens.
+                    Paid Arrexia subscriptions may be processed through Paddle. For purchases
+                    processed through Paddle, Paddle acts as the Merchant of Record and authorized
+                    reseller, processes the payment transaction, and provides applicable
+                    payment-related buyer support. Your billing cycle, price, and renewal terms are
+                    presented at checkout and through the applicable subscription management
+                    experience.
                   </p>
                 </>
               ),
@@ -115,10 +118,13 @@ export default function TermsPage() {
               title: "Cancellation",
               content: (
                 <p>
-                  You may cancel a paid subscription according to the cancellation process available in
-                  your account or by contacting support. Cancellation stops future billing but may
-                  not entitle you to a refund for unused time unless required by applicable law or
-                  stated in a separate agreement.
+                  You may cancel a paid subscription through the subscription management options
+                  available in your account or through the applicable Paddle customer portal.
+                  Cancellation prevents future renewal and normally takes effect at the end of the
+                  current paid billing period, unless applicable law requires otherwise. Payments
+                  are generally non-refundable except where required by applicable law or otherwise
+                  approved through the applicable payment and refund process. See our{" "}
+                  <Link href="/refund-policy">Refund Policy</Link> for more information.
                 </p>
               ),
             },
