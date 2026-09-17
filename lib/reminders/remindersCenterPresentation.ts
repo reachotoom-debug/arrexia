@@ -312,14 +312,29 @@ export function buildReadyRemindersMetricCards(
   return {
     helperText: READY_REMINDERS_TODAY_HELPER,
     metrics: [
-      { label: "Ready to Send Today", value: String(summary.readyCount) },
+      {
+        label: "Ready to Send Today",
+        value: String(summary.readyCount),
+        detail: "Invoices eligible for reminders",
+      },
       {
         label: "Eligible Outstanding Today",
         value: summary.outstandingLabel,
-        detail: summary.outstandingDetail,
+        detail:
+          summary.outstandingDetail === "Totals shown separately by currency."
+            ? summary.outstandingDetail
+            : "Total overdue amount",
       },
-      { label: "Customers Today", value: String(summary.distinctCustomerCount) },
-      { label: "Rules Due Today", value: String(summary.distinctRuleCount) },
+      {
+        label: "Customers Today",
+        value: String(summary.distinctCustomerCount),
+        detail: "Clients with overdue invoices",
+      },
+      {
+        label: "Rules Due Today",
+        value: String(summary.distinctRuleCount),
+        detail: "Reminder rules scheduled",
+      },
     ],
   };
 }

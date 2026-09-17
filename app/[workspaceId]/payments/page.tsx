@@ -28,8 +28,11 @@ import type {
   PaymentStatusParam,
   SortDir,
 } from "./_lib/buildPaymentsUrl";
-import { loadWorkspaceTimeZone } from "@/lib/settings/loadSettings";
 import { resolvePaymentBusinessDate } from "@/lib/payments/paymentBusinessDate";
+import { loadPaymentListKpiSummary } from "@/lib/payments/paymentListKpiSummary";
+import { KpiCard } from "@/components/KpiCard";
+import { formatKpiMoneyTotals } from "@/lib/format/kpiMoney";
+import { CheckCircle2, CreditCard, DollarSign, Users } from "lucide-react";
 
 const PAYMENT_PAGE_SIZE = 10;
 
@@ -149,9 +152,16 @@ interface PaymentsPageProps {
   }>;
 }
 
+type PaymentPageSettings = {
+  timezone: string | null;
+  defaultCurrency: string;
+  error: unknown;
+};
+
 async function loadPayments(
   workspaceId: string,
-  searchParams: Record<string, string | string[] | undefined>
+  searchParams: Record<string, string | string[] | undefined>,
+  settingsPromise: Promise<PaymentPageSettings>
 ): Promise<{
   payments: PaymentRow[];
   totalCount: number;
@@ -165,9 +175,8 @@ async function loadPayments(
   q: string;
 }> {
   const supabase = await supabaseServer();
-  const workspaceTimeZone = await loadWorkspaceTimeZone(workspaceId);
   // Query base payments table to check if ANY payments exist in workspace
-  const { count: anyPaymentsCount } = await perfTime(
+  const anyPaymentsPromise = perfTime(
     "payments-list",
     "anyPaymentsCount",
     async () =>
@@ -178,7 +187,6 @@ async function loadPayments(
     (result) => `count=${result.count ?? 0}`
   );
   
-  const workspacePaymentCount = typeof anyPaymentsCount === "number" ? anyPaymentsCount : 0;
 
   // Parse query parameters with defaults
   const { page, pageSize, status, view, q, sort, dir } = parsePaymentsQuery(searchParams);
@@ -194,7 +202,6 @@ async function loadPayments(
   const isArchivedFilter = status === "archived";
   
   let query;
-  let countQuery;
   
   if (isArchivedFilter) {
     // ========================================================================
@@ -225,11 +232,6 @@ async function loadPayments(
       .eq("workspace_id", workspaceId)
       .not("archived_at", "is", null);
 
-    countQuery = supabase
-      .from("payments")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId)
-      .not("archived_at", "is", null);
   } else {
     // ========================================================================
     // ACTIVE TABS: Query payments_view (includes joined columns)
@@ -261,10 +263,6 @@ async function loadPayments(
       )
       .eq("workspace_id", workspaceId);
 
-    countQuery = supabase
-      .from("payments_view")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId);
   }
 
   // ============================================================================
@@ -293,7 +291,6 @@ async function loadPayments(
       const validActiveStatuses: PaymentStatusParam[] = ["completed", "pending", "failed", "refunded"];
       if (validActiveStatuses.includes(status)) {
         query = query.eq("status", status);  // ✅ Apply status filter
-        countQuery = countQuery.eq("status", status);  // ✅ Apply status filter to count
       }
     }
   }
@@ -310,13 +307,11 @@ async function loadPayments(
       // Note: Can't search nested invoice/client fields with ILIKE in PostgREST easily
       const searchFilter = `transaction_id.ilike.${searchPattern},notes.ilike.${searchPattern}`;
       query = query.or(searchFilter);
-      countQuery = countQuery.or(searchFilter);
     } else {
       // Active tabs: Search across client_name, invoice_number, transaction_id, notes
       // payments_view includes client_name and invoice_number as direct columns
       const searchFilter = `client_name.ilike.${searchPattern},invoice_number.ilike.${searchPattern},transaction_id.ilike.${searchPattern},notes.ilike.${searchPattern}`;
       query = query.or(searchFilter);
-      countQuery = countQuery.or(searchFilter);
     }
   }
 
@@ -426,27 +421,19 @@ async function loadPayments(
   // Apply pagination (AFTER all filtering, search, and ordering)
   // IMPORTANT: All filtering (.eq, .or), search (.or with ilike), and ordering (.order)
   // must happen BEFORE .range() to ensure sorting/search/filtering apply across ALL pages
-  const { data: paymentsFromDb, error } = await perfTime(
-    "payments-list",
-    "paymentRows",
-    async () => query.range(from, to),
-    (result) => `rows=${result.data?.length ?? 0}`
-  );
-  
-  // Get count with same filters (but no ordering/pagination)
-  const { count, error: countError } = await perfTime(
-    "payments-list",
-    "filteredCount",
-    async () => countQuery,
-    (result) => `count=${result.count ?? 0}`
-  );
-  
-  // If count query fails, log but don't fail the whole request
-  if (countError) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("[PaymentsPage] count query failed:", countError.message);
-    }
-  }
+  const [rowsResult, anyPaymentsResult, settings] = await Promise.all([
+    perfTime(
+      "payments-list",
+      "paymentRows",
+      async () => query.range(from, to),
+      (result) => `rows=${result.data?.length ?? 0}`
+    ),
+    anyPaymentsPromise,
+    settingsPromise,
+  ]);
+  const { data: paymentsFromDb, error, count } = rowsResult;
+  const workspacePaymentCount = anyPaymentsResult.count ?? 0;
+  const workspaceTimeZone = settings.timezone;
 
   // Error handling
   if (error) {
@@ -523,10 +510,43 @@ export default async function PaymentsPage({ params, searchParams }: PaymentsPag
 
   // Load payments using the refactored function
   let paymentData;
+  let paymentKpiSummary: Awaited<ReturnType<typeof loadPaymentListKpiSummary>> | null = null;
+  let workspaceDefaultCurrency = "USD";
+  const settingsPromise: Promise<PaymentPageSettings> = perf.time("paymentSettings", async () => {
+    try {
+      const { data, error } = await supabase
+        .from("settings")
+        .select("timezone, default_currency")
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+      if (error) throw error;
+      return { timezone: data?.timezone ?? null, defaultCurrency: data?.default_currency ?? "USD", error: null };
+    } catch (error: unknown) {
+      console.error("[PaymentsPage] settings lookup failed:", { workspaceId, error });
+      return { timezone: null, defaultCurrency: "USD", error };
+    }
+  });
+  // Optional KPIs must never turn a successful payment list into a page error.
+  const kpiPromise = Promise.all([
+    perf.time("loadPaymentListKpiSummary", () =>
+      loadPaymentListKpiSummary(supabase, workspaceId)
+    ),
+    settingsPromise,
+  ]).then(([summary, settings]) => {
+    if (settings.error) throw settings.error;
+    return { summary, currency: settings.defaultCurrency };
+  }).catch((error: unknown) => {
+    console.error("[PaymentsPage] failed to load payment KPIs:", { workspaceId, error });
+    return null;
+  });
   try {
-    paymentData = await perf.time("loadPayments", () =>
-      loadPayments(workspaceId, resolvedSearchParams)
-    );
+    const [loadedPayments, loadedKpis] = await Promise.all([
+      perf.time("loadPayments", () => loadPayments(workspaceId, resolvedSearchParams, settingsPromise)),
+      kpiPromise,
+    ]);
+    paymentData = loadedPayments;
+    paymentKpiSummary = loadedKpis?.summary ?? null;
+    workspaceDefaultCurrency = loadedKpis?.currency ?? "USD";
   } catch (error) {
     perf.finish({ status: "error" });
     return (
@@ -579,6 +599,47 @@ export default async function PaymentsPage({ params, searchParams }: PaymentsPag
     Number(statusParam !== "all") +
     Number(Boolean(sort));
 
+  const amountPaidLabel = paymentKpiSummary
+    ? formatKpiMoneyTotals(paymentKpiSummary.totalAmountPaidByCurrency, workspaceDefaultCurrency)
+    : { value: "Unavailable" };
+  const paymentKpiGrid = (
+    <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <KpiCard
+        label="Total Payments"
+        value={paymentKpiSummary?.totalPayments ?? "Unavailable"}
+        supportingText="Payments recorded"
+        icon={CreditCard}
+        iconClassName="text-blue-600"
+        iconContainerClassName="bg-blue-50"
+      />
+      <KpiCard
+        label="Total Amount Paid"
+        value={amountPaidLabel.value}
+        valueTitle={amountPaidLabel.value}
+        supportingText={amountPaidLabel.detail ?? "Net effective payments"}
+        icon={DollarSign}
+        iconClassName="text-emerald-600"
+        iconContainerClassName="bg-emerald-50"
+      />
+      <KpiCard
+        label="Unique Clients"
+        value={paymentKpiSummary?.uniqueClients ?? "Unavailable"}
+        supportingText="Clients with effective payments"
+        icon={Users}
+        iconClassName="text-violet-600"
+        iconContainerClassName="bg-violet-50"
+      />
+      <KpiCard
+        label="Success Rate"
+        value={paymentKpiSummary?.successRateLabel ?? "Unavailable"}
+        supportingText="Effective / active payments"
+        icon={CheckCircle2}
+        iconClassName="text-emerald-600"
+        iconContainerClassName="bg-emerald-50"
+      />
+    </div>
+  );
+
   // Show empty state ONLY when workspace has no payments at all
   // If workspace has payments but filters return empty, let PaymentsTable render filters + empty state
   if (anyPaymentsCount === 0) {
@@ -601,7 +662,8 @@ export default async function PaymentsPage({ params, searchParams }: PaymentsPag
               }
             />
           </CommandBar>
-          <div className="p-8">
+          {paymentKpiGrid}
+          <div className="mt-5 p-8">
             <EmptyState
               title="No payments recorded"
               message="Record a payment against an invoice to see it here."
@@ -662,6 +724,9 @@ export default async function PaymentsPage({ params, searchParams }: PaymentsPag
           />
         </CommandBar>
 
+        {paymentKpiGrid}
+
+        <div className="mt-5">
         <PaymentsTable
           rows={paymentRows}
           workspaceId={workspaceId}
@@ -676,6 +741,7 @@ export default async function PaymentsPage({ params, searchParams }: PaymentsPag
           dir={dir}
           q={searchTerm}
         />
+        </div>
       </div>
     </>
   );

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Settings } from "lucide-react";
 import {
   formatAutomationRuleCountLabel,
   type AutomationStatusPresentation,
@@ -22,8 +23,16 @@ export function AutomationStatusPanel({ status }: AutomationStatusPanelProps) {
       className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-5"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-start gap-4">
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-50"
+            aria-hidden="true"
+          >
+            <Settings className="h-6 w-6 text-emerald-600" strokeWidth={2} />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-semibold text-slate-900">Automation Status</h2>
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${statusTone}`}
@@ -58,10 +67,12 @@ export function AutomationStatusPanel({ status }: AutomationStatusPanelProps) {
             ) : null}
           </div>
         </div>
+        </div>
         <Link
           href={status.settingsHref}
-          className="inline-flex shrink-0 items-center text-sm font-medium text-blue-600 hover:underline"
+          className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
         >
+          <Settings className="h-4 w-4" aria-hidden="true" />
           Reminder settings
         </Link>
       </div>

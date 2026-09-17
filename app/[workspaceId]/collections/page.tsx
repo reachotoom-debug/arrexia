@@ -7,6 +7,12 @@ import {
 } from "@/lib/onboarding/workspaceOnboardingState";
 import { formatMoney } from "@/lib/utils/format-money";
 import Link from "next/link";
+import {
+  DollarSign,
+  FileWarning,
+  ShieldAlert,
+  type LucideIcon,
+} from "lucide-react";
 import { clsx } from "clsx";
 import { ErrorState, EmptyState } from "@/components/ui/state";
 import { PaginationBar } from "@/components/PaginationBar";
@@ -244,16 +250,39 @@ function SummaryMetric({
   label,
   value,
   detail,
+  icon: Icon,
+  iconClassName,
+  iconBackgroundClassName,
 }: {
   label: string;
   value: string;
   detail?: string;
+  icon: LucideIcon;
+  iconClassName: string;
+  iconBackgroundClassName: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900 sm:text-2xl">{value}</p>
-      {detail ? <p className="mt-1 text-xs leading-snug text-slate-500">{detail}</p> : null}
+    <div className="flex min-h-[110px] items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconBackgroundClassName}`}
+        aria-hidden="true"
+      >
+        <Icon className={`h-6 w-6 ${iconClassName}`} strokeWidth={2} />
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-slate-600">{label}</p>
+
+        <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900 sm:text-2xl">
+          {value}
+        </p>
+
+        {detail ? (
+          <p className="mt-1 text-xs leading-snug text-slate-500">
+            {detail}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -386,6 +415,9 @@ export default async function CollectionsPage({
         <SummaryMetric
           label="Overdue invoices"
           value={String(summary.invoicesInView)}
+          icon={FileWarning}
+          iconClassName="text-blue-600"
+          iconBackgroundClassName="bg-blue-50"
           detail={
             summary.invoicesInView === 1
               ? "Invoice in this portfolio view"
@@ -395,11 +427,17 @@ export default async function CollectionsPage({
         <SummaryMetric
           label="Overdue exposure"
           value={summary.outstandingLabel}
+          icon={DollarSign}
+          iconClassName="text-rose-600"
+          iconBackgroundClassName="bg-rose-50"
           detail={summary.outstandingDetail}
         />
         <SummaryMetric
           label="Risk segment"
           value={summary.mode}
+          icon={ShieldAlert}
+          iconClassName="text-amber-600"
+          iconBackgroundClassName="bg-amber-50"
           detail={risk !== "all" ? "Filtered portfolio segment" : "All overdue risk levels"}
         />
       </section>

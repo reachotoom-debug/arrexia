@@ -1,4 +1,11 @@
 import Link from "next/link";
+import {
+  BellRing,
+  DollarSign,
+  ListChecks,
+  ShieldAlert,
+  type LucideIcon,
+} from "lucide-react";
 import { clsx } from "clsx";
 import { formatMoney } from "@/lib/utils/format-money";
 import { formatDateOnlyField } from "@/lib/datetime/formatDateTime";
@@ -69,16 +76,43 @@ function SummaryMetric({
   label,
   value,
   detail,
+  icon: Icon,
+  iconClassName,
+  iconBackgroundClassName,
+  valueClassName = "text-slate-900",
 }: {
   label: string;
   value: string;
   detail?: string;
+  icon: LucideIcon;
+  iconClassName: string;
+  iconBackgroundClassName: string;
+  valueClassName?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900 sm:text-2xl">{value}</p>
-      {detail ? <p className="mt-1 text-xs leading-snug text-slate-500">{detail}</p> : null}
+    <div className="flex min-h-[110px] items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconBackgroundClassName}`}
+        aria-hidden="true"
+      >
+        <Icon className={`h-6 w-6 ${iconClassName}`} strokeWidth={2} />
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-slate-600">{label}</p>
+
+        <p
+          className={`mt-1 text-xl font-semibold tabular-nums sm:text-2xl ${valueClassName}`}
+        >
+          {value}
+        </p>
+
+        {detail ? (
+          <p className="mt-1 text-xs leading-snug text-slate-500">
+            {detail}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -189,6 +223,9 @@ export function DailyActionCenterView({
           <SummaryMetric
             label="Actions today"
             value={String(summary.actionsTodayCount)}
+            icon={ListChecks}
+            iconClassName="text-blue-600"
+            iconBackgroundClassName="bg-blue-50"
             detail={
               summary.actionsTodayCount === 1
                 ? "Invoice requires action"
@@ -198,6 +235,9 @@ export function DailyActionCenterView({
           <SummaryMetric
             label="Reminders ready"
             value={String(summary.remindersDueCount)}
+            icon={BellRing}
+            iconClassName="text-violet-600"
+            iconBackgroundClassName="bg-violet-50"
             detail={
               summary.remindersDueCount === 1
                 ? "Scheduled reminder due"
@@ -207,6 +247,9 @@ export function DailyActionCenterView({
           <SummaryMetric
             label="High-risk customers"
             value={String(summary.highRiskCustomerCount)}
+            icon={ShieldAlert}
+            iconClassName="text-rose-600"
+            iconBackgroundClassName="bg-rose-50"
             detail={
               summary.highRiskCustomerCount === 1 ? "Client to prioritize" : "Clients to prioritize"
             }
@@ -214,6 +257,10 @@ export function DailyActionCenterView({
           <SummaryMetric
             label="Cash requiring attention"
             value={cashAttention.value}
+            icon={DollarSign}
+            iconClassName="text-amber-600"
+            iconBackgroundClassName="bg-amber-50"
+            valueClassName="text-amber-700"
             detail={cashAttention.detail}
           />
         </div>

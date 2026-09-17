@@ -1,3 +1,5 @@
+import { loadInvoiceListKpiSummary, type InvoiceListKpiSummary } from "@/lib/invoices/invoiceListKpiSummary";
+import { formatKpiMoneyTotals } from "@/lib/format/kpiMoney";
 import { requireWorkspace } from "@/lib/auth/server";
 import {
   applyDisplayStatusFilterPredicate,
@@ -17,9 +19,10 @@ import { PlanLimitBanner } from "@/components/billing/PlanLimitBanner";
 import { InvoicesTable } from "./_components/InvoicesTable";
 import { InvoicesViewPills } from "./_components/InvoicesViewPills";
 import { InvoicesTableUnarchiveButton } from "./_components/InvoicesTableUnarchiveButton";
+import { InvoiceKpiCard } from "./_components/InvoiceKpiCard";
+import { AlertTriangle, DollarSign, FileText } from "lucide-react";
 import { ExportCsvButton } from "../_components/ExportCsvButton";
 import { PaginationBar } from "@/components/PaginationBar";
-import { formatCurrency } from "@/lib/format/currency";
 import {
   CommandBar,
   CommandBarControls,
@@ -744,8 +747,14 @@ export default async function InvoicesPage({
   // Load invoices using the refactored function
   let invoiceData;
   let workspaceDefaultCurrency = "USD";
+  let invoiceKpiSummary: InvoiceListKpiSummary | null = null;
+  const kpiPromise = perf.time("loadInvoiceListKpiSummary", () => loadInvoiceListKpiSummary(supabase, workspaceId))
+    .catch((error: unknown) => {
+      console.error("[InvoicesPage] failed to load invoice KPIs:", { workspaceId, error });
+      return null;
+    });
   try {
-    const [loadedInvoices, settingsResult] = await Promise.all([
+    const [loadedInvoices, settingsResult, loadedKpis] = await Promise.all([
       perf.time("loadInvoices", () =>
         loadInvoices(workspaceId, resolvedSearchParams)
       ),
@@ -754,7 +763,13 @@ export default async function InvoicesPage({
         .select("default_currency")
         .eq("workspace_id", workspaceId)
         .maybeSingle(),
+      kpiPromise,
     ]);
+    invoiceKpiSummary = loadedKpis;
+    if (settingsResult.error) {
+      console.error("[InvoicesPage] KPI currency settings failed:", { workspaceId, error: settingsResult.error });
+      invoiceKpiSummary = null;
+    }
     invoiceData = loadedInvoices;
     workspaceDefaultCurrency =
       (settingsResult.data as { default_currency?: string } | null)?.default_currency ??
@@ -911,13 +926,9 @@ export default async function InvoicesPage({
               clientId: undefined,
             }),
           };
-  const summaryOutstanding = enrichedInvoices.reduce(
-    (sum, inv) => sum + Number(inv.outstanding ?? 0),
-    0
-  );
-  const summaryOverdueCount = enrichedInvoices.filter(
-    (inv) => inv.displayStatusNormalized === "overdue"
-  ).length;
+  const outstandingLabel = invoiceKpiSummary
+    ? formatKpiMoneyTotals(invoiceKpiSummary.outstandingByCurrency, workspaceDefaultCurrency)
+    : { value: "Unavailable" };
 
   perf.finish({
     rows: enrichedInvoices.length,
@@ -1077,21 +1088,36 @@ export default async function InvoicesPage({
         />
       )}
 
-      <div className="flex min-w-0 flex-wrap items-baseline gap-x-6 gap-y-2 text-sm text-gray-600">
-        <span>{totalCount} invoices</span>
-        <span>
-          Outstanding:{" "}
-          <span className="font-medium text-slate-800">
-            {formatCurrency(summaryOutstanding, { currency: workspaceDefaultCurrency })}
-          </span>
-        </span>
-        <span>
-          Overdue: <span className="font-medium text-slate-800">{summaryOverdueCount}</span>
-        </span>
+      <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">
+        <InvoiceKpiCard
+          label="Total Invoices"
+          value={invoiceKpiSummary?.totalInvoices ?? "Unavailable"}
+          supportingText="Active invoice records"
+          icon={FileText}
+          iconClassName="text-blue-600"
+          iconContainerClassName="bg-blue-50"
+        />
+        <InvoiceKpiCard
+          label="Outstanding Amount"
+          value={outstandingLabel.value}
+          valueTitle={outstandingLabel.value}
+          supportingText={outstandingLabel.detail ?? "Collectible unpaid balance"}
+          icon={DollarSign}
+          iconClassName="text-emerald-600"
+          iconContainerClassName="bg-emerald-50"
+        />
+        <InvoiceKpiCard
+          label="Overdue Invoices"
+          value={invoiceKpiSummary?.overdueInvoices ?? "Unavailable"}
+          supportingText="Invoices past due date"
+          icon={AlertTriangle}
+          iconClassName="text-red-600"
+          iconContainerClassName="bg-red-50"
+        />
       </div>
 
         {/* Table or Empty State */}
-        <div>
+        <div className="mt-5">
           {enrichedInvoices.length > 0 ? (
             <InvoicesTable
               invoices={enrichedInvoices.map((inv) => ({
