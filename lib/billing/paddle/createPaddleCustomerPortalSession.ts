@@ -4,6 +4,8 @@ import {
   isValidPaddleCustomerId,
   isValidPaddleSubscriptionId,
 } from "./checkoutCustomerIdentity";
+import { getPaddleApiKey, getPaddleEnvironment } from "./env.server";
+import { logPortalFailure, type PortalFailureStage } from "./portalDiagnostics";
 import { getPaddleServerClient } from "./serverClient";
 import {
   loadWorkspaceSubscription,
@@ -18,6 +20,7 @@ export type CreatePaddleCustomerPortalSessionResult =
         | "missing_paddle_customer"
         | "not_paddle_subscription"
         | "portal_unavailable"
+        | "paddle_environment_mismatch"
         | "subscription_lookup_failed";
       message: string;
     };
@@ -68,10 +71,7 @@ export async function createPaddleCustomerPortalSessionForWorkspace(
   try {
     subscription = await loadSubscriptionFn(workspaceId);
   } catch (error) {
-    console.error(
-      `[paddle/portal] subscription lookup failed for ${workspaceId}:`,
-      error instanceof Error ? error.message : error
-    );
+    logPortalFailure("subscription_lookup", error);
     return {
       ok: false,
       code: "subscription_lookup_failed",
@@ -87,6 +87,16 @@ export async function createPaddleCustomerPortalSessionForWorkspace(
     };
   }
 
+  const environment = getPaddleEnvironment();
+  if (!environment) {
+    logPortalFailure("configuration_validation");
+    return { ok: false, code: "portal_unavailable", message: "Unable to open subscription management right now." };
+  }
+  if (environment !== "production" || subscription.paddleEnvironment !== "production") {
+    return { ok: false, code: "paddle_environment_mismatch",
+      message: "Subscription management is unavailable until Live billing is verified." };
+  }
+
   const customerId = resolvePaddlePortalCustomerId(subscription);
   if (!customerId) {
     return {
@@ -96,28 +106,35 @@ export async function createPaddleCustomerPortalSessionForWorkspace(
     };
   }
 
+  let stage: PortalFailureStage = "configuration_validation";
   try {
+    if (!getPaddleEnvironment() || !getPaddleApiKey()) {
+      logPortalFailure(stage);
+      return { ok: false, code: "portal_unavailable", message: "Unable to open subscription management right now." };
+    }
+    stage = "client_initialization";
     const paddle = getPaddleClientFn();
+    stage = "portal_api_request";
     const session = await paddle.customerPortalSessions.create(
       customerId,
       resolvePortalSubscriptionIds(subscription)
     );
 
-    const url = session.urls.general.overview?.trim();
+    stage = "response_validation";
+    const overview = session?.urls?.general?.overview;
+    const url = typeof overview === "string" ? overview.trim() : "";
     if (!url) {
+      logPortalFailure(stage);
       return {
         ok: false,
         code: "portal_unavailable",
-        message: "Paddle customer portal is temporarily unavailable.",
+        message: "Unable to open subscription management right now.",
       };
     }
 
     return { ok: true, url };
   } catch (error) {
-    console.error(
-      `[paddle/portal] session creation failed for ${workspaceId}:`,
-      error instanceof Error ? error.message : error
-    );
+    logPortalFailure(stage, error);
     return {
       ok: false,
       code: "portal_unavailable",

@@ -21,6 +21,8 @@ import {
   PAID_LIFECYCLE_EVENT_KEYS,
 } from "@/lib/billing/paidLifecycleEvents";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { loadWorkspaceSubscription } from "./workspaceSubscription";
+import { getPaddleEnvironment } from "./paddle/env.server";
 
 export type PaidSubscriptionActivatedDeliveryInput = {
   workspaceId: string;
@@ -39,6 +41,7 @@ type DeliveryDeps = {
   admin?: ReturnType<typeof supabaseAdmin>;
   sendEmailFn?: typeof sendEmailWithRetry;
   resolveOwnerFn?: typeof getWorkspaceOwnerEmail;
+  loadSubscriptionFn?: typeof loadWorkspaceSubscription;
 };
 
 const PAID_SUBSCRIPTION_ACTIVATED_KEY = PAID_LIFECYCLE_EVENT_KEYS[0];
@@ -69,6 +72,12 @@ export async function deliverPaidSubscriptionActivatedEmail(
   }
 
   const admin = deps.admin ?? supabaseAdmin();
+  const subscription = await (deps.loadSubscriptionFn ?? loadWorkspaceSubscription)(workspaceId, admin);
+  if (getPaddleEnvironment() !== "production" || subscription?.paymentProvider !== "paddle" ||
+      subscription.paddleEnvironment !== "production" || subscription.providerSubscriptionId !== providerSubscriptionId ||
+      subscription.status !== "active") {
+    return { ok: true, sent: false, reason: "unverified_live_subscription" };
+  }
   const sendEmailFn = deps.sendEmailFn ?? sendEmailWithRetry;
   const resolveOwnerFn = deps.resolveOwnerFn ?? getWorkspaceOwnerEmail;
 

@@ -428,6 +428,9 @@ export async function markWorkspaceRenewedAction(
     const admin = supabaseAdmin();
     const now = new Date();
     const existing = await loadWorkspaceSubscription(workspaceId, admin);
+    if (existing?.paymentProvider === "paddle") {
+      return { ok: false, error: "Paddle subscriptions renew through Paddle and cannot be marked renewed manually." };
+    }
     const billingInterval = normalizeBillingInterval(existing?.billingInterval);
     const periodUpdate = computeManualRenewalPeriodUpdate(now, {
       currentPeriodStartsAt: existing?.currentPeriodStartsAt ?? null,

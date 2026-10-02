@@ -1,5 +1,6 @@
 "use server";
 
+import { logPortalFailure } from "@/lib/billing/paddle/portalDiagnostics";
 import { requireWorkspace } from "@/lib/auth/server";
 import { createPaddleCustomerPortalSessionForWorkspace } from "@/lib/billing/paddle/createPaddleCustomerPortalSession";
 
@@ -21,10 +22,7 @@ export async function openPaddleCustomerPortal(
 
     return { ok: true, url: result.url };
   } catch (error) {
-    console.error(
-      `[paddle/portal] open action failed for ${workspaceId}:`,
-      error instanceof Error ? error.message : error
-    );
+    logPortalFailure("workspace_access", error);
     return { ok: false, error: "Unable to open subscription management." };
   }
 }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { paddleWebhookRpcMock } from "./paddleWebhookRpcMock";
 
 import { getPlanStorageLimits, type WorkspacePlan } from "@/lib/billing/plans";
 
@@ -14,6 +15,7 @@ type SubscriptionRow = {
   plan: string;
   status: string;
   payment_provider?: string;
+  paddle_environment?: string | null;
   billing_interval?: string;
   trial_starts_at: string | null;
   trial_ends_at: string | null;
@@ -24,6 +26,8 @@ type SubscriptionRow = {
   provider_customer_id?: string | null;
   provider_subscription_id?: string | null;
   provider_last_event_at?: string | null;
+  provider_last_event_priority?: number;
+  provider_last_event_id?: string;
   updated_at?: string;
 };
 
@@ -54,6 +58,8 @@ export type BillingMockState = {
   templates: TemplateRow[];
   rules: RuleRow[];
   paddleWebhookEvents: Record<string, unknown>[];
+  paddleBindings: { provider_subscription_id: string; workspace_id: string; provider_customer_id: string }[];
+  paddleCompletionShouldFail?: boolean;
   planUpsertShouldFail?: boolean;
   subscriptionUpsertShouldFail?: boolean;
   subscriptionUpsertNoOp?: boolean;
@@ -73,6 +79,7 @@ export function createBillingMockState(): BillingMockState {
     templates: [],
     rules: [],
     paddleWebhookEvents: [],
+    paddleBindings: [],
     nextTemplateId: 1,
     nextRuleId: 1,
   };
@@ -418,6 +425,8 @@ export function createBillingMockAdmin(state: BillingMockState): SupabaseClient 
       >;
     },
     rpc(fn: string, params: Record<string, unknown>) {
+      const paddle = paddleWebhookRpcMock(state, fn, params, p => executeAtomicRpc(state, p));
+      if (paddle) return Promise.resolve(paddle);
       if (fn !== "rpc_change_workspace_plan_atomic") {
         return Promise.resolve({
           data: null,

@@ -22,13 +22,14 @@ export async function extendWorkspaceTrial(
 
   const { data: sub, error: loadError } = await admin
     .from("workspace_subscriptions")
-    .select("trial_ends_at")
+    .select("trial_ends_at, payment_provider")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
 
   if (loadError || !sub) {
     return { ok: false, error: "Subscription not found" };
   }
+  if (sub.payment_provider === "paddle") return { ok: false, error: "Paddle subscription history cannot be converted to a standalone trial." };
 
   const base = sub.trial_ends_at ? new Date(sub.trial_ends_at) : new Date();
   base.setDate(base.getDate() + days);

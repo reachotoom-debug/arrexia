@@ -1,6 +1,5 @@
 import "server-only";
 
-import { provisionDefaultReminderSetupSafe } from "@/lib/reminders/provisionDefaultSetup";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 import {
@@ -10,7 +9,24 @@ import {
 } from "../../atomicChangeWorkspacePlan";
 import { getPlanStorageLimits, type BillingInterval, type WorkspacePlan } from "../../plans";
 import type { WorkspaceSubscriptionSnapshot, WorkspaceSubscriptionStatus } from "../../workspaceSubscription";
-import { persistPaddleProviderIdentity } from "./resolvePaddleWorkspace";
+
+/** Claim ownership, identity, ordering, billing and ledger completion share one DB transaction. */
+export async function applyClaimedPaddleSubscriptionFulfillment(
+  eventId: string, claimToken: string, payload: Record<string, unknown>
+): Promise<{ action: "fulfilled" | "ignored"; reason: string; workspaceId: string; periodEndsAt: string | null; notifyActivation: boolean; notificationId?: string }> {
+  const { data, error } = await supabaseAdmin().rpc("rpc_apply_paddle_webhook", {
+    p_environment: "production",
+    p_event_id: eventId, p_claim_token: claimToken, p_payload: payload,
+  });
+  if (error || !data || !["fulfilled", "ignored"].includes(data.action) ||
+      typeof data.reason !== "string" || typeof data.workspace_id !== "string") {
+    throw new Error("paddle_atomic_fulfillment_failed");
+  }
+  return { action: data.action, reason: data.reason, workspaceId: data.workspace_id,
+    periodEndsAt: typeof data.period_ends_at === "string" ? data.period_ends_at : null,
+    notifyActivation: data.notify_activation === true,
+    notificationId: typeof data.notification_id === "string" ? data.notification_id : undefined };
+}
 
 export type ApplyPaddleSubscriptionFulfillmentInput = {
   workspaceId: string;
@@ -91,60 +107,6 @@ async function executePaddleAtomicRpc(
   }
 
   return { ok: true, snapshot };
-}
-
-/** Applies verified Paddle subscription state via the existing atomic billing RPC. */
-export async function applyPaddleSubscriptionFulfillment(
-  input: ApplyPaddleSubscriptionFulfillmentInput
-): Promise<ApplyPaddleSubscriptionFulfillmentResult> {
-  const rpcParams = buildPaddleAtomicRpcParams(input);
-  if (!rpcParams) {
-    return {
-      ok: false,
-      code: "invalid_payload",
-      error: "Paddle subscription payload could not be built.",
-    };
-  }
-
-  const expectedStatus = input.status;
-  const admin = supabaseAdmin();
-  const atomicResult = await executePaddleAtomicRpc(
-    rpcParams,
-    input.targetPlan,
-    expectedStatus,
-    admin
-  );
-
-  if (!atomicResult.ok) {
-    return {
-      ok: false,
-      code: atomicResult.reason === "rpc_failed" ? "rpc_failed" : "snapshot_mismatch",
-      error: atomicResult.error,
-    };
-  }
-
-  if (input.providerCustomerId || input.providerSubscriptionId) {
-    try {
-      await persistPaddleProviderIdentity(input.workspaceId, {
-        providerCustomerId: input.providerCustomerId,
-        providerSubscriptionId: input.providerSubscriptionId,
-      }, admin);
-    } catch (error) {
-      return {
-        ok: false,
-        code: "provider_identity_failed",
-        error: error instanceof Error ? error.message : "Provider identity persistence failed.",
-      };
-    }
-  }
-
-  await provisionDefaultReminderSetupSafe({
-    workspaceId: input.workspaceId,
-    plan: input.targetPlan,
-    admin,
-  });
-
-  return { ok: true };
 }
 
 /** @internal test hook — reuse atomic RPC execution without provider side effects. */

@@ -199,6 +199,14 @@ export function resolveWorkspaceEntitlement(
   const trialConsumedAt =
     input.trialConsumedAt ?? subscription?.trialConsumedAt ?? subscription?.trialStartsAt ?? null;
 
+  // Shared workspace entitlements belong to Live, regardless of the web app's
+  // checkout environment. Retain the record so legacy plan fallback cannot hide it.
+  if (subscription?.paymentProvider === "paddle" && subscription.paddleEnvironment !== "production") {
+    return { ...expiredTrialEntitlement("free", subscription, trialConsumedAt),
+      state: "legacy_free", trialExpired: false, trial: null,
+      trialInvoiceLimitTotal: null, clientLimit: 5, invoiceLimitMonthly: 5, workspaceMemberLimit: 1 };
+  }
+
   if (!subscription) {
     const legacy = input.legacyFreeLimits ?? {
       clientLimit: 5,

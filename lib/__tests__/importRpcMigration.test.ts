@@ -167,7 +167,7 @@ describe("160000 invoice import RPC consolidation", () => {
     const dropLegacyIdx = migration.indexOf(
       "DROP FUNCTION IF EXISTS public.import_invoices_grouped(json, uuid, boolean);"
     );
-    const publicWrapperIdx = migration.indexOf(
+    const publicWrapperIdx = migration.replaceAll("\r\n", "\n").indexOf(
       "CREATE OR REPLACE FUNCTION public.import_invoices_grouped(\n  p_workspace_id uuid,\n  p_rows jsonb,"
     );
 
@@ -175,7 +175,10 @@ describe("160000 invoice import RPC consolidation", () => {
     assert.ok(installIdx > preserveIdx);
     assert.ok(verifyIdx > installIdx);
     assert.ok(dropLegacyIdx > verifyIdx);
-    assert.ok(publicWrapperIdx > dropLegacyIdx);
+    const normalizedDropLegacyIdx = migration.replaceAll("\r\n", "\n").indexOf(
+      "DROP FUNCTION IF EXISTS public.import_invoices_grouped(json, uuid, boolean);"
+    );
+    assert.ok(publicWrapperIdx > normalizedDropLegacyIdx);
   });
 
   it("does not grant internal RPC before verifying it exists", () => {

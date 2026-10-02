@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import "@/lib/test/nodeTestSetup";
 
 import {
   CANONICAL_REMINDER_STAGES,
@@ -663,11 +664,10 @@ describe("provisionDefaultReminderSetup — R2E.1 non-destructive invariant", ()
 describe("integration wiring", () => {
   it("workspace bootstrap invokes provisioning helper", async () => {
     const { readFileSync } = await import("node:fs");
-    const { dirname, join } = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
+    const { join } = await import("node:path");
 
     const source = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "../../workspaces/ensureWorkspaceForUser.ts"),
+      join(__dirname, "../../workspaces/ensureWorkspaceForUser.ts"),
       "utf8"
     );
     assert.match(source, /provisionDefaultReminderSetupSafe/);
@@ -676,15 +676,14 @@ describe("integration wiring", () => {
 
   it("plan change invokes provisioning without upgrade mutation", async () => {
     const { readFileSync } = await import("node:fs");
-    const { dirname, join } = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
+    const { join } = await import("node:path");
 
     const setPlanSource = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "../../billing/setWorkspacePlan.ts"),
+      join(__dirname, "../../billing/setWorkspacePlan.ts"),
       "utf8"
     );
     const provisionSource = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "../provisionDefaultSetup.ts"),
+      join(__dirname, "../provisionDefaultSetup.ts"),
       "utf8"
     );
 

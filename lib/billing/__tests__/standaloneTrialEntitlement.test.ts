@@ -279,7 +279,7 @@ describe("billing CTA semantics", () => {
 });
 
 describe("createArrexiaTrialSubscription one-trial guarantee", () => {
-  type Row = {
+  type Row = Record<string, unknown> & {
     workspace_id: string;
     plan: string;
     status: string;
@@ -333,6 +333,7 @@ describe("createArrexiaTrialSubscription one-trial guarantee", () => {
           insert(row: Record<string, unknown>) {
             if (table === "workspace_subscriptions") {
               rows.push({
+                ...row,
                 workspace_id: String(row.workspace_id),
                 plan: String(row.plan),
                 status: String(row.status),
@@ -381,6 +382,24 @@ describe("createArrexiaTrialSubscription one-trial guarantee", () => {
     assert.equal(admin.getRows()[0]?.plan, "free");
     assert.ok(admin.getRows()[0]?.trial_consumed_at);
   });
+
+  for (const intent of ["starter", "pro", "business"] as const) {
+    it(`${intent} signup creates the same cardless 14-day trial and expires exactly at its end`, async () => {
+      const admin = mockAdmin();
+      assert.equal(resolveBootstrapWorkspacePlan(intent), "free");
+      const result = await createArrexiaTrialSubscription(`ws-${intent}`, admin as never, NOW);
+      assert.deepEqual(result, {ok: true, created: true});
+      const row = admin.getRows()[0]!;
+      assert.equal(row.payment_provider, "manual");
+      assert.equal(row.plan, "free");
+      assert.equal(Date.parse(String(row.trial_ends_at)) - Date.parse(String(row.trial_starts_at)), 14 * 86400000);
+      assert.ok(!row.provider_customer_id && !row.provider_subscription_id);
+      const snapshot = { ...standaloneTrial(), trialStartsAt: String(row.trial_starts_at), trialEndsAt: String(row.trial_ends_at) };
+      const end = Date.parse(snapshot.trialEndsAt);
+      assert.equal(resolveWorkspaceEntitlement({storedPlan:"free",subscription:snapshot,now:new Date(end-1)}).state, "trial");
+      assert.equal(resolveWorkspaceEntitlement({storedPlan:"free",subscription:snapshot,now:new Date(end)}).canMutate, false);
+    });
+  }
 
   it("does not recreate trial for legacy consumed row", async () => {
     const admin = mockAdmin([

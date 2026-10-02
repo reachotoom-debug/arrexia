@@ -7,7 +7,7 @@ import {
   normalizeEmailAddress,
   SANDBOX_FROM_EMAIL,
 } from "@/lib/email/constants";
-import { sanitizeReplyToAddress } from "@/lib/email/emailValidation";
+import { sanitizeReplyToAddress, validateFormattedFromIdentity } from "@/lib/email/emailValidation";
 import {
   EMAIL_SENDER_MISCONFIGURED_MESSAGE,
   getEmailSender,
@@ -47,12 +47,17 @@ export type SendEmailInput = {
   /** Validated Reply-To address(es). Never derived from unvalidated visitor input here. */
   replyTo?: string | string[];
   attachments?: EmailAttachment[];
+  /** Stable logical notification key; every provider retry uses the same payload. */
+  idempotencyKey?: string;
+  /** Internal durable request snapshot; ordinary callers retain central identity. */
+  frozenFrom?: string;
 };
 
 export type SendEmailResult = {
   success: boolean;
   messageId?: string;
   error?: string;
+  uncertain?: boolean;
 };
 
 const EMAIL_TIMEOUT_MS = 9000;
@@ -147,7 +152,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return { success: false, error: sender.error };
   }
 
-  const from = sender.from;
+  if (input.frozenFrom && !validateFormattedFromIdentity(input.frozenFrom)) return { success: false, error: "Invalid durable sender identity" };
+  const from = input.frozenFrom ?? sender.from;
   logEmailSenderDev(from);
 
   const { Resend } = await import("resend");
@@ -188,7 +194,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
           ...(input.text ? { text: input.text } : {}),
           ...(replyTo ? { replyTo } : {}),
           ...(attachments ? { attachments } : {}),
-        })
+        }, input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined)
       : resend.emails.send({
           from,
           to,
@@ -196,10 +202,11 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
           text: input.text ?? "",
           ...(replyTo ? { replyTo } : {}),
           ...(attachments ? { attachments } : {}),
-        });
+        }, input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined);
 
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(
+    timeoutTimer = setTimeout(
       () => reject(new Error(`Email send timeout (${Math.round(timeoutMs / 1000)}s)`)),
       timeoutMs
     );
@@ -212,18 +219,23 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       return {
         success: false,
         error: error.message || "Resend API error",
+        uncertain: error.statusCode == null || error.statusCode >= 500 || error.statusCode === 409,
       };
     }
 
     return {
       success: true,
       messageId: data?.id,
+      uncertain: !data?.id,
     };
   } catch (err) {
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to send email",
+      uncertain: true,
     };
+  } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
   }
 }
 

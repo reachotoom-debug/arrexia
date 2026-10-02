@@ -55,12 +55,12 @@ describe("Paddle checkout customer identity", () => {
     }
   });
 
-  it("reuses existing provider_customer_id for the workspace", async () => {
+  it("reuses the Live customer when restarting a canceled subscription", async () => {
     const resolved = await resolvePaddleCheckoutCustomer(WORKSPACE_A, {
       loadSubscriptionFn: async (workspaceId) => {
         assert.equal(workspaceId, WORKSPACE_A);
         return {
-          status: "active",
+          status: "cancelled",
           plan: "starter",
           trialStartsAt: null,
           trialEndsAt: null,
@@ -70,7 +70,8 @@ describe("Paddle checkout customer identity", () => {
           providerCustomerId: PADDLE_CUSTOMER_A,
           providerSubscriptionId: "sub_test",
           paymentProvider: "paddle",
-          providerLastEventAt: null,
+          paddleEnvironment: "production" as const,
+          providerLastEventAt: "2026-09-01T00:00:00Z",
         };
       },
       resolveOwnerFn: async () => {
@@ -105,7 +106,7 @@ describe("Paddle checkout customer identity", () => {
       const row = subscriptions.get(workspaceId);
       if (!row) return null;
       return {
-        status: "active" as const,
+        status: "cancelled" as const,
         plan: "starter" as const,
         trialStartsAt: null,
         trialEndsAt: null,
@@ -115,7 +116,8 @@ describe("Paddle checkout customer identity", () => {
         providerCustomerId: row.providerCustomerId,
         providerSubscriptionId: "sub_test",
         paymentProvider: "paddle",
-        providerLastEventAt: null,
+          paddleEnvironment: "production" as const,
+        providerLastEventAt: "2026-09-01T00:00:00Z",
       };
     }
 

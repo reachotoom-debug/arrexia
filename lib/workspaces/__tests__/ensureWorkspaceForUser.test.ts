@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import "@/lib/test/nodeTestSetup";
 
 import {
   ORGANIZATION_BOOTSTRAP_COLUMNS,
@@ -644,11 +645,10 @@ describe("ensureWorkspaceForUser bootstrap", () => {
 
   it("Test 8 — admin repair delegates to canonical bootstrap helper", async () => {
     const { readFileSync } = await import("node:fs");
-    const { dirname, join } = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
+    const { join } = await import("node:path");
 
     const repairSource = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "../../admin/repairUserWorkspace.ts"),
+      join(__dirname, "../../admin/repairUserWorkspace.ts"),
       "utf8"
     );
     assert.match(repairSource, /ensureWorkspaceForUser/);
@@ -1325,11 +1325,10 @@ describe("ensureStandaloneTrialIfNeeded one-trial recovery invariant", () => {
 
   it("10 — founder admin repair delegates through explicit authorized path", async () => {
     const { readFileSync } = await import("node:fs");
-    const { dirname, join } = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
+    const { join } = await import("node:path");
 
     const repairSource = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "../../admin/repairUserWorkspace.ts"),
+      join(__dirname, "../../admin/repairUserWorkspace.ts"),
       "utf8"
     );
     assert.match(repairSource, /repairUserWorkspace/);

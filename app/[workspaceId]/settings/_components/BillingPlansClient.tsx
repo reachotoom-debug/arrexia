@@ -457,6 +457,11 @@ export function BillingPlansClient({
 
 
       <SettingsCard title="Available plans">
+        {!paddleCheckoutCustomer.available && (
+          <p role="status" className="mb-3 text-sm text-amber-800">
+            {paddleCheckoutCustomer.unavailableReason}
+          </p>
+        )}
 
         <p className="text-sm text-slate-600">
 

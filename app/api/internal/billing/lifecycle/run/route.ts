@@ -1,5 +1,5 @@
 /**
- * Internal API endpoint for workspace trial lifecycle email processing.
+ * Internal API endpoint for paid and trial billing lifecycle email processing.
  *
  * GET /api/internal/billing/lifecycle/run  — Vercel Cron (Authorization: Bearer CRON_SECRET)
  * POST /api/internal/billing/lifecycle/run — legacy/manual trigger (Bearer or x-cron-secret)
@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runTrialLifecycleEmailsForAllWorkspaces } from "@/lib/billing/runTrialLifecycleEmails";
 import { verifyCronReminderAuth } from "@/lib/reminders/cronAuth";
+import { enqueueAnnualBillingReminders, runPaidBillingEmailRecovery } from "@/lib/billing/billingEmailDelivery";
 
 async function handleLifecycleRun() {
   console.log(
@@ -16,29 +17,42 @@ async function handleLifecycleRun() {
   );
   const startTime = Date.now();
 
-  const result = await runTrialLifecycleEmailsForAllWorkspaces();
+  const stageFailures: string[] = [];
+  // Independent paid stages run first so trial failures cannot strand paid intent.
+  const annualRemindersQueued = await enqueueAnnualBillingReminders().catch(() => {
+    stageFailures.push("annual_reminder_enqueue"); return 0;
+  });
+  const paidEmailRecovery = await runPaidBillingEmailRecovery().catch(() => {
+    stageFailures.push("paid_email_recovery"); return null;
+  });
+  const result = await runTrialLifecycleEmailsForAllWorkspaces().catch(() => {
+    stageFailures.push("trial_lifecycle"); return null;
+  });
 
   const duration = Date.now() - startTime;
   console.log(
     `[TrialLifecycleCron] Completed in ${duration}ms. ` +
-      `Processed ${result.workspacesProcessed} workspaces, ` +
-      `sent ${result.totalSent}, skipped ${result.totalSkipped}, failed ${result.totalFailed}`
+      `Processed ${result?.workspacesProcessed ?? 0} trial workspaces, ` +
+      `sent ${result?.totalSent ?? 0}, stage failures ${stageFailures.length}`
   );
 
   return NextResponse.json({
-    success: true,
+    success: stageFailures.length === 0,
     timestamp: new Date().toISOString(),
     durationMs: duration,
     summary: {
-      workspacesProcessed: result.workspacesProcessed,
-      totalSent: result.totalSent,
-      totalSkipped: result.totalSkipped,
-      totalFailed: result.totalFailed,
-      errorsCount: result.errors.length,
+      workspacesProcessed: result?.workspacesProcessed ?? 0,
+      totalSent: result?.totalSent ?? 0,
+      totalSkipped: result?.totalSkipped ?? 0,
+      totalFailed: result?.totalFailed ?? 0,
+      errorsCount: result?.errors.length ?? 0,
     },
-    workspaceResults: result.workspaceResults,
-    errors: result.errors,
-  });
+    workspaceResults: result?.workspaceResults ?? [],
+    errors: result?.errors ?? [],
+    stageFailures,
+    annualRemindersQueued,
+    paidEmailRecovery,
+  }, { status: stageFailures.length ? 500 : 200 });
 }
 
 function unauthorizedResponse(

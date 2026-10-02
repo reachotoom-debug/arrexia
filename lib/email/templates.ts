@@ -860,3 +860,58 @@ export function renderPaidSubscriptionActivatedEmail(
     subject: `Your Arrexia ${context.planName} subscription is active`,
   };
 }
+
+export type PaidSubscriptionRenewedEmailContext = {
+  workspaceName: string;
+  workspaceUrl: string;
+  ownerDisplayName?: string | null;
+  planName: string;
+  billingIntervalLabel: string;
+  periodStartsAt: string | null;
+  periodEndsAt: string | null;
+  paidAmountLabel: string | null;
+};
+
+export function renderPaidSubscriptionRenewedEmail(context: PaidSubscriptionRenewedEmailContext): {
+  html: string; text: string; subject: string;
+} {
+  const rendered = renderEmailShell({
+    businessName: "Arrexia", logoUrl: ARREXIA_EMAIL_LOGO_URL, badge: "trial_lifecycle",
+    greeting: renderTrialLifecycleGreeting(context.ownerDisplayName),
+    mainMessage: `Your Arrexia ${context.planName} subscription for ${context.workspaceName} renewed successfully.\n\nThank you for your payment. The details below describe the paid renewal period.`,
+    summaryRows: [
+      { label: "Plan", value: context.planName },
+      { label: "Billing", value: context.billingIntervalLabel },
+      { label: "Period starts", value: context.periodStartsAt ? formatDisplayDatePlain(context.periodStartsAt) : null },
+      { label: "Period ends", value: context.periodEndsAt ? formatDisplayDatePlain(context.periodEndsAt) : null },
+      { label: "Amount paid", value: context.paidAmountLabel },
+    ],
+    ctaButton: { label: "Open workspace", url: context.workspaceUrl },
+  });
+  return { ...rendered, subject: `Your Arrexia ${context.planName} subscription renewed` };
+}
+
+export type AnnualRenewalReminderEmailContext = {
+  workspaceName: string;
+  workspaceUrl: string;
+  billingUrl: string;
+  ownerDisplayName?: string | null;
+  planName: string;
+  renewalDate: string;
+};
+
+export function renderAnnualRenewalReminderEmail(context: AnnualRenewalReminderEmailContext): {
+  html: string; text: string; subject: string;
+} {
+  const rendered = renderEmailShell({
+    businessName: "Arrexia", logoUrl: ARREXIA_EMAIL_LOGO_URL, badge: "trial_lifecycle",
+    greeting: renderTrialLifecycleGreeting(context.ownerDisplayName),
+    mainMessage: `The annual renewal date for your Arrexia ${context.planName} subscription for ${context.workspaceName} is approaching.\n\nReview your subscription and manage billing before the renewal date.`,
+    summaryRows: [
+      { label: "Plan", value: context.planName },
+      { label: "Renewal date", value: formatDisplayDatePlain(context.renewalDate) },
+    ],
+    ctaButton: { label: "Manage billing", url: context.billingUrl },
+  });
+  return { ...rendered, subject: `Your Arrexia annual renewal is approaching` };
+}

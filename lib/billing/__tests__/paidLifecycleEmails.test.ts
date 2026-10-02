@@ -12,7 +12,7 @@ import {
   type PaidLifecycleEventKey,
   type PaidLifecycleEventMetadata,
 } from "@/lib/billing/paidLifecycleEvents";
-import { PADDLE_SANDBOX_PRICE_CATALOG } from "@/lib/billing/paddle/priceCatalog";
+import { PADDLE_PRODUCTION_PRICE_CATALOG } from "@/lib/billing/paddle/priceCatalog";
 import { processPaddleWebhookEvent } from "@/lib/billing/paddle/webhook/processPaddleWebhookEvent";
 import { deliverTrialLifecycleEmail } from "@/lib/billing/trialLifecycleDelivery";
 import { getEligibleTrialLifecycleEvents } from "@/lib/billing/trialLifecycleEligibility";
@@ -226,6 +226,13 @@ function buildWorkspaceAdmin(paidMock: ReturnType<typeof createPaidLifecycleEven
           }),
         };
       }
+      if (table === "workspace_subscriptions") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({data: {
+          status: "active", plan: "starter", payment_provider: "paddle", paddle_environment: "production",
+          provider_subscription_id: PADDLE_SUBSCRIPTION_ID, billing_interval: "monthly",
+          trial_starts_at: null, trial_ends_at: null, current_period_starts_at: null, current_period_ends_at: PERIOD_END,
+        }, error: null}) }) }) };
+      }
       if (table === "workspace_paid_lifecycle_events") {
         return paidMock.admin.from(table);
       }
@@ -305,8 +312,8 @@ function renderForPlan(
   periodEnd: string = PERIOD_END
 ) {
   const resolution = resolvePlanFromPaddlePriceId(
-    PADDLE_SANDBOX_PRICE_CATALOG[plan][interval],
-    "sandbox"
+    PADDLE_PRODUCTION_PRICE_CATALOG[plan][interval],
+    "production"
   );
   assert.equal(resolution.ok, true);
   if (!resolution.ok) {
@@ -410,7 +417,7 @@ describe("paid subscription activation delivery", () => {
   });
 
   it("F — subscription.updated does not send activation email", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installBillingMockForWebhook();
     seedPlan(state, WORKSPACE_ID, "starter");
     const existing = state.subscriptions.find((row) => row.workspace_id === WORKSPACE_ID);
@@ -418,6 +425,7 @@ describe("paid subscription activation delivery", () => {
       existing.plan = "starter";
       existing.status = "active";
       existing.payment_provider = "paddle";
+      existing.paddle_environment = "production";
       existing.provider_subscription_id = PADDLE_SUBSCRIPTION_ID;
       existing.current_period_ends_at = PERIOD_END;
     }
@@ -426,7 +434,7 @@ describe("paid subscription activation delivery", () => {
     const sendCalls: string[] = [];
 
     const result = await processPaddleWebhookEvent(
-      buildSubscriptionUpdatedEvent(PADDLE_SANDBOX_PRICE_CATALOG.starter.monthly)
+      buildSubscriptionUpdatedEvent(PADDLE_PRODUCTION_PRICE_CATALOG.starter.monthly)
     );
     assert.equal(result.ok, true);
 
@@ -457,11 +465,11 @@ describe("paid subscription activation delivery", () => {
   });
 
   it("G — email provider failure does not undo paid entitlement", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installBillingMockForWebhook();
 
     const webhookResult = await processPaddleWebhookEvent(
-      buildTransactionEvent(PADDLE_SANDBOX_PRICE_CATALOG.starter.monthly, "monthly")
+      buildTransactionEvent(PADDLE_PRODUCTION_PRICE_CATALOG.starter.monthly, "monthly")
     );
     assert.equal(webhookResult.ok, true);
     if (webhookResult.ok) {
@@ -569,22 +577,19 @@ describe("paid subscription activation delivery", () => {
   });
 
   it("J — enterprise does not enter paid activation flow", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installBillingMockForWebhook();
 
     const unknownPriceResult = await processPaddleWebhookEvent(
       buildTransactionEvent("pri_enterprise_unknown", "monthly")
     );
-    assert.equal(unknownPriceResult.ok, true);
-    if (unknownPriceResult.ok) {
-      assert.equal(unknownPriceResult.action, "ignored");
-      assert.equal(unknownPriceResult.reason, "unknown_paddle_price");
-    }
+    assert.equal(unknownPriceResult.ok, false);
+    if (!unknownPriceResult.ok) assert.equal(unknownPriceResult.retryable, true);
 
     const subscription = state.subscriptions.find((row) => row.workspace_id === WORKSPACE_ID);
     assert.equal(subscription?.status, "trial");
 
-    const enterpriseResolution = resolvePlanFromPaddlePriceId("pri_enterprise_unknown", "sandbox");
+    const enterpriseResolution = resolvePlanFromPaddlePriceId("pri_enterprise_unknown", "production");
     assert.equal(enterpriseResolution.ok, false);
   });
 });
@@ -626,19 +631,12 @@ describe("paid lifecycle migration contract", () => {
     assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   });
 
-  it("hooks activation enqueue only from transaction.completed handler", () => {
+  it("uses atomic notification intent instead of detached activation delivery", () => {
     const source = readFileSync(
       "lib/billing/paddle/webhook/processPaddleWebhookEvent.ts",
       "utf8"
     );
-    const handlerStart = source.indexOf("async function handleTransactionCompleted");
-    const handlerEnd = source.indexOf("export async function processPaddleWebhookEvent");
-    assert.ok(handlerStart >= 0);
-    assert.ok(handlerEnd > handlerStart);
-
-    const callSites = [...source.matchAll(/enqueuePaidSubscriptionActivatedEmail\(/g)];
-    assert.equal(callSites.length, 1);
-    const callIndex = callSites[0]!.index!;
-    assert.ok(callIndex >= handlerStart && callIndex < handlerEnd);
+    assert.doesNotMatch(source, /enqueuePaidSubscriptionActivatedEmail/);
+    assert.match(source, /notificationId: fulfilled.notificationId/);
   });
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { describe, it } from "node:test";
+import { beforeEach, afterEach, describe, it } from "node:test";
 
 import "@/lib/test/nodeTestSetup";
 
@@ -29,6 +29,7 @@ function paidPaddleSubscription(
     currentPeriodEndsAt: "2026-09-29T00:00:00Z",
     cancelAtPeriodEnd: false,
     paymentProvider: "paddle",
+    paddleEnvironment: "production",
     providerCustomerId: PADDLE_CUSTOMER_ID,
     providerSubscriptionId: PADDLE_SUBSCRIPTION_ID,
     ...overrides,
@@ -41,6 +42,8 @@ describe("Paddle customer portal availability", () => {
       canManagePaddleSubscription({
         entitlementState: "paid",
         paymentProvider: "paddle",
+    paddleEnvironment: "production",
+    checkoutEnvironment: "production",
         providerCustomerId: PADDLE_CUSTOMER_ID,
       }),
       true
@@ -52,6 +55,8 @@ describe("Paddle customer portal availability", () => {
       canManagePaddleSubscription({
         entitlementState: "paid",
         paymentProvider: "paddle",
+    paddleEnvironment: "production",
+    checkoutEnvironment: "production",
         providerCustomerId: null,
       }),
       false
@@ -74,6 +79,8 @@ describe("Paddle customer portal availability", () => {
       canManagePaddleSubscription({
         entitlementState: "trial",
         paymentProvider: "paddle",
+    paddleEnvironment: "production",
+    checkoutEnvironment: "production",
         providerCustomerId: PADDLE_CUSTOMER_ID,
       }),
       false
@@ -82,6 +89,8 @@ describe("Paddle customer portal availability", () => {
       canManagePaddleSubscription({
         entitlementState: "trial_expired",
         paymentProvider: "paddle",
+    paddleEnvironment: "production",
+    checkoutEnvironment: "production",
         providerCustomerId: PADDLE_CUSTOMER_ID,
       }),
       false
@@ -102,7 +111,7 @@ describe("Paddle customer portal session creation", () => {
             return {
               urls: {
                 general: {
-                  overview: "https://sandbox-customer-portal.paddle.com/session/test-overview",
+                  overview: "https://customer-portal.paddle.com/session/test-overview",
                 },
               },
             };
@@ -205,7 +214,7 @@ describe("Paddle customer portal security wiring", () => {
       getPaddleClientFn: () => ({
         customerPortalSessions: {
           create: async () => ({
-            urls: { general: { overview: "https://sandbox-customer-portal.paddle.com/temp" } },
+            urls: { general: { overview: "https://customer-portal.paddle.com/temp" } },
           }),
         },
       }),
@@ -213,7 +222,7 @@ describe("Paddle customer portal security wiring", () => {
 
     assert.equal(result.ok, true);
     if (result.ok) {
-      assert.match(result.url, /sandbox-customer-portal/);
+      assert.match(result.url, /customer-portal/);
     }
   });
 
@@ -224,5 +233,66 @@ describe("Paddle customer portal security wiring", () => {
     );
     assert.match(clientSrc, /canManageSubscription/);
     assert.match(clientSrc, /ManageSubscriptionButton/);
+  });
+});
+
+const savedPortalEnv = { environment: process.env.NEXT_PUBLIC_PADDLE_ENV, key: process.env.PADDLE_API_KEY };
+beforeEach(() => { process.env.NEXT_PUBLIC_PADDLE_ENV = "production"; process.env.PADDLE_API_KEY = "test-key-never-log"; });
+afterEach(() => {
+  for (const [name, value] of [["NEXT_PUBLIC_PADDLE_ENV", savedPortalEnv.environment], ["PADDLE_API_KEY", savedPortalEnv.key]]) {
+    if (value === undefined) delete process.env[name!]; else process.env[name!] = value;
+  }
+});
+
+describe("Paddle portal safe diagnostics", () => {
+  for (const scenario of ["configuration_validation", "client_initialization", "portal_api_request", "response_validation", "subscription_lookup"] as const) {
+    it(`reports ${scenario} without sensitive data`, async (t) => {
+      const logs: unknown[][] = [];
+      t.mock.method(console, "error", (...args: unknown[]) => { logs.push(args); });
+      const secret = `test-key-never-log ${PADDLE_CUSTOMER_ID} ${PADDLE_SUBSCRIPTION_ID} https://portal.example/?token=private-token`;
+      const error = Object.assign(new Error(secret), { code: "forbidden", status: 403, requestId: secret, body: secret });
+      if (scenario === "configuration_validation") delete process.env.PADDLE_API_KEY;
+      const result = await createPaddleCustomerPortalSessionForWorkspace(WORKSPACE_ID, {
+        loadSubscriptionFn: async () => { if (scenario === "subscription_lookup") throw error; return paidPaddleSubscription(); },
+        getPaddleClientFn: () => {
+          if (scenario === "client_initialization") throw error;
+          return { customerPortalSessions: { create: async () => {
+            if (scenario === "portal_api_request") throw error;
+            return { urls: { general: { overview: 123 } } } as never;
+          } } };
+        },
+      });
+      assert.equal(result.ok, false);
+      assert.equal(logs.length, 1);
+      assert.equal((logs[0][1] as {stage: string}).stage, scenario);
+      assert.equal((logs[0][1] as {environment: string}).environment, "production");
+      const serialized = JSON.stringify({logs, result});
+      for (const value of ["test-key-never-log", PADDLE_CUSTOMER_ID, PADDLE_SUBSCRIPTION_ID, "private-token", "portal.example"]) assert.ok(!serialized.includes(value));
+      assert.ok(!serialized.includes('"requestId"'));
+      assert.ok(!serialized.includes('"httpStatus"'));
+    });
+  }
+  it("rejects invalid environment before initializing a client", async (t) => {
+    const logs: unknown[][] = [];
+    t.mock.method(console, "error", (...args: unknown[]) => { logs.push(args); });
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "secret-environment-token";
+    let initialized = false;
+    const result = await createPaddleCustomerPortalSessionForWorkspace(WORKSPACE_ID, {
+      loadSubscriptionFn: async () => paidPaddleSubscription(),
+      getPaddleClientFn: () => { initialized = true; throw new Error("must not initialize"); },
+    });
+    assert.equal(result.ok, false); assert.equal(initialized, false);
+    assert.equal((logs[0][1] as {environment: unknown}).environment, null);
+    assert.ok(!JSON.stringify(logs).includes("secret-environment-token"));
+  });
+  it("does not log arbitrary API error codes", async (t) => {
+    const logs: unknown[][] = [];
+    t.mock.method(console, "error", (...args: unknown[]) => { logs.push(args); });
+    await createPaddleCustomerPortalSessionForWorkspace(WORKSPACE_ID, {
+      loadSubscriptionFn: async () => paidPaddleSubscription(),
+      getPaddleClientFn: () => ({customerPortalSessions: {create: async () => {throw {code: PADDLE_CUSTOMER_ID, message: "private-token"};}}}),
+    });
+    assert.equal((logs[0][1] as {errorCode: string}).errorCode, "unknown");
+    assert.ok(!JSON.stringify(logs).includes(PADDLE_CUSTOMER_ID));
   });
 });

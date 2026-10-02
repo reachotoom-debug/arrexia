@@ -23,7 +23,7 @@ export const PADDLE_SANDBOX_PRICE_CATALOG: Readonly<
   },
 } as const;
 
-/** Verified Paddle Live catalog — centralized for checkout wiring. */
+/** Configured Paddle Live IDs; account metadata must pass the release audit. */
 export const PADDLE_PRODUCTION_PRICE_CATALOG: Readonly<
   Record<PaddleCheckoutPlan, Readonly<Record<BillingInterval, string>>>
 > = {

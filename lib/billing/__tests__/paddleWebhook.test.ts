@@ -22,7 +22,6 @@ import {
   extractPrimaryPaddlePriceId,
   parsePaddleCheckoutCustomData,
 } from "@/lib/billing/paddle/webhook/parsePaddleWebhookPayload";
-import { evaluatePaddleLifecycleEventOrdering } from "@/lib/billing/paddle/webhook/paddleLifecycleOrdering";
 import { processPaddleWebhookEvent } from "@/lib/billing/paddle/webhook/processPaddleWebhookEvent";
 import { resolvePlanFromPaddlePriceId } from "@/lib/billing/paddle/priceCatalog";
 import { verifyPaddleWebhookSignatureManually } from "@/lib/billing/paddle/webhook/diagnosePaddleWebhookSignature";
@@ -41,8 +40,8 @@ import {
 } from "./billingMutationMock";
 
 const WORKSPACE_ID = "00000000-0000-0000-0000-000000000001";
-const STARTER_MONTHLY_PRICE = "pri_01m160et1jrsbnb0hftets4ej2";
-const PRO_MONTHLY_PRICE = "pri_01m160evbf5cecq92r62bwkt95";
+const STARTER_MONTHLY_PRICE = "pri_01m1at62xv6w2m6qs1phhv9dcr";
+const PRO_MONTHLY_PRICE = "pri_01m1ate0g915aeyvcf0y7kwr1z";
 const PADDLE_SUBSCRIPTION_ID = "sub_test_paddle_001";
 const PADDLE_CUSTOMER_ID = "ctm_test_paddle_001";
 
@@ -143,6 +142,7 @@ function seedActivePaddleSubscription(
     status: options.status ?? "active",
     billing_interval: "monthly",
     payment_provider: "paddle",
+    paddle_environment: "production",
     provider_subscription_id: PADDLE_SUBSCRIPTION_ID,
     provider_customer_id: PADDLE_CUSTOMER_ID,
     provider_last_event_at: options.providerLastEventAt ?? null,
@@ -162,7 +162,7 @@ function seedActivePaddleSubscription(
 afterEach(() => {
   setSupabaseAdminClientForTests(null);
   resetPaddleWebhooksVerifierForTests();
-  process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+  process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
 });
 
 function buildSignedPaddleWebhookFixture() {
@@ -345,66 +345,7 @@ describe("Paddle atomic fulfillment RPC params", () => {
 
 describe("Paddle webhook idempotency ledger", () => {
   it("treats repeated event IDs as duplicates without reprocessing", async () => {
-    const events = new Map<string, Record<string, unknown>>();
-
-    const admin = {
-      from(table: string) {
-        assert.equal(table, "paddle_webhook_events");
-        return {
-          insert(row: Record<string, unknown>) {
-            return {
-              select() {
-                return {
-                  async maybeSingle() {
-                    if (events.has(String(row.event_id))) {
-                      return {
-                        data: null,
-                        error: { code: "23505", message: "duplicate" },
-                      };
-                    }
-                    events.set(String(row.event_id), { ...row, status: "processing" });
-                    return { data: { event_id: row.event_id }, error: null };
-                  },
-                };
-              },
-            };
-          },
-          select() {
-            return {
-              eq(_column: string, eventId: string) {
-                return {
-                  async maybeSingle() {
-                    const existing = events.get(eventId);
-                    return {
-                      data: existing
-                        ? { status: existing.status, result: existing.result ?? null }
-                        : null,
-                      error: null,
-                    };
-                  },
-                };
-              },
-            };
-          },
-          update(patch: Record<string, unknown>) {
-            return {
-              eq(_column: string, eventId: string) {
-                return Promise.resolve({
-                  error: (() => {
-                    const existing = events.get(eventId);
-                    if (existing) {
-                      Object.assign(existing, patch);
-                    }
-                    return null;
-                  })(),
-                });
-              },
-            };
-          },
-        };
-      },
-    };
-
+    const admin = createBillingMockAdmin(createBillingMockState());
     const first = await beginPaddleWebhookProcessing(
       {
         eventId: "evt_test_1",
@@ -423,7 +364,8 @@ describe("Paddle webhook idempotency ledger", () => {
         eventId: "evt_test_1",
         eventType: EventName.TransactionCompleted,
         occurredAt: "2026-08-29T00:00:00Z",
-        status: "processed",
+        status: "ignored",
+        claimToken: first.ok && first.state === "new" ? first.claimToken : "",
         result: "transaction_completed_synced",
       },
       admin as never
@@ -440,7 +382,7 @@ describe("Paddle webhook idempotency ledger", () => {
     assert.equal(second.ok, true);
     if (second.ok) {
       assert.equal(second.state, "duplicate");
-      assert.equal(second.status, "processed");
+      assert.equal(second.status, "ignored");
     }
   });
 });
@@ -594,7 +536,7 @@ describe("Paddle webhook signature handling", () => {
 
 describe("Paddle webhook workspace provisioning", () => {
   it("activates the correct workspace for a verified transaction", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installPaddleBillingMock();
 
     const result = await processPaddleWebhookEvent(buildTransactionCompletedEvent());
@@ -615,7 +557,7 @@ describe("Paddle webhook workspace provisioning", () => {
   });
 
   it("does not provision when workspace is missing", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = createBillingMockState();
     setSupabaseAdminClientForTests(createBillingMockAdmin(state));
 
@@ -625,16 +567,13 @@ describe("Paddle webhook workspace provisioning", () => {
       })
     );
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.action, "ignored");
-      assert.equal(result.reason, "transaction_workspace_unresolved");
-    }
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.retryable, true);
     assert.equal(state.subscriptions.length, 0);
   });
 
   it("does not provision unknown price IDs even with workspace hints", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installPaddleBillingMock();
 
     const result = await processPaddleWebhookEvent(
@@ -648,11 +587,8 @@ describe("Paddle webhook workspace provisioning", () => {
       })
     );
 
-    assert.equal(result.ok, true);
-    if (result.ok) {
-      assert.equal(result.action, "ignored");
-      assert.equal(result.reason, "unknown_paddle_price");
-    }
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.retryable, true);
 
     const subscription = state.subscriptions.find(
       (row) => row.workspace_id === WORKSPACE_ID
@@ -664,7 +600,7 @@ describe("Paddle webhook workspace provisioning", () => {
 
 describe("Paddle webhook event ordering", () => {
   it("tolerates transaction.completed before subscription.created", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installPaddleBillingMock();
 
     const transactionResult = await processPaddleWebhookEvent(
@@ -686,7 +622,7 @@ describe("Paddle webhook event ordering", () => {
   });
 
   it("tolerates subscription.created before transaction.completed", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installPaddleBillingMock();
 
     const subscriptionResult = await processPaddleWebhookEvent(
@@ -709,7 +645,7 @@ describe("Paddle webhook event ordering", () => {
 
 describe("Paddle webhook lifecycle synchronization", () => {
   it("syncs subscription.updated without deleting workspace data", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installPaddleBillingMock();
     await processPaddleWebhookEvent(buildTransactionCompletedEvent());
 
@@ -734,7 +670,7 @@ describe("Paddle webhook lifecycle synchronization", () => {
   });
 
   it("maps cancellation to cancelled without removing workspace rows", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installPaddleBillingMock();
     await processPaddleWebhookEvent(buildTransactionCompletedEvent());
 
@@ -754,7 +690,7 @@ describe("Paddle webhook lifecycle synchronization", () => {
   });
 
   it("resolves subsequent events by provider_subscription_id", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = installPaddleBillingMock();
     await processPaddleWebhookEvent(buildTransactionCompletedEvent());
 
@@ -780,8 +716,85 @@ describe("Paddle webhook lifecycle synchronization", () => {
 });
 
 describe("Paddle webhook verified handler idempotency", () => {
+  it("a lost response after commit cannot mark success failed or mutate again", async () => {
+    const state = installPaddleBillingMock();
+    const admin = createBillingMockAdmin(state);
+    const rpc = admin.rpc.bind(admin);
+    admin.rpc = ((fn: string, params: Record<string, unknown>) => {
+      const result = rpc(fn, params);
+      if (fn === "rpc_apply_paddle_webhook") {
+        return Promise.resolve(result).then(() => ({ data: null, error: { message: "response lost" } }));
+      }
+      return result;
+    }) as typeof admin.rpc;
+    setSupabaseAdminClientForTests(admin);
+    const event = buildTransactionCompletedEvent({}, { eventId: "evt_response_lost" });
+    assert.equal((await handleVerifiedPaddleWebhookEvent(event)).status, 500);
+    assert.equal(state.subscriptions[0].status, "active");
+    assert.equal(state.paddleWebhookEvents[0].status, "processed");
+    const retry = await handleVerifiedPaddleWebhookEvent(event);
+    assert.ok(retry.ok && retry.duplicate);
+    assert.equal(state.paddleWebhookEvents[0].attempts, 1);
+  });
+
+  it("recovers a stale claim and fences its previous worker", async () => {
+    const state = installPaddleBillingMock();
+    const event = buildTransactionCompletedEvent({}, { eventId: "evt_stale_claim" });
+    const first = await beginPaddleWebhookProcessing(event);
+    assert.ok(first.ok && first.state === "new");
+    assert.equal((await handleVerifiedPaddleWebhookEvent(event)).status, 500);
+    state.paddleWebhookEvents[0].lease_expires_at = Date.now() - 1;
+    assert.equal((await handleVerifiedPaddleWebhookEvent(event)).status, 200);
+    await assert.rejects(finalizePaddleWebhookProcessing({ ...event, claimToken: first.claimToken,
+      status: "failed", result: "late_worker" }));
+    assert.equal(state.paddleWebhookEvents[0].status, "processed");
+  });
+
+  it("rolls back a completion failure and succeeds on redelivery", async () => {
+    const state = installPaddleBillingMock();
+    const event = buildTransactionCompletedEvent({}, { eventId: "evt_completion_failure" });
+    state.paddleCompletionShouldFail = true;
+    assert.equal((await handleVerifiedPaddleWebhookEvent(event)).status, 500);
+    assert.equal(state.subscriptions[0].status, "trial");
+    state.paddleCompletionShouldFail = false;
+    assert.equal((await handleVerifiedPaddleWebhookEvent(event)).status, 200);
+    assert.equal(state.subscriptions[0].status, "active");
+  });
+
+  it("concurrent duplicate deliveries only claim the event once", async () => {
+    const state = installPaddleBillingMock();
+    const event = buildTransactionCompletedEvent({}, { eventId: "evt_concurrent" });
+    const replies = await Promise.all([handleVerifiedPaddleWebhookEvent(event), handleVerifiedPaddleWebhookEvent(event)]);
+    assert.equal(replies.filter(reply => reply.status === 200).length, 1);
+    assert.equal(state.paddleWebhookEvents[0].attempts, 1);
+    assert.equal((await handleVerifiedPaddleWebhookEvent(event)).status, 200);
+  });
+
+  it("ignores old subscription events after an explicit replacement", async () => {
+    const state = installPaddleBillingMock();
+    await handleVerifiedPaddleWebhookEvent(buildTransactionCompletedEvent());
+    state.subscriptions[0].provider_subscription_id = "sub_replacement";
+    const result = await handleVerifiedPaddleWebhookEvent(buildSubscriptionEvent(EventName.SubscriptionCanceled,
+      { status: "canceled" }, { occurredAt: "2026-09-05T00:00:00Z" }));
+    assert.ok(result.ok);
+    assert.equal(result.result, "subscription_identity_conflict");
+    assert.equal(state.subscriptions[0].provider_subscription_id, "sub_replacement");
+    assert.equal(state.subscriptions[0].status, "active");
+  });
+
+  it("retries a failed event on redelivery", async () => {
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
+    const state = installPaddleBillingMock();
+    const event = buildTransactionCompletedEvent({}, { eventId: "evt_retry" });
+    state.atomicRpcShouldFail = true;
+    assert.equal((await handleVerifiedPaddleWebhookEvent(event)).ok, false);
+    state.atomicRpcShouldFail = false;
+    const retry = await handleVerifiedPaddleWebhookEvent(event);
+    assert.equal(retry.ok, true);
+    assert.equal(state.subscriptions[0].status, "active");
+  });
   it("returns HTTP 200 for duplicate verified events", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     installPaddleBillingMock();
 
     const event = buildTransactionCompletedEvent();
@@ -807,7 +820,7 @@ describe("Paddle webhook verified handler idempotency", () => {
 
 describe("Paddle lifecycle occurred_at ordering", () => {
   it("ignores older past_due after newer active was applied", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = createBillingMockState();
     seedActivePaddleSubscription(state, {
       status: "active",
@@ -835,7 +848,7 @@ describe("Paddle lifecycle occurred_at ordering", () => {
   });
 
   it("ignores older activated after newer canceled was applied", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = createBillingMockState();
     seedActivePaddleSubscription(state, {
       status: "cancelled",
@@ -861,7 +874,7 @@ describe("Paddle lifecycle occurred_at ordering", () => {
   });
 
   it("returns HTTP 200 and records ignored for stale lifecycle webhook events", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = createBillingMockState();
     seedActivePaddleSubscription(state, {
       status: "active",
@@ -891,7 +904,7 @@ describe("Paddle lifecycle occurred_at ordering", () => {
   });
 
   it("applies newer lifecycle events and advances provider_last_event_at", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = createBillingMockState();
     seedActivePaddleSubscription(state, {
       status: "active",
@@ -917,22 +930,8 @@ describe("Paddle lifecycle occurred_at ordering", () => {
     assert.equal(subscription?.provider_last_event_at, "2026-08-30T12:00:00.000Z");
   });
 
-  it("ignores equal-timestamp lifecycle downgrades deterministically", () => {
-    const decision = evaluatePaddleLifecycleEventOrdering({
-      incomingOccurredAt: "2026-08-30T12:00:00.000Z",
-      storedProviderLastEventAt: "2026-08-30T12:00:00.000Z",
-      currentStatus: "active",
-      incomingStatus: "past_due",
-    });
-
-    assert.equal(decision.action, "ignore");
-    if (decision.action === "ignore") {
-      assert.equal(decision.reason, "stale_event_ignored");
-    }
-  });
-
-  it("does not apply lifecycle ordering to transaction.completed", async () => {
-    process.env.NEXT_PUBLIC_PADDLE_ENV = "sandbox";
+  it("does not let a transaction overwrite a bound subscription", async () => {
+    process.env.NEXT_PUBLIC_PADDLE_ENV = "production";
     const state = createBillingMockState();
     seedActivePaddleSubscription(state, {
       status: "active",
@@ -946,8 +945,8 @@ describe("Paddle lifecycle occurred_at ordering", () => {
 
     assert.equal(result.ok, true);
     if (result.ok) {
-      assert.equal(result.action, "fulfilled");
-      assert.equal(result.reason, "transaction_completed_synced");
+      assert.equal(result.action, "ignored");
+      assert.equal(result.reason, "transaction_subscription_already_bound");
     }
   });
 });

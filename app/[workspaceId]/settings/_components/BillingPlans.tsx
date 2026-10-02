@@ -3,6 +3,7 @@ import { getBillingUsageSummary } from "@/lib/billing/getBillingUsageSummary";
 import { getWorkspacePlan } from "@/lib/billing/getWorkspacePlan";
 import { resolvePaddleCheckoutCustomer } from "@/lib/billing/paddle/resolvePaddleCheckoutCustomer";
 import { canManagePaddleSubscription } from "@/lib/billing/paddle/canManagePaddleSubscription";
+import { getPaddleEnvironment } from "@/lib/billing/paddle/env.server";
 import { loadWorkspaceSubscription } from "@/lib/billing/workspaceSubscription";
 import { BillingPlansClient } from "./BillingPlansClient";
 
@@ -30,7 +31,11 @@ export async function BillingPlans({ workspaceId }: { workspaceId: string }) {
       : {
           available: false as const,
           unavailableReason:
-            checkoutCustomer.reason === "no_email"
+            checkoutCustomer.reason === "billing_history_requires_review"
+              ? "Checkout is unavailable while we review this workspace’s billing history. Contact support before making a payment."
+              : checkoutCustomer.reason === "existing_paid_subscription"
+                ? "Checkout is unavailable for this existing paid subscription. Use Manage subscription or contact support to change your plan."
+              : checkoutCustomer.reason === "no_email"
               ? "Workspace owner email is required for billing."
               : checkoutCustomer.reason === "no_owner"
                 ? "A workspace owner is required for billing."
@@ -41,6 +46,8 @@ export async function BillingPlans({ workspaceId }: { workspaceId: string }) {
     entitlementState: current.entitlement.state,
     paymentProvider: workspaceSubscription?.paymentProvider,
     providerCustomerId: workspaceSubscription?.providerCustomerId,
+    paddleEnvironment: workspaceSubscription?.paddleEnvironment,
+    checkoutEnvironment: getPaddleEnvironment(),
   });
 
   return (

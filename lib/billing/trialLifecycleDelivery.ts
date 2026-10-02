@@ -17,6 +17,7 @@ import {
   getEligibleTrialLifecycleEvents,
   isTrialStartedEligible,
 } from "@/lib/billing/trialLifecycleEligibility";
+import { hasWorkspacePaidConversion } from "@/lib/billing/trialPaidConversion";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type TrialLifecycleDeliveryResult =
@@ -29,6 +30,7 @@ type DeliveryDeps = {
   sendEmailFn?: typeof sendEmailWithRetry;
   loadEntitlementFn?: typeof getWorkspaceEntitlementState;
   resolveOwnerFn?: typeof getWorkspaceOwnerEmail;
+  hasPaidConversionFn?: typeof hasWorkspacePaidConversion;
 };
 
 async function loadWorkspaceName(
@@ -68,11 +70,19 @@ export async function deliverTrialLifecycleEmail(
     return { ok: true, sent: false, reason: "paid_workspace" };
   }
 
-  const { data: subscription } = await admin
+  const { data: subscription, error: subscriptionError } = await admin
     .from("workspace_subscriptions")
-    .select("trial_ends_at")
+    .select("trial_ends_at, payment_provider, provider_subscription_id")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
+
+  if (subscriptionError) {
+    return { ok: false, error: `Failed to load trial subscription: ${subscriptionError.message}` };
+  }
+
+  if (await (deps.hasPaidConversionFn ?? hasWorkspacePaidConversion)(workspaceId, admin, subscription ?? {})) {
+    return { ok: true, sent: false, reason: "paid_conversion" };
+  }
 
   const trialEndsAt = (subscription?.trial_ends_at as string | null | undefined) ?? null;
   const eligibleEvents = getEligibleTrialLifecycleEvents(entitlement, trialEndsAt, now);
@@ -152,6 +162,26 @@ export async function deliverTrialLifecycleEmail(
     ownerDisplayName: ownerLookup.owner.displayName,
   });
 
+  // Owner lookup and rendering can overlap a paid conversion. Re-read at the send boundary.
+  try {
+    const { data: latestSubscription, error: latestSubscriptionError } = await admin
+      .from("workspace_subscriptions")
+      .select("payment_provider, provider_subscription_id")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (latestSubscriptionError) {
+      throw new Error(`Failed to recheck trial subscription: ${latestSubscriptionError.message}`);
+    }
+    if (await (deps.hasPaidConversionFn ?? hasWorkspacePaidConversion)(workspaceId, admin, latestSubscription ?? {})) {
+      await markTrialLifecycleEventSkipped(workspaceId, eventKey, "paid_conversion", admin, now);
+      return { ok: true, sent: false, reason: "paid_conversion" };
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to recheck paid conversion";
+    await markTrialLifecycleEventFailed(workspaceId, eventKey, message, reservation.attemptCount, admin, now);
+    return { ok: false, error: message };
+  }
+
   const sendResult = await sendEmailFn({
     to: ownerLookup.owner.email,
     subject: rendered.subject,
@@ -192,3 +222,6 @@ export async function deliverTrialLifecycleEmail(
     recipientEmail: ownerLookup.owner.email,
   };
 }
+
+
+

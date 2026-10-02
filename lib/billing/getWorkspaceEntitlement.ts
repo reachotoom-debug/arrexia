@@ -121,7 +121,8 @@ export async function getWorkspaceEntitlementState(
     };
   }
 
-  if (entitlement.state === "legacy_free" && storedPlan !== "free") {
+  if (entitlement.state === "legacy_free" && storedPlan !== "free" &&
+      !(subscription?.paymentProvider === "paddle" && subscription.paddleEnvironment !== "production")) {
     const limits = getPlanStorageLimits(storedPlan);
     return {
       ...entitlement,

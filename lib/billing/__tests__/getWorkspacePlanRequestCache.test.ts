@@ -70,8 +70,8 @@ describe("getWorkspacePlan request cache", () => {
     seedSubscription(state, WORKSPACE_A, {
       plan: "starter",
       status: "trial",
-      trial_starts_at: "2026-08-01T12:00:00.000Z",
-      trial_ends_at: "2026-09-30T12:00:00.000Z",
+      trial_starts_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      trial_ends_at: new Date(Date.now() + 13 * 24 * 60 * 60 * 1000).toISOString(),
       current_period_starts_at: null,
       current_period_ends_at: null,
     });

@@ -32,6 +32,8 @@
   ],
   "exclude": [
     "node_modules",
+    "docs/release-evidence/**",
+    "docs/billing-email-evidence/**",
     ".next",
     "components/clients",
     "components/invoices",

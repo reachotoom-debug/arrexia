@@ -5,6 +5,7 @@ import { getWorkspaceOwnerEmailsByWorkspaceId } from "@/lib/billing/getWorkspace
 import { deliverTrialLifecycleEmail } from "@/lib/billing/trialLifecycleDelivery";
 import { getEligibleTrialLifecycleEvents, selectTrialLifecycleEventForRun } from "@/lib/billing/trialLifecycleEligibility";
 import type { TrialLifecycleEventKey } from "@/lib/billing/trialLifecycleEvents";
+import { hasWorkspacePaidConversion } from "@/lib/billing/trialPaidConversion";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type TrialLifecycleWorkspaceResult = {
@@ -32,6 +33,8 @@ export type RunTrialLifecycleEmailsResult = {
 type SubscriptionRow = {
   workspace_id: string;
   trial_ends_at: string | null;
+  payment_provider?: string | null;
+  provider_subscription_id?: string | null;
 };
 
 export async function runTrialLifecycleEmailsForAllWorkspaces(
@@ -40,7 +43,7 @@ export async function runTrialLifecycleEmailsForAllWorkspaces(
   const admin = supabaseAdmin();
   const { data: subscriptions, error } = await admin
     .from("workspace_subscriptions")
-    .select("workspace_id, trial_ends_at")
+    .select("workspace_id, trial_ends_at, payment_provider, provider_subscription_id")
     .not("trial_ends_at", "is", null);
 
   if (error) {
@@ -71,7 +74,7 @@ export async function runTrialLifecycleEmailsForAllWorkspaces(
 
     try {
       const entitlement = await getWorkspaceEntitlementState(workspaceId, now);
-      if (entitlement.state === "paid") {
+      if (entitlement.state === "paid" || await hasWorkspacePaidConversion(workspaceId, admin, row)) {
         workspaceResults.push(result);
         continue;
       }
@@ -139,3 +142,4 @@ export async function runTrialLifecycleEmailsForAllWorkspaces(
     errors,
   };
 }
+

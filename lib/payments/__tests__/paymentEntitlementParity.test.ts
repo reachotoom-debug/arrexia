@@ -140,8 +140,10 @@ describe("payment mutation entitlement parity", () => {
   });
 
   it("L — payment overpay and unarchive overpay guards remain intact", () => {
-    assert.match(actionsSrc, /wouldRestorePaymentCauseOverpay/);
-    assert.match(actionsSrc, /validatePaymentUnarchiveBatchOverpay/);
+    // Single restores now enforce overpayment atomically inside the database RPC.
+    assert.match(actionsSrc, /rpc_unarchive_payment_manual/);
+    const bulkRestore = actionsSrc.slice(actionsSrc.indexOf("export async function bulkUnarchivePayments"));
+    assert.match(bulkRestore, /restorePaymentViaRpc/);
     assert.match(actionsSrc, /rpc_create_payment_manual/);
     assert.match(actionsSrc, /rpc_update_payment_manual/);
     assert.match(

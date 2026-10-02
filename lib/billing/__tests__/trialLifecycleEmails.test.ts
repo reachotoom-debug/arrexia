@@ -85,6 +85,10 @@ function createLifecycleEventsMock(initial: LifecycleEventRow[] = []) {
 
   const admin = {
     from(table: string) {
+      if (table === "workspace_paid_lifecycle_events") {
+        const paidBuilder = { select: () => paidBuilder, eq: () => paidBuilder, in: () => paidBuilder, or: () => paidBuilder, limit: async () => ({ data: [], error: null }) };
+        return paidBuilder;
+      }
       if (table !== "workspace_trial_lifecycle_events") {
         throw new Error(`Unexpected table ${table}`);
       }
@@ -911,4 +915,54 @@ describe("trial lifecycle greeting personalization", () => {
       assert.doesNotMatch(generic.text, /Hello Mohammed,/);
     }
   });
+});
+
+
+it('conversion during owner resolution suppresses and skips reserved trial send', async () => {
+  const mock = createLifecycleEventsMock();
+  let converted = false;
+  let sends = 0;
+  const result = await deliverTrialLifecycleEmail('ws-race', 'trial_started', {
+    admin: { from(table: string) {
+      if (table === 'workspace_subscriptions') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({
+        data: { trial_ends_at: TRIAL_END, payment_provider: converted ? 'paddle' : 'manual', provider_subscription_id: converted ? 'sub_new' : null }, error: null
+      }) }) }) };
+      if (table === 'workspaces') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { name: 'Race Co' }, error: null }) }) }) };
+      return mock.admin.from(table);
+    } } as never,
+    loadEntitlementFn: async () => entitlementFromSubscription(activeTrialSubscription()),
+    resolveOwnerFn: async () => {
+      converted = true;
+      return { ok: true, owner: { userId: 'owner', email: 'owner@example.com', displayName: 'Ada' } };
+    },
+    sendEmailFn: async () => { sends++; return { success: true }; },
+  }, NOW);
+  assert.deepEqual(result, { ok: true, sent: false, reason: 'paid_conversion' });
+  assert.equal(sends, 0);
+  assert.equal(mock.rows[0]?.metadata?.skippedReason, 'paid_conversion');
+});
+
+
+it('send-boundary subscription lookup failure fails closed and preserves retry', async () => {
+  const mock = createLifecycleEventsMock();
+  let reads = 0;
+  let sends = 0;
+  const result = await deliverTrialLifecycleEmail('ws-recheck-failure', 'trial_started', {
+    admin: { from(table: string) {
+      if (table === 'workspace_subscriptions') return { select: () => ({ eq: () => ({ maybeSingle: async () => {
+        reads++;
+        return reads === 1 ? { data: { trial_ends_at: TRIAL_END, payment_provider: 'manual', provider_subscription_id: null }, error: null }
+          : { data: null, error: { message: 'temporary lookup failure' } };
+      } }) }) };
+      if (table === 'workspaces') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { name: 'Fixture' }, error: null }) }) }) };
+      return mock.admin.from(table);
+    } } as never,
+    loadEntitlementFn: async () => entitlementFromSubscription(activeTrialSubscription()),
+    resolveOwnerFn: async () => ({ ok: true, owner: { userId: 'owner', email: 'owner@example.com', displayName: 'Ada' } }),
+    sendEmailFn: async () => { sends++; return { success: true }; },
+  }, NOW);
+  assert.equal(result.ok, false);
+  assert.equal(sends, 0);
+  assert.equal(mock.rows[0]?.metadata?.status, 'failed');
+  assert.match(mock.rows[0]?.metadata?.error ?? '', /temporary lookup failure/);
 });

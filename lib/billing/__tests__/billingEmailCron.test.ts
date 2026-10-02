@@ -1,0 +1,30 @@
+import "./testSetup";
+import assert from "node:assert/strict";
+import { afterEach, it, mock } from "node:test";
+import { NextRequest } from "next/server";
+import * as paidEmails from "../billingEmailDelivery";
+import * as trialEmails from "../runTrialLifecycleEmails";
+import { GET } from "@/app/api/internal/billing/lifecycle/run/route";
+const originalSecret = process.env.CRON_SECRET;
+afterEach(() => { mock.restoreAll(); if (originalSecret === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = originalSecret; });
+it("recovers paid intent even if reminder enqueue and trial processing fail", async () => {
+  process.env.CRON_SECRET = "fixture-secret";
+  const calls: string[] = [];
+  mock.method(paidEmails, "enqueueAnnualBillingReminders", async () => { calls.push("enqueue"); throw new Error("fixture failure"); });
+  mock.method(paidEmails, "runPaidBillingEmailRecovery", async () => { calls.push("paid"); return { attempted: 1, sent: 1, uncertain: 0, failed: 0 }; });
+  mock.method(trialEmails, "runTrialLifecycleEmailsForAllWorkspaces", async () => { calls.push("trial"); throw new Error("fixture trial failure"); });
+  const response = await GET(new NextRequest("https://fixture.invalid/api/internal/billing/lifecycle/run", { headers: { authorization: "Bearer fixture-secret" } }));
+  const result = await response.json();
+  assert.deepEqual(calls, ["enqueue", "paid", "trial"]);
+  assert.equal(response.status, 500);
+  assert.deepEqual(result.stageFailures, ["annual_reminder_enqueue", "trial_lifecycle"]);
+  assert.equal(result.paidEmailRecovery.sent, 1);
+});
+it("does no queue or email work without cron authorization", async () => {
+  process.env.CRON_SECRET = "fixture-secret";
+  mock.method(paidEmails, "enqueueAnnualBillingReminders", async () => { throw new Error("must not run"); });
+  mock.method(paidEmails, "runPaidBillingEmailRecovery", async () => { throw new Error("must not run"); });
+  mock.method(trialEmails, "runTrialLifecycleEmailsForAllWorkspaces", async () => { throw new Error("must not run"); });
+  const response = await GET(new NextRequest("https://fixture.invalid/api/internal/billing/lifecycle/run"));
+  assert.equal(response.status, 401);
+});
