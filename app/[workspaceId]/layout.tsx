@@ -4,6 +4,10 @@ import { getAdminBasePath } from "@/lib/admin/adminPaths";
 import { getCurrentProfile } from "@/lib/profile/server";
 import { getCommercialSubscriptionPresentation } from "@/lib/billing/commercialSubscriptionPresentation";
 import { getWorkspacePlan } from "@/lib/billing/getWorkspacePlan";
+import { loadWorkspaceSubscription } from "@/lib/billing/workspaceSubscription";
+import { isValidPaddleCustomerId } from "@/lib/billing/paddle/checkoutCustomerIdentity";
+import { getPaddleEnvironment } from "@/lib/billing/paddle/env.server";
+import { PaddleRetainIdentity } from "@/components/billing/PaddleRetainIdentity";
 import { createRoutePerf } from "@/lib/perf/server";
 import { WorkspaceShell } from "./_components/WorkspaceShell";
 
@@ -22,13 +26,22 @@ export default async function WorkspaceLayout({
     requireWorkspace(workspaceId)
   );
 
-  const [profileResult, planResult, showAdminLink] = await Promise.all([
+  const [profileResult, planResult, showAdminLink, workspaceSubscription] = await Promise.all([
     perf.time("getCurrentProfile", () => getCurrentProfile()),
     perf.time("getWorkspacePlan", () => getWorkspacePlan(workspaceId)),
     perf.time("adminAccessCheck", () =>
       userCanAccessAdminPanel(user.id, user.email)
     ),
+    loadWorkspaceSubscription(workspaceId),
   ]);
+
+  const retainCustomerId =
+    getPaddleEnvironment() === "production" &&
+    workspaceSubscription?.paymentProvider === "paddle" &&
+    workspaceSubscription.paddleEnvironment === "production" &&
+    isValidPaddleCustomerId(workspaceSubscription.providerCustomerId)
+      ? workspaceSubscription.providerCustomerId.trim()
+      : null;
 
   const profile = profileResult.profile;
   const subscription = getCommercialSubscriptionPresentation({
@@ -50,6 +63,7 @@ export default async function WorkspaceLayout({
       showAdminLink={showAdminLink}
       adminPath={getAdminBasePath()}
     >
+      <PaddleRetainIdentity customerId={retainCustomerId} />
       {children}
     </WorkspaceShell>
   );
