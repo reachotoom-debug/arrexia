@@ -1,6 +1,7 @@
 import dynamic from "next/dynamic";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { LandingHero } from "@/components/landing/LandingHero";
+import { LandingPaddleInitializer } from "@/components/landing/LandingPaddleInitializer";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { buildSoftwareApplicationSchema } from "@/lib/seo/structured-data";
@@ -70,6 +71,7 @@ export const metadata = buildPageMetadata("home");
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-white text-slate-900">
+      <LandingPaddleInitializer />
       <JsonLd data={buildSoftwareApplicationSchema()} />
       <PublicNavbar />
       <main>
