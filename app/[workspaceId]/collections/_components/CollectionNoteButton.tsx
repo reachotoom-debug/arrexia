@@ -30,11 +30,19 @@ export function CollectionNoteButton({
 
   const handleSave = async (noteText: string | null) => {
     try {
-      await updateCollectionsNote({
+      const result = await updateCollectionsNote({
         invoiceId,
         workspaceId,
         notes: noteText || null,
       });
+      if (!result.ok) {
+        toast({
+          title: "Failed to save note",
+          description: result.error,
+          variant: "destructive",
+        });
+        return;
+      }
       
       toast({
         title: "Note saved",

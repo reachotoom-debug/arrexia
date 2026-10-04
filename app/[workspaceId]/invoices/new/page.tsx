@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import { supabaseServer } from "@/lib/supabase/server";
 import { InvoiceForm } from "../_components/InvoiceForm";
 import { type InvoiceFormValues } from "@/lib/invoices/schema";
@@ -76,6 +77,15 @@ export default async function NewInvoicePage({
       if (result && typeof result === "object" && "fieldErrors" in result) {
         actionTimer.mark("END");
         return result;
+      }
+
+      if (result && typeof result === "object" && "error" in result) {
+        actionTimer.mark("END");
+        return result;
+      }
+
+      if (typeof result !== "string" || !z.string().uuid().safeParse(result).success) {
+        throw new Error("Invoice creation returned an invalid invoice ID.");
       }
 
       actionTimer.mark("REDIRECT_START");

@@ -29,7 +29,15 @@ export function ToggleClientActive({
   const performToggle = async (shouldBeActive: boolean) => {
     setIsLoading(true);
     try {
-      await toggleClientActive(workspaceId, clientId, shouldBeActive);
+      const result = await toggleClientActive(workspaceId, clientId, shouldBeActive);
+      if (!result.ok) {
+        toast({
+          variant: "destructive",
+          title: "Update failed",
+          description: result.message,
+        });
+        return;
+      }
       router.refresh();
       toast({
         title: shouldBeActive ? "Client activated" : "Client inactivated",

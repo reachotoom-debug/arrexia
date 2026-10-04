@@ -195,7 +195,7 @@ export async function toggleClientActive(
   workspaceId: string,
   clientId: string,
   isActive: boolean
-) {
+): Promise<ActionResult> {
   const { workspace } = await requireWorkspace(workspaceId);
   const validatedWorkspaceId = workspace.id;
 
@@ -203,7 +203,7 @@ export async function toggleClientActive(
     await assertWorkspaceMutationAllowed(workspaceId, "client_update");
   } catch (error) {
     if (error instanceof EntitlementError) {
-      throw new Error(error.message);
+      return fail(error.message, error.code);
     }
     throw error;
   }
@@ -224,6 +224,7 @@ export async function toggleClientActive(
   revalidatePath(`/${workspaceId}/clients`);
   revalidatePath(`/${workspaceId}/clients/${clientId}`);
   revalidatePath(`/${workspaceId}/dashboard`);
+  return ok();
 }
 
 function getErrorMessage(e: unknown): string {

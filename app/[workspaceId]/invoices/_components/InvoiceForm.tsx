@@ -22,7 +22,7 @@ interface InvoiceFormProps {
   onSubmit: (
     values: InvoiceFormValues
   ) => Promise<
-    void | { ok?: boolean; fieldErrors?: { invoice_number?: string } }
+    void | { ok?: boolean; error?: string; code?: string; fieldErrors?: { invoice_number?: string } }
   >;
   generatedInvoiceNumber?: string; // pass from server for create
   workspaceId: string;
@@ -55,6 +55,7 @@ export function InvoiceForm({
   defaultIssueDate,
   submitError,
 }: InvoiceFormProps) {
+  const [actionError, setActionError] = useState<string | null>(null);
   const router = useRouter();
   const isEdit = mode === "edit";
   const [submitMode, setSubmitMode] = useState<
@@ -159,6 +160,7 @@ export function InvoiceForm({
       console.warn("[InvoiceForm] Attempted to submit archived invoice - blocked");
       return;
     }
+    setActionError(null);
     try {
       console.log("[InvoiceForm] submitHandler called with values:", values);
       
@@ -200,6 +202,10 @@ export function InvoiceForm({
         });
         return;
       }
+      if (result?.error) {
+        setActionError(result.error);
+        return;
+      }
     } catch (error) {
       // Next.js redirect() throws an error with a digest property
       const errorWithDigest = error as { digest?: string } | null;
@@ -215,7 +221,11 @@ export function InvoiceForm({
       onSubmit={handleSubmit(submitHandler)}
       className="mx-auto w-full max-w-6xl min-w-0 space-y-6"
     >
-      {submitError ? (
+      {actionError ? (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {actionError}
+        </div>
+      ) : submitError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {submitError}
         </div>

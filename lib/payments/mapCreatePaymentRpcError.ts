@@ -132,7 +132,7 @@ function mapPaymentManualRpcBase(rpcError: RpcErrorLike, actionLabel: string): P
 export function isExpectedPaymentManualRpcError(result: PaymentManualActionError): boolean {
   const { error, code } = result;
 
-  if (code === "23505" || code === "22023" || code === "42501" || code === "P0001" || code === "P0002") {
+  if (code === "TRIAL_EXPIRED" || code === "23505" || code === "22023" || code === "42501" || code === "P0001" || code === "P0002") {
     return true;
   }
 

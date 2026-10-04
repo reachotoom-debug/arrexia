@@ -29,6 +29,7 @@ export function isExpectedUpdateInvoiceError(
   }
 
   if (
+    code === "TRIAL_EXPIRED" ||
     code === "PLAN_LIMIT_INVOICES" ||
     code === "TRIAL_INVOICE_LIMIT_REACHED" ||
     (code != null && code.startsWith("PLAN_"))

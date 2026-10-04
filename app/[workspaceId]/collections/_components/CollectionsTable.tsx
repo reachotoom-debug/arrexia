@@ -98,22 +98,29 @@ function CollectionsNotesModal({
   onClose: () => void;
 }) {
   const [notes, setNotes] = useState(invoice?.notes ?? "");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!invoice) return;
+    setSaveError(null);
 
     startTransition(async () => {
       try {
-        await updateCollectionsNote({
+        const result = await updateCollectionsNote({
           invoiceId: invoice.id,
           workspaceId,
           notes: notes || null,
         });
+        if (!result.ok) {
+          setSaveError(result.error);
+          return;
+        }
         onClose();
       } catch (error) {
         console.error("Failed to update note:", error);
+        setSaveError(error instanceof Error ? error.message : "Failed to save collection note");
       }
     });
   }
@@ -144,6 +151,9 @@ function CollectionsNotesModal({
             <p className="mt-1 text-xs text-slate-500">
               {notes.length}/2000 characters
             </p>
+            {saveError && (
+              <p role="alert" className="mt-2 text-sm text-red-600">{saveError}</p>
+            )}
           </div>
           <div className="flex gap-2 border-t border-slate-200 px-4 py-3">
             <button

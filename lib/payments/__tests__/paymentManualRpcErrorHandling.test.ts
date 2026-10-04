@@ -30,6 +30,40 @@ function readCreatePaymentBlock(): string {
 }
 
 describe("payment manual RPC error handling", () => {
+  it("recognizes TRIAL_EXPIRED by code independently of message wording", () => {
+    assert.equal(isExpectedPaymentManualRpcError({
+      code: "TRIAL_EXPIRED",
+      error: "Mutation unavailable",
+    }), true);
+  });
+
+  it("classifies the exact production trial rejection for the expected-error redirect", () => {
+    const result = {
+      code: "TRIAL_EXPIRED",
+      error: "Your Arrexia trial has ended. Choose a paid plan to continue making changes.",
+    };
+    assert.equal(isExpectedPaymentManualRpcError(result), true);
+  });
+
+  it("preserves existing expected codes and legacy message recognition", () => {
+    for (const code of ["23505", "22023", "42501", "P0001", "P0002"]) {
+      assert.equal(isExpectedPaymentManualRpcError({ code, error: "Business rejection" }), true, code);
+    }
+    for (const error of ["Trial expired", "Workspace is read-only", "Client not found", "Invoice has no outstanding balance"]) {
+      assert.equal(isExpectedPaymentManualRpcError({ error }), true, error);
+    }
+  });
+
+  it("keeps unexpected create errors and unknown codes unexpected", () => {
+    for (const result of [
+      { code: "08006", error: "Connection terminated unexpectedly" },
+      { code: "XX000", error: "Internal database error" },
+      { error: "Failed to create payment: missing payment_id from RPC" },
+    ]) {
+      assert.equal(isExpectedPaymentManualRpcError(result), false, result.error);
+    }
+  });
+
   it("update overpayment maps to user-facing result without throwing in action", () => {
     const mapped = mapUpdatePaymentRpcError({
       code: "P0001",

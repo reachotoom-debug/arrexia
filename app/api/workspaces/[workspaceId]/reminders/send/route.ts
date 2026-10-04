@@ -35,6 +35,18 @@ export async function POST(
       userId: user.id,
     });
 
+    if (result.status === "skipped") {
+      return NextResponse.json({
+        ok: false,
+        success: false,
+        status: "skipped",
+        message: result.errorMessage || "Reminder skipped",
+        reminder_log_id: result.reminderLogId,
+        error: result.errorMessage || undefined,
+        details: result.skipReason ? { skipReason: result.skipReason } : undefined,
+      }, { status: 200 });
+    }
+
     if (!result.success) {
       return NextResponse.json(
         {

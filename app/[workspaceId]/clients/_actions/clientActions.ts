@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 
-type ActionResult = { ok: true } | { ok: false; error: string };
+type ActionResult = { ok: true } | { ok: false; error: string; code?: string };
 
 function getErrorMessage(e: unknown): string {
   if (!e) return "Unknown error";
@@ -27,6 +29,7 @@ export async function archiveClient(
 ): Promise<ActionResult> {
   try {
     await requireWorkspace(workspaceId);
+    await assertWorkspaceMutationAllowed(workspaceId, "client_delete");
     const supabase = await supabaseServer();
 
     console.log("[archiveClient] updating public.clients", { workspaceId, clientId, cascade });
@@ -153,6 +156,9 @@ export async function archiveClient(
     revalidatePath(`/${workspaceId}/payments`);
     return { ok: true };
   } catch (e) {
+    if (e instanceof EntitlementError) {
+      return { ok: false, error: e.message, code: e.code };
+    }
     const errorMsg = getErrorMessage(e);
     console.error("[archiveClient] exception", {
       error: errorMsg,
@@ -178,6 +184,7 @@ export async function unarchiveClient(
 ): Promise<ActionResult> {
   try {
     await requireWorkspace(workspaceId);
+    await assertWorkspaceMutationAllowed(workspaceId, "client_update");
     const supabase = await supabaseServer();
 
     console.log("[unarchiveClient] updating public.clients", { workspaceId, clientId, cascade });
@@ -305,6 +312,9 @@ export async function unarchiveClient(
     revalidatePath(`/${workspaceId}/payments`);
     return { ok: true };
   } catch (e) {
+    if (e instanceof EntitlementError) {
+      return { ok: false, error: e.message, code: e.code };
+    }
     const errorMsg = getErrorMessage(e);
     console.error("[unarchiveClient] exception", {
       error: errorMsg,

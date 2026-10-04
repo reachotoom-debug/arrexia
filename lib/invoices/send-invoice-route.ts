@@ -9,6 +9,8 @@ import {
 } from "@/lib/invoices/promoteDraftInvoiceAfterSend";
 import { logAuditEvent } from "@/lib/audit/log";
 import { validateSandboxRecipient } from "@/lib/email/sendEmail";
+import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
+import { EntitlementError } from "@/lib/billing/entitlementErrors";
 
 export type SendInvoicePayload = {
   toEmail?: string;
@@ -25,6 +27,7 @@ export type SendInvoiceJsonBody =
       ok: false;
       success: false;
       error: string;
+      code?: string;
     };
 
 function jsonResponse(body: SendInvoiceJsonBody, status: number) {
@@ -45,6 +48,18 @@ export async function postSendInvoiceEmail(
       { ok: false, success: false, error: auth.error },
       auth.status
     );
+  }
+
+  try {
+    await assertWorkspaceMutationAllowed(workspaceId, "invoice_update");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return jsonResponse(
+        { ok: false, success: false, code: error.code, error: error.message },
+        403
+      );
+    }
+    throw error;
   }
 
   const { user } = auth;
