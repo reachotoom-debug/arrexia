@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useTransition } from "react";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { secondaryToolbarClass } from "@/components/ui/cta-styles";
 import { useToast } from "@/components/ui/use-toast";
 import { bulkUnarchiveInvoices } from "../actions";
@@ -38,7 +38,8 @@ export function InvoicesTableUnarchiveButton({
   const selection = useSelection();
   const selectedIds = selection?.selectedIds ?? new Set();
   const setSelectedIds = selection?.setSelectedIds ?? (() => {});
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = React.useState(false);
+  const [showConfirm, setShowConfirm] = React.useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -58,50 +59,53 @@ export function InvoicesTableUnarchiveButton({
     return null;
   }
 
-  const handleUnarchive = () => {
+  const handleUnarchive = async () => {
     const count = selectedIds.size;
     if (count === 0) return;
 
-    const confirmed = window.confirm(`Unarchive ${count} selected invoice(s)?`);
-    if (!confirmed) return;
+    setIsPending(true);
+    try {
+      const result = await bulkUnarchiveInvoices(workspaceId, Array.from(selectedIds));
 
-    startTransition(async () => {
-      try {
-        const result = await bulkUnarchiveInvoices(workspaceId, Array.from(selectedIds));
-
-        if (result.ok) {
-          setSelectedIds(new Set());
-          toast({
-            title: "Invoices unarchived",
-            description: `Successfully unarchived ${result.count} invoice${result.count !== 1 ? "s" : ""}.`,
-          });
-          router.refresh();
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Error unarchiving invoices",
-            description: result.message || "Please try again.",
-          });
-        }
-      } catch (err) {
-        console.error("bulkUnarchiveInvoices error", err);
+      if (result.ok) {
+        setSelectedIds(new Set());
+        toast({
+          title: "Invoices unarchived",
+          description: `Successfully unarchived ${result.count} invoice${result.count !== 1 ? "s" : ""}.`,
+        });
+        router.refresh();
+      } else {
         toast({
           variant: "destructive",
           title: "Error unarchiving invoices",
-          description: "Please try again.",
+          description: result.message || "Please try again.",
         });
       }
-    });
+    } catch (err) {
+      console.error("bulkUnarchiveInvoices error", err);
+      toast({
+        variant: "destructive",
+        title: "Error unarchiving invoices",
+        description: "Please try again.",
+      });
+    } finally {
+      setIsPending(false);
+    }
   };
 
   return (
-    <button
-      type="button"
-      disabled={isPending}
-      onClick={handleUnarchive}
-      className={secondaryToolbarClass}
-    >
-      {isPending ? "Unarchiving..." : "Unarchive selected"}
-    </button>
+    <>
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => setShowConfirm(true)}
+        className={secondaryToolbarClass}
+      >
+        {isPending ? "Unarchiving..." : "Unarchive selected"}
+      </button>
+      <ConfirmationDialog open={showConfirm} onOpenChange={setShowConfirm}
+        action="unarchive" recordName="invoice" count={selectedIds.size}
+        onConfirm={handleUnarchive} />
+    </>
   );
 }
