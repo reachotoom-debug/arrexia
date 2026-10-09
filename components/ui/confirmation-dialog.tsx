@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { DialogContent } from "@/components/ui/dialog";
 
 /** Synchronous lock also prevents a second click before React renders disabled. */
 export function createConfirmationSubmission() {
@@ -71,17 +70,18 @@ export function ConfirmationDialog({ open, onOpenChange, action, recordName, cou
 
   return (
     <dialog ref={dialogRef} aria-labelledby={titleId} aria-describedby={descriptionId}
-      aria-busy={pending} className="m-auto bg-transparent p-0 backdrop:bg-black/50"
+      aria-busy={pending} className="m-auto w-[calc(100%-2rem)] max-w-[28rem] rounded-xl border-0 bg-transparent p-0 backdrop:bg-black/50"
       onCancel={(event) => {
         event.preventDefault();
         if (!pending) onOpenChange(false);
       }}>
-      <DialogContent className="max-w-md p-6">
-        <h2 id={titleId} className="text-lg font-semibold text-slate-900">{label} selected {recordName}{count !== 1 ? "s" : ""}?</h2>
-        <p id={descriptionId} className="mt-2 text-sm text-slate-600">
+      {/* Shared DialogContent's w-full + mx-4 overflows this native dialog. */}
+      <div className="max-h-[90vh] w-full min-w-0 overflow-y-auto rounded-xl bg-white p-6">
+        <h2 id={titleId} className="break-words text-lg font-semibold text-slate-900">{label} selected {recordName}{count !== 1 ? "s" : ""}?</h2>
+        <p id={descriptionId} className="mt-2 break-words text-sm text-slate-600">
           {label} {count} selected {recordName}{count !== 1 ? "s" : ""}?
         </p>
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
           <Button ref={cancelRef} type="button" variant="outline" disabled={pending}
             onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button type="button" variant={action === "archive" ? "destructive" : "default"}
@@ -89,7 +89,7 @@ export function ConfirmationDialog({ open, onOpenChange, action, recordName, cou
             {pending ? (action === "archive" ? "Archiving..." : "Unarchiving...") : label}
           </Button>
         </div>
-      </DialogContent>
+      </div>
     </dialog>
   );
 }

@@ -43,7 +43,13 @@ test("confirmation renders accessible labels; cancellation never submits", async
   assert.equal(tree.type, "dialog");
   assert.ok(tree.props["aria-labelledby"]);
   assert.ok(tree.props["aria-describedby"]);
-  const content = tree.props.children;
+  assert.match(tree.props.className, /w-\[calc\(100%-2rem\)\]/);
+  assert.match(tree.props.className, /max-w-\[28rem\]/);
+  const content = React.Children.toArray(tree.props.children).find(React.isValidElement) as typeof tree;
+  assert.equal(content.type, "div");
+  assert.match(content.props.className, /w-full/);
+  assert.doesNotMatch(content.props.className, /\bmx-/);
+  assert.match(content.props.children[2].props.className, /flex-wrap/);
   const buttons = content.props.children[2].props.children;
   assert.equal(buttons[0].props.children, "Cancel");
   assert.equal(buttons[1].props.children, "Unarchive");
@@ -54,11 +60,13 @@ test("confirmation renders accessible labels; cancellation never submits", async
   assert.equal(submissions, 1);
   const archiveTree = ConfirmationDialog({ open: true, action: "archive", recordName: "client", count: 1,
     onOpenChange: () => {}, onConfirm: async () => {} });
-  assert.equal(archiveTree.props.children.props.children[2].props.children[1].props.variant, "destructive");
+  const archiveContent = React.Children.toArray(archiveTree.props.children).find(React.isValidElement) as typeof content;
+  assert.equal(archiveContent.props.children[2].props.children[1].props.variant, "destructive");
   t.mock.method(React, "useState", () => [true, () => {}]);
   const pendingTree = ConfirmationDialog({ open: true, action: "unarchive", recordName: "invoice", count: 2,
     onOpenChange: value => openChanges.push(value), onConfirm: async () => { submissions++; } });
-  const pendingButtons = pendingTree.props.children.props.children[2].props.children;
+  const pendingContent = React.Children.toArray(pendingTree.props.children).find(React.isValidElement) as typeof content;
+  const pendingButtons = pendingContent.props.children[2].props.children;
   assert.equal(pendingButtons[0].props.disabled, true);
   assert.equal(pendingButtons[1].props.disabled, true);
   pendingTree.props.onCancel({ preventDefault() {} });
