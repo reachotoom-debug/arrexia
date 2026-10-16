@@ -56,7 +56,7 @@ function getDashboardInsight(summary: DashboardSummaryPremium): DashboardInsight
   ) {
     return {
       level: "critical",
-      title: "Most of your outstanding is high-risk.",
+      title: "Most of your outstanding is high-priority.",
       detail: "Start with these invoices in Collections.",
     };
   }
@@ -79,7 +79,7 @@ function getDashboardInsight(summary: DashboardSummaryPremium): DashboardInsight
     return {
       level: "warning",
       title: "Overdue balance is elevated.",
-      detail: `${(overdueRatio * 100).toFixed(0)}% of outstanding is overdue. Use Collections to work medium-risk invoices earlier.`,
+      detail: `${(overdueRatio * 100).toFixed(0)}% of outstanding is overdue. Use Collections to work medium-priority invoices earlier.`,
     };
   }
 
@@ -108,7 +108,7 @@ function getDashboardInsight(summary: DashboardSummaryPremium): DashboardInsight
   return {
     level: "neutral",
     title: "Steady AR performance.",
-    detail: "No major changes in overdue or collections this period. Keep monitoring your high-risk invoices.",
+    detail: "No major changes in overdue or collections this period. Keep monitoring your high-priority invoices.",
   };
 }
 

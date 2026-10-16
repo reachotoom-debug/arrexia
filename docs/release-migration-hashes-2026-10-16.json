@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-16",
+  "scope": "Isolated PostgreSQL17.11 only; no production; original local function restored",
+  "baseCommit": "adfccfd85a43dbd6f2eeb916970086af281af6af",
+  "migrations": [
+    {
+      "name": "20261015010000_claim_reminder_delivery.sql",
+      "sha256": "d09f5159b74c34c2ed9e56dd943d3e6fd4baba9ecc365554c9cd26eb2ceff93d",
+      "changedSincePreviousEvidence": true
+    },
+    {
+      "name": "20261015120000_invoice_import_stored_totals_consistency.sql",
+      "sha256": "54dded48cc52b3ffc34d06ea5804942bcee9af7f61f99ded187d9daaf8319248",
+      "changedSincePreviousEvidence": false
+    },
+    {
+      "name": "20261015140000_payment_update_generated_net_guard.sql",
+      "sha256": "28f86fe277c6c5716640891ca98a52101f11daa1df47e2666a6a57755039490c",
+      "changedSincePreviousEvidence": false
+    },
+    {
+      "name": "20261015150000_workspace_policy_fences.sql",
+      "sha256": "a8299b581af25df83b44a65f7981159d23439cbc8dd21a4714fc834646e5e1ce",
+      "changedSincePreviousEvidence": false
+    },
+    {
+      "name": "20261015151000_payment_write_boundary.sql",
+      "sha256": "437e372be1200ff127cee4e96dcc947fac66806c67c0807713f07f4778344ed9",
+      "changedSincePreviousEvidence": false
+    },
+    {
+      "name": "20261015152000_remove_api_destructive_privileges.sql",
+      "sha256": "a0073ce7174aa615a906dae0296e918a3a1e8c6ef92f33c3b949c707622abb85",
+      "changedSincePreviousEvidence": false
+    },
+    {
+      "name": "20261015153000_users_organizations_write_boundary.sql",
+      "sha256": "0749d644dd356a6c5386678a669a1cfc6beea134460927e19b7aa81baa460656",
+      "changedSincePreviousEvidence": false
+    },
+    {
+      "name": "20261015154000_invoice_write_boundary.sql",
+      "sha256": "37d4dbbbdf616f3fbb57282acc1106df41fb32174e7335b9610d1cd8d44cbbb4",
+      "changedSincePreviousEvidence": false
+    }
+  ],
+  "testSource": {
+    "path": "scripts/tests/reminder-claims-pg17-targeted.test.cjs",
+    "sha256": "420cebdd4d2efc8976ec43950b0dc9e5a20402e10eae1ebe8377f81f14aa8cbf"
+  },
+  "runs": [
+    {
+      "path": "tmp/claim-null-template-pg17-red.tap",
+      "sha256": "c413e7c6d3a61481883b8fd2cd2d610c3856b06764ae97a18f8eb2dfee9b8772",
+      "expectedExitCode": 1,
+      "tests": 1,
+      "passed": 0
+    },
+    {
+      "path": "tmp/claim-null-template-pg17-green.tap",
+      "sha256": "d56bf3e142a504d39835050f2e24f66d6847c226ace82059589cbad0fb3e5a29",
+      "expectedExitCode": 0,
+      "tests": 3,
+      "passed": 3
+    }
+  ],
+  "priorEvidenceStatus": "Preserved historical; claim hash and whole-set current-artifact certification superseded. Seven unchanged migrations retain prior evidence. No full-suite rerun.",
+  "stagingList": {
+    "path": "docs/release-staging-list.txt",
+    "files": 99,
+    "sha256": "9989543af15bec11f4167114bb1e60c7ffaa427ff369569cf50b2e1028043ecb",
+    "staged": false
+  }
+}

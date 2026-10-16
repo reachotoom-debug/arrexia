@@ -1,3 +1,4 @@
+import { readAllPages } from "@/lib/db/readAllPages";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
@@ -213,7 +214,7 @@ async function getCollectionsData(
       metricsQuery = metricsQuery.eq("risk_level", risk);
     }
 
-    const { data: exposureRows } = await metricsQuery;
+    const { data: exposureRows } = await readAllPages((from, to) => metricsQuery.order("id", { ascending: true }).range(from, to));
     outstandingByCurrency = computePortfolioExposureByCurrency(
       (exposureRows ?? []).map((row) => ({
         outstanding: Number(row.outstanding ?? 0),
@@ -223,6 +224,7 @@ async function getCollectionsData(
     );
   } catch (metricsError) {
     console.error("[Collections] failed to calculate outstanding total", { workspaceId, metricsError });
+    throw new Error("Collections totals unavailable: incomplete financial dataset");
   }
 
   const exposureLabel = formatPortfolioExposureLabel(outstandingByCurrency, defaultCurrency);
@@ -240,7 +242,7 @@ async function getCollectionsData(
       outstandingByCurrency,
       outstandingLabel: exposureLabel.value,
       outstandingDetail: exposureLabel.detail,
-      mode: risk === "all" ? "All risks" : risk === "high" ? "High risk" : risk === "medium" ? "Medium risk" : "Low risk",
+      mode: risk === "all" ? "All priorities" : risk === "high" ? "High priority" : risk === "medium" ? "Medium priority" : "Low priority",
       sentInvoiceCount: sentInvoiceCount ?? 0,
     },
   };
@@ -335,10 +337,10 @@ export default async function CollectionsPage({
     collectionsData;
 
   const riskOptions = [
-    { id: "high", label: "High risk" },
-    { id: "medium", label: "Medium risk" },
-    { id: "low", label: "Low risk" },
-    { id: "all", label: "All risks" },
+    { id: "high", label: "High priority" },
+    { id: "medium", label: "Medium priority" },
+    { id: "low", label: "Low priority" },
+    { id: "all", label: "All priorities" },
   ];
 
   const buildRiskUrl = (riskId: string) => {
@@ -359,7 +361,7 @@ export default async function CollectionsPage({
       <CommandBar>
         <PageHeader
           title="Collections"
-          description="Monitor overdue exposure and prioritize the accounts that need attention."
+          description="Monitor overdue exposure. Collection priority uses age and amount, not credit risk. Default order: newest invoices first."
           secondaryActions={
             <Link
               href={`/${workspaceId}/actions`}
@@ -433,14 +435,18 @@ export default async function CollectionsPage({
           detail={summary.outstandingDetail}
         />
         <SummaryMetric
-          label="Risk segment"
+          label="Priority segment"
           value={summary.mode}
           icon={ShieldAlert}
           iconClassName="text-amber-600"
           iconBackgroundClassName="bg-amber-50"
-          detail={risk !== "all" ? "Filtered portfolio segment" : "All overdue risk levels"}
+          detail={risk !== "all" ? "Filtered portfolio segment" : "All overdue priority levels"}
         />
       </section>
+
+      <p className="text-xs text-slate-500">
+        Escalate marks invoices at least {COLLECTIONS_ESCALATION_MIN_OVERDUE_DAYS} days overdue with at least {COLLECTIONS_ESCALATION_MIN_OUTSTANDING.toLocaleString("en-US")} outstanding in invoice currency. Ask the account owner to review the invoice and contact the client directly.
+      </p>
 
       {count === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
@@ -509,7 +515,7 @@ export default async function CollectionsPage({
                 <table className={TABLE_BASE}>
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className={`hidden lg:table-cell ${TABLE_TH}`}>Risk</th>
+                      <th className={`hidden lg:table-cell ${TABLE_TH}`}>Priority</th>
                       <th className={`min-w-[11rem] ${TABLE_TH} text-left`}>Client / Invoice</th>
                       <th className={clsx(TABLE_TH, TABLE_TH_RIGHT, "whitespace-nowrap")}>
                         Outstanding
@@ -608,7 +614,7 @@ export default async function CollectionsPage({
                           <td className={`hidden xl:table-cell ${TABLE_TD} text-sm`}>
                             {escalate ? (
                               <span
-                                title={`Escalate when overdue ≥ ${COLLECTIONS_ESCALATION_MIN_OVERDUE_DAYS} days and outstanding ≥ ${COLLECTIONS_ESCALATION_MIN_OUTSTANDING}`}
+                                title={`Collection priority, not credit risk. Escalate when overdue ≥ ${COLLECTIONS_ESCALATION_MIN_OVERDUE_DAYS} days and outstanding ≥ ${COLLECTIONS_ESCALATION_MIN_OUTSTANDING} in invoice currency. Ask the account owner to review the invoice and contact the client directly.`}
                                 className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 ring-1 ring-inset ring-red-200"
                               >
                                 Escalate

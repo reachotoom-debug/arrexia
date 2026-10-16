@@ -1,3 +1,4 @@
+import { readAllPages } from "@/lib/db/readAllPages";
 import { requireWorkspace } from "@/lib/auth/server";
 import {
   aggregateClientInvoiceMetrics,
@@ -44,7 +45,7 @@ const CLIENT_STATUS = [
 
 const CLIENT_VIEWS = [
   { id: "default", label: "Default View" },
-  { id: "highest-outstanding-first", label: "Highest outstanding first" },
+  { id: "highest-outstanding-first", label: "Outstanding by currency" },
   { id: "with-overdue-invoices", label: "With overdue invoices" },
 ];
 
@@ -379,7 +380,11 @@ async function loadClients(
   const { data: clientsFromDb, error, count } = await perfTime(
     "clients-list",
     needsInvoiceAggregation ? "clientRowsAll" : "clientRows",
-    async () => (needsInvoiceAggregation ? query : query.range(from, to)),
+    async () => {
+      if (!needsInvoiceAggregation) return query.range(from, to);
+      const result = await readAllPages<any>((start, end) => query.range(start, end));
+      return { ...result, count: result.data.length };
+    },
     (result) => `rows=${result.data?.length ?? 0} count=${result.count ?? 0}`
   );
 
@@ -441,33 +446,34 @@ async function loadClients(
     const { data: invoiceRows, error: invoiceError } = await perfTime(
       "clients-list",
       "invoicesViewForMetrics",
-      async () =>
+      async () => readAllPages<ClientPageInvoiceMetricRow>((from, to) =>
         supabase
           .from("invoices_view")
-          .select("id, client_id, display_status, risk_level, outstanding")
+          .select("id, client_id, display_status, risk_level, outstanding, currency")
           .eq("workspace_id", workspaceId)
           .neq("display_status", "void")
-          .neq("display_status", "draft"),
+          .neq("display_status", "draft")
+          .order("id", { ascending: true }).range(from, to)),
       (result) => `rows=${result.data?.length ?? 0}`
     );
 
     if (invoiceError) {
       console.error("[ClientsPage] Error loading invoices for metrics:", invoiceError);
-      // Continue with empty invoice data - will use fallback values
+      throw invoiceError;
     }
 
     const safeInvoiceRows = invoiceRows ?? [];
     const clientMetrics = aggregateClientInvoiceMetrics(safeInvoiceRows);
 
-    // Enrich clients with metrics (preserve existing values if query failed)
+    // Enrich clients only after the complete invoice scan succeeds.
     let enrichedClients = clientsFromDb.map((client) => {
       const metrics = clientMetrics.get(client.id);
-      const existingOutstanding = typeof (client as any).outstanding === "number" ? (client as any).outstanding : undefined;
       const existingHasOverdue = typeof (client as any).hasOverdueInvoices === "boolean" ? (client as any).hasOverdueInvoices : undefined;
       
       return {
         ...client,
-        outstanding: metrics?.outstandingSum ?? existingOutstanding ?? 0,
+        outstanding: metrics?.outstandingSum ?? 0,
+        outstandingByCurrency: metrics?.outstandingByCurrency ?? {},
         hasOverdueInvoices: metrics?.isOverdue ?? existingHasOverdue ?? false,
         invoices_count: metrics?.invoiceCount ?? 0,
       };
@@ -477,11 +483,7 @@ async function loadClients(
     if (view === "highest-outstanding-first") {
       // Sort by outstanding descending (numeric comparison)
       // Force sort to outstanding desc regardless of UI sort selection
-      enrichedClients.sort((a, b) => {
-        const aOutstanding = Number(a.outstanding ?? 0);
-        const bOutstanding = Number(b.outstanding ?? 0);
-        return bOutstanding - aOutstanding; // Descending
-      });
+      enrichedClients = sortClientsByComputedKey(enrichedClients, "outstanding", "desc");
       appliedView = "highest-outstanding-first (sorted by outstanding desc)";
       appliedOrder = "outstanding desc";
     } else if (view === "with-overdue-invoices") {
@@ -490,11 +492,7 @@ async function loadClients(
       enrichedClients = enrichedClients.filter((c) => c.hasOverdueInvoices);
       
       // Then sort by outstanding descending (numeric comparison)
-      enrichedClients.sort((a, b) => {
-        const aOutstanding = Number(a.outstanding ?? 0);
-        const bOutstanding = Number(b.outstanding ?? 0);
-        return bOutstanding - aOutstanding; // Descending
-      });
+      enrichedClients = sortClientsByComputedKey(enrichedClients, "outstanding", "desc");
       appliedView = "with-overdue-invoices (filtered, sorted by outstanding desc)";
       appliedOrder = "outstanding desc";
     } else if (view === "default" && isComputedClientSortKey(sort)) {
@@ -531,34 +529,35 @@ async function loadClients(
     const { data: invoiceRows, error: invoiceError } = await perfTime(
       "clients-list",
       "invoicesViewForPageBatch",
-      async () =>
+      async () => readAllPages<ClientPageInvoiceMetricRow>((from, to) =>
         supabase
           .from("invoices_view")
-          .select("client_id, display_status, risk_level, outstanding, due_date")
+          .select("client_id, display_status, risk_level, outstanding, currency, due_date")
           .eq("workspace_id", workspaceId)
           .in("client_id", clientIds)
           .neq("display_status", "void")
-          .neq("display_status", "draft"),
+          .neq("display_status", "draft")
+          .order("id", { ascending: true }).range(from, to)),
       (result) => `rows=${result.data?.length ?? 0}`
     );
 
     if (invoiceError) {
       console.error("[ClientsPage] Error loading invoices for overdue computation:", invoiceError);
-      // Continue with empty data - will use fallback values
+      throw invoiceError;
     }
 
     const safeInvoiceRows = invoiceRows ?? [];
     const clientMetrics = aggregateClientInvoiceMetrics(safeInvoiceRows);
 
-    // Enrich clients with metrics (preserve existing values if query failed)
+    // Enrich clients only after the complete invoice scan succeeds.
     const enrichedClients = clientsFromDb.map((client) => {
       const metrics = clientMetrics.get(client.id);
-      const existingOutstanding = typeof (client as any).outstanding === "number" ? (client as any).outstanding : undefined;
       const existingHasOverdue = typeof (client as any).hasOverdueInvoices === "boolean" ? (client as any).hasOverdueInvoices : undefined;
       
       return {
         ...client,
-        outstanding: metrics?.outstandingSum ?? existingOutstanding ?? 0,
+        outstanding: metrics?.outstandingSum ?? 0,
+        outstandingByCurrency: metrics?.outstandingByCurrency ?? {},
         hasOverdueInvoices: metrics?.isOverdue ?? existingHasOverdue ?? false,
         invoices_count: metrics?.invoiceCount ?? 0,
       };
@@ -772,47 +771,29 @@ export default async function ClientsPage({
     const { data: invoiceRows, error: invoiceRowsError } = await perfTime(
       "clients-list",
       "invoicesViewForPageClients",
-      async () =>
+      async () => readAllPages<ClientPageInvoiceMetricRow>((from, to) =>
         supabase
           .from("invoices_view")
-          .select("client_id, display_status, risk_level, outstanding")
+          .select("client_id, display_status, risk_level, outstanding, currency")
           .eq("workspace_id", workspaceId)
           .in("client_id", clientIds)
           .neq("display_status", "void")
-          .neq("display_status", "draft"),
+          .neq("display_status", "draft")
+          .order("id", { ascending: true }).range(from, to)),
       (result) => `rows=${result.data?.length ?? 0}`
     );
 
     if (invoiceRowsError) {
-      console.error("[ClientsPage] Error loading invoices:", invoiceRowsError);
+      throw invoiceRowsError;
     }
 
     safeInvoiceRows = invoiceRows ?? [];
   }
 
   // Compute metrics per client using deterministic logic
-  const clientMetrics = new Map<string, { outstandingSum: number; isOverdue: boolean; invoiceCount: number }>();
-  
-  for (const inv of safeInvoiceRows) {
-    if (!inv.client_id) continue;
-    
-    // Sum outstanding_sum: COALESCE(outstanding, 0) for invoices where status NOT IN ("Draft","Void")
-    const outstanding = Number(inv.outstanding ?? 0);
-    const existing = clientMetrics.get(inv.client_id) ?? { outstandingSum: 0, isOverdue: false, invoiceCount: 0 };
-    
-    // Sum all outstanding amounts (including 0 and negative)
-    existing.outstandingSum += outstanding;
-    
-    // Determine overdue signal from canonical invoices_view fields only.
-    if (inv.display_status === "overdue" || inv.risk_level != null) {
-      existing.isOverdue = true;
-    }
-    
-    existing.invoiceCount += 1;
-    clientMetrics.set(inv.client_id, existing);
-  }
+  const clientMetrics = aggregateClientInvoiceMetrics(safeInvoiceRows);
 
-  // Enrich clients with metrics (preserve existing values if query failed)
+  // Enrich clients only after the complete invoice scan succeeds.
   const clientsWithMetrics = safeClients.map((client) => {
     // If client already has outstanding and hasOverdueInvoices (from loadClients for view presets), use it
     if ("outstanding" in client && typeof client.outstanding === "number" && "hasOverdueInvoices" in client && typeof client.hasOverdueInvoices === "boolean") {
@@ -827,13 +808,13 @@ export default async function ClientsPage({
     
     // Otherwise use computed metrics or fallback to existing values
     const metrics = clientMetrics.get(client.id);
-    const existingOutstanding = typeof (client as any).outstanding === "number" ? (client as any).outstanding : undefined;
     const existingHasOverdue = typeof (client as any).hasOverdueInvoices === "boolean" ? (client as any).hasOverdueInvoices : undefined;
     
     return {
       ...client,
       invoicesCount: metrics?.invoiceCount ?? (client as any).invoicesCount ?? 0,
-      outstanding: metrics?.outstandingSum ?? existingOutstanding ?? 0,
+      outstanding: metrics?.outstandingSum ?? 0,
+      outstandingByCurrency: metrics?.outstandingByCurrency ?? {},
       hasOverdueInvoices: metrics?.isOverdue ?? existingHasOverdue ?? false,
     };
   });

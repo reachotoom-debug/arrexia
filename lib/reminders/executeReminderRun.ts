@@ -12,7 +12,9 @@ export interface ReminderExecutionSummary {
   remindersSent: number;
   remindersFailed: number;
   remindersSkipped: number;
-  errors: Array<{ invoiceId: string; ruleId?: string; error: string }>;
+  remindersUncertain: number;
+  warnings: Array<{ invoiceId: string; ruleId?: string; warning: string; historyPersisted?: boolean; deliveryUncertain?: boolean }>;
+  errors: Array<{ invoiceId: string; ruleId?: string; error: string; historyPersisted?: boolean; deliveryUncertain?: boolean }>;
 }
 
 export type SendReminderOutcome = {
@@ -20,6 +22,8 @@ export type SendReminderOutcome = {
   status: "sent" | "failed" | "skipped";
   errorMessage?: string;
   message?: string;
+  historyPersisted?: boolean;
+  deliveryUncertain?: boolean;
 };
 
 export type SendReminderForInvoiceFn = (options: {
@@ -43,6 +47,8 @@ export async function executeEligibleReminderCandidates(
     remindersSent: 0,
     remindersFailed: 0,
     remindersSkipped: 0,
+    remindersUncertain: 0,
+    warnings: [],
     errors: [],
   };
 
@@ -58,12 +64,18 @@ export async function executeEligibleReminderCandidates(
         userId: null,
       });
 
-      if (sendResult.success && sendResult.status === "sent") {
+      if (sendResult.deliveryUncertain) result.remindersUncertain++;
+      if (sendResult.historyPersisted === false) {
+        result.warnings.push({ invoiceId: candidate.invoiceId, ruleId: candidate.ruleId,
+          warning: `${sendResult.errorMessage || sendResult.message || "Reminder history was not saved"}. Reconcile delivery and history; do not resend.`,
+          historyPersisted: false, deliveryUncertain: sendResult.deliveryUncertain });
+      }
+      if (sendResult.success && sendResult.status === "sent" && !sendResult.deliveryUncertain) {
         result.remindersSent++;
         continue;
       }
 
-      if (sendResult.status === "skipped") {
+      if (sendResult.status === "skipped" && !sendResult.deliveryUncertain) {
         result.remindersSkipped++;
         continue;
       }
@@ -72,7 +84,9 @@ export async function executeEligibleReminderCandidates(
       result.errors.push({
         invoiceId: candidate.invoiceId,
         ruleId: candidate.ruleId,
-        error: sendResult.errorMessage || sendResult.message || "Unknown error",
+        error: (sendResult.errorMessage || sendResult.message || "Unknown error") + (sendResult.deliveryUncertain ? ". Reconcile delivery; do not resend." : ""),
+        historyPersisted: sendResult.historyPersisted,
+        deliveryUncertain: sendResult.deliveryUncertain,
       });
     } catch (err) {
       result.remindersFailed++;

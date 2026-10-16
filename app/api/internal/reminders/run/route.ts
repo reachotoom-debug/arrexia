@@ -23,8 +23,18 @@ async function handleCronRun() {
       `failed ${result.totalRemindersFailed}`
   );
 
+  const workspaceErrors = result.workspaceResults.flatMap(workspace => workspace.errors.map(error => ({ workspaceId: workspace.workspaceId, ...error })));
+  const warningsCount = result.workspaceResults.reduce((sum, workspace) => sum + workspace.warnings.length, 0);
+  const errors = [...result.errors, ...workspaceErrors];
+  const reconciliationRequired = warningsCount > 0 || result.totalRemindersUncertain > 0;
+  const hasIssues = result.totalRemindersFailed > 0 || errors.length > 0 || reconciliationRequired;
+  const status = hasIssues ? (result.totalRemindersSent > 0 ? "partial" : "failed") : "success";
   return NextResponse.json({
-    success: true,
+    success: !hasIssues,
+    status,
+    reconciliationRequired,
+    retryAllowed: false,
+    ...(reconciliationRequired ? { message: "Reconcile delivery and history before any further action; do not resend or replay this batch." } : {}),
     timestamp: new Date().toISOString(),
     durationMs: duration,
     summary: {
@@ -32,11 +42,13 @@ async function handleCronRun() {
       totalInvoicesProcessed: result.totalInvoicesProcessed,
       totalRemindersSent: result.totalRemindersSent,
       totalRemindersFailed: result.totalRemindersFailed,
-      errorsCount: result.errors.length,
+      totalRemindersUncertain: result.totalRemindersUncertain,
+      warningsCount,
+      errorsCount: errors.length,
     },
     workspaceResults: result.workspaceResults,
-    errors: result.errors,
-  });
+    errors,
+  }, { status: status === "failed" ? 500 : 200 });
 }
 
 function unauthorizedResponse(auth: Extract<ReturnType<typeof verifyCronReminderAuth>, { ok: false }>) {

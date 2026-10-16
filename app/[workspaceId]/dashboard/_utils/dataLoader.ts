@@ -1,3 +1,6 @@
+import { readAllPages } from "@/lib/db/readAllPages";
+import { buildPaymentMonthlySeries, formatYearMonth } from "@/lib/dashboard/paymentMonthlySeries";
+import { getWorkspaceCalendarDateNow } from "@/lib/datetime/workspaceCalendar";
 /**
  * Server-side dashboard data loader - Dashboard v3
  */
@@ -94,22 +97,26 @@ function formatPercent(value: number): string {
 }
 
 export async function getDashboardData(
-  workspaceId: string
+  workspaceId: string,
+  scopeCurrency?: string,
 ): Promise<DashboardData> {
   const supabase = await supabaseServer();
 
   // Fetch workspace settings for default currency and customer-facing business name
-  const [{ data: settingsRow }, { data: workspaceRow }] = await Promise.all([
+  const [{ data: settingsRow, error: settingsError }, { data: workspaceRow }] = await Promise.all([
     supabase
       .from("settings")
       .select(
-        "default_currency, branding_business_legal_name, business_name, workspace_display_name"
+        "default_currency, timezone, branding_business_legal_name, business_name, workspace_display_name"
       )
       .eq("workspace_id", workspaceId)
       .maybeSingle(),
     supabase.from("workspaces").select("name").eq("id", workspaceId).maybeSingle(),
   ]);
-  const workspaceCurrency = (settingsRow as { default_currency?: string } | null)?.default_currency || "USD";
+  if (settingsError) throw settingsError;
+  const fallbackCurrency = settingsRow?.default_currency || "USD";
+  const workspaceCurrency = scopeCurrency ?? fallbackCurrency;
+  const workspaceTimeZone = settingsRow?.timezone ?? "UTC";
   const businessName = resolveCustomerFacingBusinessName({
     brandingBusinessLegalName: settingsRow?.branding_business_legal_name,
     businessName: settingsRow?.business_name,
@@ -164,7 +171,7 @@ export async function getDashboardData(
   }> = [];
 
   try {
-    const { data: invoices, error: invoicesError } = await supabase
+    const { data: invoices, error: invoicesError } = await readAllPages((from, to) => supabase
       .from("invoices_view")
       .select(
         "id, workspace_id, client_id, client_name, client_is_active, client_archived_at, invoice_number, display_status, base_status, issue_date, due_date, currency, total, paid, outstanding, is_overdue, overdue_days, risk_level, archived_at"
@@ -172,20 +179,20 @@ export async function getDashboardData(
       .eq("workspace_id", workspaceId)
       // invoices_view excludes archived invoices at the SQL layer, but this explicit
       // filter keeps app behavior aligned with the contract and avoids drift.
-      .is("archived_at", null);
+      .is("archived_at", null).order("id", { ascending: true }).range(from, to));
 
     if (invoicesError) {
       console.error("[Dashboard] invoices_view error", invoicesError);
-      invoicesRaw = [];
+      throw invoicesError;
     } else {
       invoicesRaw = invoices ?? [];
     }
   } catch (error) {
     console.error("[Dashboard] failed to load invoices", error);
-    invoicesRaw = [];
+    throw error;
   }
 
-  const safeInvoices = invoicesRaw.map((inv) => ({
+  const safeInvoices = invoicesRaw.filter(inv => (inv.currency?.trim().toUpperCase() || fallbackCurrency) === workspaceCurrency).map((inv) => ({
     id: inv.id,
     clientId: inv.client_id ?? null,
     invoiceNumber: inv.invoice_number ?? "",
@@ -222,20 +229,20 @@ export async function getDashboardData(
   }> = [];
 
   try {
-    const { data: clients, error: clientsError } = await supabase
+    const { data: clients, error: clientsError } = await readAllPages((from, to) => supabase
       .from("clients")
       .select("id, name, email, is_active, archived_at")
-      .eq("workspace_id", workspaceId);
+      .eq("workspace_id", workspaceId).order("id", { ascending: true }).range(from, to));
 
     if (clientsError) {
       console.error("[Dashboard] clients error", clientsError);
-      clientsRaw = [];
+      throw clientsError;
     } else {
       clientsRaw = clients ?? [];
     }
   } catch (error) {
     console.error("[Dashboard] failed to load clients", error);
-    clientsRaw = [];
+    throw error;
   }
 
   const eligibleClients = new Map<string, { name: string | null; email: string | null }>();
@@ -245,6 +252,12 @@ export async function getDashboardData(
       eligibleClients.set(c.id, { name: c.name ?? null, email: c.email ?? null });
     }
   }
+
+  const { data: paymentRows } = await readAllPages((from, to) => supabase
+    .from("payments_view").select("amount, net_amount, payment_date, created_at, status, currency")
+    .eq("workspace_id", workspaceId).is("archived_at", null)
+    .order("id", { ascending: true }).range(from, to));
+  const scopedPayments = paymentRows.filter(row => (row.currency?.trim().toUpperCase() || fallbackCurrency) === workspaceCurrency);
 
   // --- Compute period stats for insight ---------------------------------------
   const periodEnd = now;
@@ -464,33 +477,26 @@ export async function getDashboardData(
   // --- Calculate monthly series (last 12 months) ------------------------------
   const monthlyMap = new Map<string, { invoiced: number; collected: number; overdueAmount: number; overdueCount: number; highRiskAmount: number; outstanding: number }>();
 
-  // Initialize last 12 months
+  const [calendarYear, calendarMonth] = (getWorkspaceCalendarDateNow(workspaceTimeZone, now) ?? now.toISOString().slice(0, 10)).split("-").map(Number);
+  // Initialize last 12 workspace calendar months
   for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const d = new Date(Date.UTC(calendarYear, calendarMonth - 1 - i, 1));
+    const monthKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
     monthlyMap.set(monthKey, { invoiced: 0, collected: 0, overdueAmount: 0, overdueCount: 0, highRiskAmount: 0, outstanding: 0 });
   }
 
   // Aggregate invoices by issue_date month
   for (const inv of invoices12m) {
     if (!inv.issueDate) continue;
-    const d = new Date(inv.issueDate);
-    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const monthKey = inv.issueDate.slice(0, 7);
     const existing = monthlyMap.get(monthKey);
     if (existing) {
       existing.invoiced += inv.totalAmount;
     }
   }
 
-  // Aggregate collected amounts from invoices_view.paid by issue_date month
-  for (const inv of invoices12m) {
-    if (!inv.issueDate) continue;
-    const d = new Date(inv.issueDate);
-    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const existing = monthlyMap.get(monthKey);
-    if (existing) {
-      existing.collected += inv.paidAmount;
-    }
+  for (const row of buildPaymentMonthlySeries(scopedPayments, Array.from(monthlyMap.keys()), workspaceTimeZone)) {
+    monthlyMap.get(row.month)!.collected = row.amount;
   }
 
   // Aggregate overdue by due_date month
@@ -544,6 +550,8 @@ export async function getDashboardData(
     else agingBuckets[3].amount += inv.outstanding;
   }
 
+  summary.totalInvoiced12m = invoicedMonthly.reduce((sum, row) => sum + row.amount, 0);
+  summary.totalCollected12m = collectedMonthly.reduce((sum, row) => sum + row.amount, 0);
   const series: DashboardSeries = {
     invoicedMonthly,
     collectedMonthly,
@@ -704,9 +712,10 @@ export async function getDashboardData(
 
   const totalInvoiced30 = invoicesLast30.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  const totalCollected30 = invoicesLast30.reduce((sum, inv) => sum + inv.paidAmount, 0);
-
-  const collectionRate = totalInvoiced30 > 0 ? totalCollected30 / totalInvoiced30 : null;
+  const cohortPaid30 = invoicesLast30.reduce((sum, inv) => sum + inv.paidAmount, 0);
+  const totalCollected30 = sumPaymentsReceivedInLast30CalendarDays(scopedPayments, workspaceTimeZone, now).amount;
+  // Preserve invoice-cohort ratio; receipt-period amount is a separate scope.
+  const collectionRate = totalInvoiced30 > 0 ? cohortPaid30 / totalInvoiced30 : null;
 
   // Status funnel
   const funnelMap = new Map<string, { amount: number; count: number }>();
@@ -908,12 +917,12 @@ export async function getDashboardData(
   let reminderEffectiveness: ReminderEffectivenessData[] = [];
 
   try {
-    const { data: remindersRaw, error: remindersError } = await supabase
+    const { data: remindersRaw, error: remindersError } = await readAllPages((from, to) => supabase
       .from("reminders")
       .select("sent_at, workspace_id")
       .eq("workspace_id", workspaceId)
       .not("sent_at", "is", null)
-      .gte("sent_at", twelveMonthsAgo.toISOString());
+      .gte("sent_at", twelveMonthsAgo.toISOString()).order("id", { ascending: true }).range(from, to));
 
     if (remindersError) {
       console.error("[Dashboard] reminders error", remindersError);
@@ -945,7 +954,7 @@ export async function getDashboardData(
         .map(([month, remindersCount]) => {
           const paymentForMonth = series.collectedMonthly.find((p) => p.month === month);
           return {
-            month: new Date(month + "-01").toLocaleDateString("en-US", { month: "short" }),
+            month: formatYearMonth(month),
             remindersSent: remindersCount,
             paymentsReceived: paymentForMonth?.amount ?? 0,
           };
@@ -953,7 +962,7 @@ export async function getDashboardData(
     }
   } catch (error) {
     console.error("[Dashboard] reminder effectiveness calculation failed", error);
-    reminderEffectiveness = [];
+    throw error;
   }
 
   return {
@@ -973,7 +982,7 @@ export async function getDashboardData(
   };
 }
 
-export async function getDashboardSummary(workspaceId: string): Promise<DashboardSummaryPremium> {
+export async function getDashboardSummary(workspaceId: string, scopeCurrency?: string): Promise<DashboardSummaryPremium> {
   const supabase = await supabaseServer();
 
   // getDashboardSummary powers the top “Premium KPI Row”:
@@ -1002,23 +1011,25 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
       .select("default_currency, timezone")
       .eq("workspace_id", workspaceId)
       .maybeSingle(),
-    supabase
+    readAllPages((from, to) => supabase
       .from("invoices_view")
       .select(
         "id, total, paid, outstanding, issue_date, due_date, display_status, base_status, is_overdue, risk_level, client_is_active, client_archived_at, currency, archived_at"
       )
       .eq("workspace_id", workspaceId)
       .is("archived_at", null)
-      .not("base_status", "in", '("draft","void")'),
-    supabase
-      .from("payments")
-      .select("amount, net_amount, payment_date, created_at, status")
+      .not("base_status", "in", '("draft","void")').order("id", { ascending: true }).range(from, to)),
+    readAllPages((from, to) => supabase
+      .from("payments_view")
+      .select("amount, net_amount, payment_date, created_at, status, currency")
       .eq("workspace_id", workspaceId)
-      .is("archived_at", null),
+      .is("archived_at", null).order("id", { ascending: true }).range(from, to)),
   ]);
 
+  if (settingsResult.error) throw settingsResult.error;
   const settingsRow = settingsResult.data;
-  const defaultCurrency = (settingsRow as { default_currency?: string } | null)?.default_currency || "USD";
+  const fallbackCurrency = settingsRow?.default_currency || "USD";
+  const defaultCurrency = scopeCurrency ?? fallbackCurrency;
   const workspaceTimeZone =
     (settingsRow as { timezone?: string | null } | null)?.timezone ?? null;
 
@@ -1040,7 +1051,7 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   }> = [];
 
   if (invoicesResult.error) {
-    console.error("[Dashboard] invoices_view error in getDashboardSummary", invoicesResult.error);
+    throw invoicesResult.error;
   } else {
     invoicesRaw = invoicesResult.data ?? [];
   }
@@ -1051,21 +1062,22 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
     payment_date: string | null;
     created_at: string | null;
     status: string | null;
+    currency: string | null;
   }> = [];
 
   if (paymentsResult.error) {
-    console.error("[Dashboard] payments error in getDashboardSummary", paymentsResult.error);
+    throw paymentsResult.error;
   } else {
     paymentsRaw = paymentsResult.data ?? [];
   }
 
   const paymentsReceivedLast30 = sumPaymentsReceivedInLast30CalendarDays(
-    paymentsRaw,
+    paymentsRaw.filter(row => (row.currency?.trim().toUpperCase() || fallbackCurrency) === defaultCurrency),
     workspaceTimeZone,
     now
   );
 
-  const safeInvoices = invoicesRaw.map((inv) => ({
+  const safeInvoices = invoicesRaw.filter(inv => (inv.currency?.trim().toUpperCase() || fallbackCurrency) === defaultCurrency).map((inv) => ({
     id: inv.id,
     totalAmount: toNumber(inv.total),
     paidAmount: toNumber(inv.paid),
@@ -1107,11 +1119,15 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   );
   const totalInvoiced12m = invoices12m.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  // Paid total for the KPI period (12 months): sourced from invoices_view.paid.
-  // Rolling window is OK here: this is a trend/delta metric, not the all-time ledger total above.
-  const totalCollected12m = safeInvoices
-    .filter((inv) => inv.issueDate && new Date(inv.issueDate) >= twelveMonthsAgo)
-    .reduce((sum, inv) => sum + inv.paidAmount, 0);
+  const [calendarYear, calendarMonth] = (getWorkspaceCalendarDateNow(workspaceTimeZone, now) ?? now.toISOString().slice(0, 10)).split("-").map(Number);
+  const receiptMonths = Array.from({ length: 24 }, (_, index) => {
+    const date = new Date(Date.UTC(calendarYear, calendarMonth - 24 + index, 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  });
+  const receivedByMonth = buildPaymentMonthlySeries(
+    paymentsRaw.filter(row => (row.currency?.trim().toUpperCase() || fallbackCurrency) === defaultCurrency), receiptMonths, workspaceTimeZone,
+  );
+  const totalCollected12m = receivedByMonth.slice(12).reduce((sum, row) => sum + row.amount, 0);
 
   // Average invoice payment terms (issue → due) on fully paid invoices in the last 3 months.
   const avgPaymentTermsDays = calculateAveragePaymentTermsDays(safeInvoices, threeMonthsAgo);
@@ -1125,14 +1141,7 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   );
   const totalInvoicedPrev12m = invoicesPrev12m.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  const totalCollectedPrev12m = safeInvoices
-    .filter(
-      (inv) =>
-        inv.issueDate &&
-        new Date(inv.issueDate) >= previousTwelveMonthsAgo &&
-        new Date(inv.issueDate) < twelveMonthsAgo
-    )
-    .reduce((sum, inv) => sum + inv.paidAmount, 0);
+  const totalCollectedPrev12m = receivedByMonth.slice(0, 12).reduce((sum, row) => sum + row.amount, 0);
 
   // Calculate deltas
   const invoicedPct = totalInvoicedPrev12m > 0
@@ -1181,8 +1190,8 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
   }
 
   for (let i = 11; i >= 0; i--) {
-    const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const monthStart = new Date(Date.UTC(calendarYear, calendarMonth - 1 - i, 1));
+    const monthEnd = new Date(Date.UTC(calendarYear, calendarMonth - i, 0));
 
     // Invoiced for this month
     const monthInvoices = safeInvoices.filter((inv) => {
@@ -1194,15 +1203,8 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
       monthInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0)
     );
 
-    // Collected for this month (KPI trend): invoices_view.paid on invoices issued in this month.
-    const monthInvoicesForPaid = safeInvoices.filter((inv) => {
-      if (!inv.issueDate) return false;
-      const date = new Date(inv.issueDate);
-      return date >= monthStart && date <= monthEnd;
-    });
-    monthlyTrends.collected.push(
-      monthInvoicesForPaid.reduce((sum, inv) => sum + inv.paidAmount, 0)
-    );
+    const receiptMonth = `${monthStart.getUTCFullYear()}-${String(monthStart.getUTCMonth() + 1).padStart(2, "0")}`;
+    monthlyTrends.collected.push(receivedByMonth.find(row => row.month === receiptMonth)?.amount ?? 0);
 
     // Overdue/high-risk trend (ledger): group current overdue invoices by due_date month.
     const dueMonthKey = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}`;
@@ -1255,4 +1257,17 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
       dsoLabel: "Avg invoice terms · 3 months",
     },
   };
+}
+
+export async function getDashboardCurrencies(workspaceId: string): Promise<string[]> {
+  const supabase = await supabaseServer();
+  const [settings, invoices, payments] = await Promise.all([
+    supabase.from("settings").select("default_currency").eq("workspace_id", workspaceId).maybeSingle(),
+    readAllPages((from, to) => supabase.from("invoices_view").select("currency").eq("workspace_id", workspaceId).order("id", { ascending: true }).range(from, to)),
+    readAllPages((from, to) => supabase.from("payments_view").select("currency").eq("workspace_id", workspaceId).order("id", { ascending: true }).range(from, to)),
+  ]);
+  if (settings.error) throw settings.error;
+  const fallback = settings.data?.default_currency || "USD";
+  const currencies = new Set([...invoices.data, ...payments.data].map(row => row.currency?.trim().toUpperCase() || fallback));
+  return currencies.size ? [...currencies].sort() : [fallback];
 }

@@ -64,7 +64,7 @@ describe("Dashboard launch coherence", () => {
     assert.match(pageSrc, /getEligibleReminders\(workspaceId\)/);
     assert.match(pageSrc, /eligibleReminders\.length/);
     assert.match(pageSrc, /Promise\.all\(\[/);
-    assert.match(pageSrc, /getDashboardSummary\(workspaceId\)/);
+    assert.match(pageSrc, /getDashboardSummary\(workspaceId, currency\)/);
   });
 
   it("6 — Reminders ready count links to /reminders", () => {
@@ -105,14 +105,14 @@ describe("Dashboard launch coherence", () => {
 
   it("10 — Collection Rate supporting copy describes lifetime paid/invoiced", () => {
     const kpiSrc = readFileSync(KPI_ROW, "utf8");
-    assert.match(kpiSrc, /subtext="Lifetime paid \/ invoiced"/);
+    assert.match(kpiSrc, /subtext="Paid \/ issued invoice value/);
     assert.doesNotMatch(kpiSrc, /Collection efficiency/i);
   });
 
   it("11 — Collected Last 30 Days uses payment-date semantics and truthful subtext", () => {
     const loaderSrc = readFileSync(DATA_LOADER, "utf8");
     assert.match(loaderSrc, /sumPaymentsReceivedInLast30CalendarDays/);
-    assert.match(loaderSrc, /from\("payments"\)/);
+    assert.match(loaderSrc, /from\("payments_view"\)/);
     assert.match(loaderSrc, /Payments received in the last 30 workspace-calendar days/);
 
     const kpiSrc = readFileSync(KPI_ROW, "utf8");
@@ -124,7 +124,7 @@ describe("Dashboard launch coherence", () => {
     const pageSrc = readFileSync(DASHBOARD_PAGE, "utf8");
     assert.match(pageSrc, /ArFocusView/);
     assert.match(pageSrc, /view === "ar-focus"/);
-    assert.match(pageSrc, /getDashboardData\(workspaceId\)/);
+    assert.match(pageSrc, /getDashboardData\(workspaceId, currency\)/);
   });
 
   it("13 — Performance (owner-overview) remains wired after rename", () => {

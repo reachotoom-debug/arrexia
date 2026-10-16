@@ -1,3 +1,4 @@
+import { readAllPages } from "@/lib/db/readAllPages";
 /**
  * R2B — Suggested reminders orchestration over canonical R2A eligibility.
  * Pure evaluation lives here; Supabase I/O is isolated in getEligibleReminders().
@@ -529,19 +530,20 @@ export async function getEligibleReminders(
     options.supabase ?? (await (await import("@/lib/supabase/server")).supabaseServer());
   const evaluationInstant = options.evaluationInstant ?? new Date();
 
-  const { data: settingsRow } = await supabase
+  const { data: settingsRow, error: settingsError } = await supabase
     .from("settings")
     .select("timezone")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
 
+  if (settingsError) throw new Error("Reminder eligibility unavailable: workspace timezone could not be read");
   const workspaceTimeZone = settingsRow?.timezone ?? "UTC";
   const evaluationDate = resolveWorkspaceEvaluationDate(
     evaluationInstant,
     workspaceTimeZone
   );
 
-  const { data: rules, error: rulesError } = await supabase
+  const { data: rules, error: rulesError } = await readAllPages((from, to) => supabase
     .from("reminder_rules")
     .select(
       `
@@ -565,7 +567,7 @@ export async function getEligibleReminders(
     .eq("is_enabled", true)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true })
-    .order("id", { ascending: true });
+    .order("id", { ascending: true }).range(from, to));
 
   if (rulesError) {
     console.error("[getEligibleReminders] rules load error", rulesError);
@@ -576,7 +578,7 @@ export async function getEligibleReminders(
     return [];
   }
 
-  const { data: invoices, error: invoicesError } = await supabase
+  const { data: invoices, error: invoicesError } = await readAllPages((from, to) => supabase
     .from("invoices_view")
     .select(
       `
@@ -606,7 +608,7 @@ export async function getEligibleReminders(
     .not("due_date", "is", null)
     .is("archived_at", null)
     .eq("client_is_active", true)
-    .is("client_archived_at", null);
+    .is("client_archived_at", null).order("id", { ascending: true }).range(from, to));
 
   if (invoicesError) {
     console.error("[getEligibleReminders] invoices load error", invoicesError);
@@ -633,11 +635,11 @@ export async function getEligibleReminders(
 
   let historyRows: ReminderHistoryCandidateRow[] = [];
   if (invoiceIds.length > 0) {
-    const { data, error: historyError } = await supabase
+    const { data, error: historyError } = await readAllPages((from, to) => supabase
       .from("reminders")
       .select("invoice_id, rule_id, status, sent_at, scheduled_at, channel")
       .eq("workspace_id", workspaceId)
-      .in("invoice_id", invoiceIds);
+      .not("invoice_id", "is", null).order("id", { ascending: true }).range(from, to));
 
     if (historyError) {
       console.error("[getEligibleReminders] history load error", historyError);
@@ -649,12 +651,12 @@ export async function getEligibleReminders(
 
   let invoiceDeliveryRows: InvoiceDeliveryCandidateRow[] = [];
   if (invoiceIds.length > 0) {
-    const { data: deliveryData, error: deliveryError } = await supabase
+    const { data: deliveryData, error: deliveryError } = await readAllPages((from, to) => supabase
       .from("invoice_delivery_logs")
       .select("invoice_id, status, created_at")
       .eq("workspace_id", workspaceId)
       .eq("status", "sent")
-      .in("invoice_id", invoiceIds);
+      .not("invoice_id", "is", null).order("id", { ascending: true }).range(from, to));
 
     if (deliveryError) {
       console.error(

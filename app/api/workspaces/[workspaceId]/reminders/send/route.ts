@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireWorkspace } from "@/lib/auth/server";
+import { requireWorkspaceForApi } from "@/lib/auth/server";
 import { sendReminderForInvoice } from "@/lib/reminders/send";
+
+import { reminderDeliveryResponse } from "@/lib/reminders/deliveryResponse";
 
 type SendReminderPayload = {
   invoiceId: string;
@@ -14,7 +16,9 @@ export async function POST(
 ) {
   try {
     const { workspaceId } = await params;
-    const { user } = await requireWorkspace(workspaceId);
+    const auth = await requireWorkspaceForApi(workspaceId);
+    if (!auth.ok) return NextResponse.json({ ok: false, success: false, message: auth.error }, { status: auth.status });
+    const { user, workspace } = auth;
 
     const body = (await req.json()) as Partial<SendReminderPayload>;
 
@@ -27,7 +31,7 @@ export async function POST(
 
     // Call shared reminder sending helper
     const result = await sendReminderForInvoice({
-      workspaceId,
+      workspaceId: workspace.id,
       invoiceId: body.invoiceId,
       ruleId: body.ruleId ?? null,
       templateId: body.templateId ?? null,
@@ -39,9 +43,8 @@ export async function POST(
       return NextResponse.json({
         ok: false,
         success: false,
-        status: "skipped",
         message: result.errorMessage || "Reminder skipped",
-        reminder_log_id: result.reminderLogId,
+        ...reminderDeliveryResponse(result),
         error: result.errorMessage || undefined,
         details: result.skipReason ? { skipReason: result.skipReason } : undefined,
       }, { status: 200 });
@@ -52,6 +55,7 @@ export async function POST(
         {
           success: false,
           message: result.errorMessage || "Failed to send reminder",
+          ...reminderDeliveryResponse(result),
         },
         { status: result.errorMessage?.includes("not found") ? 404 : 500 }
       );
@@ -60,6 +64,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       message: result.message || "Reminder sent successfully",
+      ...reminderDeliveryResponse(result),
     });
   } catch (err) {
     console.error("[SendReminderAPI] unexpected error", err);

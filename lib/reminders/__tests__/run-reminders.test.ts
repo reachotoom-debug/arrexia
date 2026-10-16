@@ -378,6 +378,8 @@ describe("ruleOccurrence duplicate guard", () => {
         eqCalls.push(`${column}=${value}`);
         return builder;
       },
+      order() { return builder; },
+      range() { return builder; },
       then(
         resolve: (value: { data: unknown[]; error: null }) => void,
         _reject?: (reason: unknown) => void

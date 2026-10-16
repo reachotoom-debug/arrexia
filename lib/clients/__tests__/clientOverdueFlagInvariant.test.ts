@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 
 const INVOICES_VIEW_MIGRATION =
   "supabase/migrations/20260725000000_invoices_view_workspace_business_date.sql";
-const CLIENTS_PAGE = "app/[workspaceId]/clients/page.tsx";
+const CLIENTS_PAGE = "lib/clients/listQueryPlan.ts";
 
 describe("client overdue flag vs invoices_view risk_level invariant", () => {
   it("invoices_view sets risk_level to NULL unless display_status is overdue", () => {

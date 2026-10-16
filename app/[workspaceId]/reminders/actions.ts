@@ -44,6 +44,8 @@ export async function sendReminderAction(input: SendReminderInput) {
       status: result.status,
       message: result.errorMessage || result.message || (result.success ? "Reminder sent successfully." : "Failed to send reminder"),
       reminderId: result.reminderLogId,
+      historyPersisted: result.historyPersisted,
+      deliveryUncertain: result.deliveryUncertain,
       error: result.errorMessage || undefined,
     };
   } catch (error) {

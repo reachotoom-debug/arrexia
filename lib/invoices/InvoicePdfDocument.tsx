@@ -481,6 +481,8 @@ export function InvoicePdfDocument({
 
   const thankYouBody = resolveThankYouBody(invoice.thankYouMessage);
   const thankYouLines = thankYouBody.split(/\r?\n/).filter(Boolean);
+  const customerNotes = invoice.notes?.trim() || "";
+  const paymentTerms = invoice.paymentTermsLabel?.trim() || "";
 
   const pd = invoice.paymentDetails;
   const methodLabel = paymentMethodLabel(pd);
@@ -591,7 +593,7 @@ export function InvoicePdfDocument({
             const lineAmount = item.quantity * item.unit_price;
             const desc = item.description?.trim();
             return (
-              <View key={`item-${idx}`} style={styles.tableRow}>
+              <View key={`item-${idx}`} style={styles.tableRow} wrap={false}>
                 <View style={styles.colDesc}>
                   <Text style={styles.itemName}>{item.name}</Text>
                   {desc ? <Text style={styles.itemDesc}>{desc}</Text> : null}
@@ -648,6 +650,23 @@ export function InvoicePdfDocument({
             ) : null}
           </View>
         </View>
+
+        {paymentTerms || customerNotes ? (
+          <View style={[styles.card, { marginBottom: 10 }]}>
+            {paymentTerms ? (
+              <View>
+                <Text style={styles.cardLabel}>Payment terms</Text>
+                <Text style={styles.noteText}>{paymentTerms}</Text>
+              </View>
+            ) : null}
+            {customerNotes ? (
+              <View style={paymentTerms ? { marginTop: 8 } : {}}>
+                <Text style={styles.cardLabel}>Customer notes</Text>
+                <Text style={styles.noteText}>{customerNotes}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {showPaymentSection || showNoteSection ? (
           <View style={styles.bottomRow}>

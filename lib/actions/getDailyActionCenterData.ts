@@ -1,3 +1,4 @@
+import { readAllPages } from "@/lib/db/readAllPages";
 import { instantToWorkspaceCalendarDate } from "@/lib/datetime/formatDateTime";
 import { resolveWorkspaceEvaluationDate } from "@/lib/datetime/workspaceCalendar";
 import { resolveCustomerFacingBusinessName } from "@/lib/branding/resolveCustomerFacingBusinessName";
@@ -143,11 +144,11 @@ async function loadClientContactsById(
   const map = new Map<string, ClientContactRow>();
   if (clientIds.length === 0) return map;
 
-  const { data, error } = await supabase
+  const { data, error } = await readAllPages((from, to) => supabase
     .from("clients")
     .select("id, email, whatsapp_phone, whatsapp, country")
     .eq("workspace_id", workspaceId)
-    .in("id", clientIds);
+    .order("id", { ascending: true }).range(from, to));
 
   if (error) {
     console.error("[getDailyActionCenterData] clients contact load error", error);
@@ -174,7 +175,7 @@ export async function getDailyActionCenterData(
   const [eligibleReminders, invoicesResult, settingsResult, sentInvoiceCountResult, workspaceResult] =
     await Promise.all([
     getEligibleReminders(workspaceId),
-    supabase
+    readAllPages((from, to) => supabase
       .from("invoices_view")
       .select(
         `
@@ -197,7 +198,7 @@ export async function getDailyActionCenterData(
       )
       .eq("workspace_id", workspaceId)
       .gt("outstanding", 0)
-      .is("archived_at", null),
+      .is("archived_at", null).order("id", { ascending: true }).range(from, to)),
     supabase
       .from("settings")
       .select(
@@ -219,6 +220,7 @@ export async function getDailyActionCenterData(
     throw new Error("Failed to load daily action center data");
   }
 
+  if (settingsResult.error) throw new Error("Action totals unavailable: workspace settings could not be read");
   const workspaceTimeZone = settingsResult.data?.timezone ?? "UTC";
   const defaultCurrency = settingsResult.data?.default_currency ?? "USD";
   const businessName = resolveCustomerFacingBusinessName({
@@ -243,13 +245,13 @@ export async function getDailyActionCenterData(
 
   let sentReminderDatesByInvoiceId = new Map<string, string[]>();
   if (invoiceIds.length > 0) {
-    const { data: sentReminders, error: sentRemindersError } = await supabase
+    const { data: sentReminders, error: sentRemindersError } = await readAllPages((from, to) => supabase
       .from("reminders")
       .select("invoice_id, sent_at")
       .eq("workspace_id", workspaceId)
       .eq("status", "sent")
       .not("sent_at", "is", null)
-      .in("invoice_id", invoiceIds);
+      .not("invoice_id", "is", null).order("id", { ascending: true }).range(from, to));
 
     if (sentRemindersError) {
       console.error(

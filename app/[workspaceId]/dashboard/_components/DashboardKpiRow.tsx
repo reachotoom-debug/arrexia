@@ -34,9 +34,9 @@ export function DashboardKpiRow({
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
       <KPI
-        title="High-Risk Outstanding"
+        title="High-Priority Overdue"
         value={fmt(totals.highRiskExposure)}
-        subtext="Invoices marked high priority"
+        subtext="Age/amount heuristic · not credit risk"
         intent="danger"
         icon={AlertTriangle}
       />
@@ -48,11 +48,11 @@ export function DashboardKpiRow({
         icon={AlertTriangle}
       />
       <KPI
-        title="Collection Rate"
+        title="Lifetime Collection Rate"
         value={
           collectionRate !== null ? `${collectionRate.toFixed(1)}%` : "—"
         }
-        subtext="Lifetime paid / invoiced"
+        subtext="Paid / issued invoice value · excludes drafts/voids"
         intent={collectionRate !== null && collectionRate >= 85 ? "success" : "default"}
         icon={TrendingUp}
       />

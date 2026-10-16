@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatClientCurrencyAmounts } from "@/lib/clients/currencyPresentation";
 import { SortableHeader } from "@/components/shared/sortable-header";
 import { resolveClientStatus } from "@/lib/clients/state";
 import { ClientRowActions } from "./ClientRowActions";
@@ -67,6 +67,7 @@ interface Client {
   is_active: boolean;
   invoicesCount?: number;
   outstanding?: number;
+  outstandingByCurrency?: Record<string, number>;
   hasOverdueInvoices?: boolean;
   is_overdue?: boolean;
 }
@@ -267,7 +268,7 @@ export function ClientsListView({
                             : "text-slate-700"
                         }`}
                       >
-                        {formatMoney(Math.abs(outstanding), workspaceDefaultCurrency)}
+                        {formatClientCurrencyAmounts(client.outstandingByCurrency ?? {})}
                       </div>
                     </td>
                     

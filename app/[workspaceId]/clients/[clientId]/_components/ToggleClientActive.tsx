@@ -22,6 +22,7 @@ export function ToggleClientActive({
 }: ToggleClientActiveProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [outstandingByCurrency, setOutstandingByCurrency] = useState<Record<string, number>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const [outstanding, setOutstanding] = useState<number>(0);
   const { toast } = useToast();
@@ -75,9 +76,10 @@ export function ToggleClientActive({
       return;
     }
 
-    if (outstandingResult.outstanding > 0) {
+    if (outstandingResult.hasOutstanding) {
       // Show confirmation dialog
       setOutstanding(outstandingResult.outstanding);
+      setOutstandingByCurrency(outstandingResult.outstandingByCurrency);
       setShowConfirm(true);
     } else {
       // No outstanding, proceed directly
@@ -117,6 +119,7 @@ export function ToggleClientActive({
           onClose={handleCancel}
           onConfirm={handleConfirm}
           outstanding={outstanding}
+          outstandingByCurrency={outstandingByCurrency}
           workspaceId={workspaceId}
           clientId={clientId}
           action="inactivate"

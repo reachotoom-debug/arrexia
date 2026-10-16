@@ -460,7 +460,7 @@ describe("reminder customer-facing overdue age consistency", () => {
     assert.match(sendSrc, /daysOverdue,/);
     assert.doesNotMatch(
       sendSrc,
-      /buildReminderTemplateContext\([\s\S]*scheduledDate/
+      /buildReminderTemplateContext\([^;]*scheduledDate/
     );
   });
 
@@ -497,7 +497,7 @@ describe("send path overdue contract", () => {
     assert.match(sendSrc, /workspaceTimeZone,/);
     assert.doesNotMatch(
       sendSrc,
-      /resolveReminderOverdueReferenceDate\([\s\S]*scheduledDate/
+      /resolveReminderOverdueReferenceDate\([^;]*scheduledDate/
     );
   });
 

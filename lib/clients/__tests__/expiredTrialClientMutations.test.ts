@@ -18,6 +18,7 @@ function load(path: string, dependencies: Record<string, unknown>): any {
 
 function fixture(state: "expired" | "active" | "paid") {
   const writes: Array<{ table: string; payload: any }> = [];
+  const restores: Array<{ name: string; args: unknown }> = [];
   const refreshes: string[] = [];
   const events: string[] = [];
   const dependencies = {
@@ -32,14 +33,31 @@ function fixture(state: "expired" | "active" | "paid") {
       const query: any = {
         update(payload: any) { updating = true; writes.push({ table, payload }); return query; },
         select() { return query; }, eq() { return query; }, in() { return query; }, or() { return query; },
+        not(column: string, operator: string, value: unknown) {
+          assert.deepEqual([table, column, operator, value], ["payments", "archived_at", "is", null]);
+          return query;
+        },
+        order(column: string, options: { ascending: boolean }) {
+          assert.equal(column, "id");
+          assert.equal(options.ascending, true);
+          return query;
+        },
+        range(from: number, to: number) {
+          assert.deepEqual([from, to], [0, 499]);
+          return Promise.resolve({ data: [{ id: `${table}-1` }], error: null });
+        },
         single: async () => ({ data: { id: "client" }, error: null }),
         then(resolve: any) { return Promise.resolve({ data: updating ? [] : [{ id: `${table}-1` }], error: null }).then(resolve); },
       };
       return query;
+    }, async rpc(name: string, args: unknown) {
+      events.push("rpc");
+      restores.push({ name, args });
+      return { data: { ok: true }, error: null };
     } }) },
     "next/cache": { revalidatePath: (path: string) => refreshes.push(path) },
   };
-  return { writes, refreshes, events,
+  return { writes, restores, refreshes, events,
     toggle: load("app/[workspaceId]/clients/actions.ts", dependencies).toggleClientActive,
     ...load("app/[workspaceId]/clients/_actions/clientActions.ts", dependencies) };
 }
@@ -60,6 +78,7 @@ for (const method of ["archiveClient", "unarchiveClient"]) {
       const f = fixture("expired");
       assert.deepEqual(await f[method]("workspace", "client", cascade), { ok: false, error: TRIAL_EXPIRED_MESSAGE, code: "TRIAL_EXPIRED" });
       assert.deepEqual(f.writes, []);
+      assert.deepEqual(f.restores, []);
       assert.deepEqual(f.refreshes, []);
       assert.deepEqual(f.events, ["auth", "guard"]);
     });
@@ -89,7 +108,14 @@ for (const state of ["active", "paid"] as const) {
       test(`${state} workspace preserves ${method} cascade=${cascade}`, async () => {
         const f = fixture(state);
         assert.deepEqual(await f[method]("workspace", "client", cascade), { ok: true });
-        assert.deepEqual(f.writes.map((w: any) => w.table), cascade ? ["clients", "invoices", "payments"] : ["clients"]);
+        const guardedRestore = cascade && method === "unarchiveClient";
+        assert.deepEqual(f.writes.map((w: any) => w.table), cascade
+          ? guardedRestore ? ["clients", "invoices"] : ["clients", "invoices", "payments"]
+          : ["clients"]);
+        assert.deepEqual(f.restores, guardedRestore ? [{
+          name: "rpc_unarchive_payment_manual",
+          args: { p_workspace_id: "workspace", p_payment_id: "payments-1" },
+        }] : []);
         assert.equal(f.writes[0].payload.archived_at === null, method === "unarchiveClient");
         if (method === "unarchiveClient") assert.equal(f.writes[0].payload.is_active, true);
         assert.equal(f.refreshes.length, 4);

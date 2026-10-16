@@ -15,6 +15,7 @@ export type ClientListViewParam =
   | "with-overdue-invoices";
 
 export type ClientPageInvoiceMetricRow = {
+  currency?: string | null;
   client_id: string | null;
   display_status: string | null;
   risk_level: string | null;
@@ -23,7 +24,8 @@ export type ClientPageInvoiceMetricRow = {
 };
 
 export type ClientInvoiceMetrics = {
-  outstandingSum: number;
+  outstandingSum?: number;
+  outstandingByCurrency: Record<string, number>;
   isOverdue: boolean;
   invoiceCount: number;
 };
@@ -67,12 +69,15 @@ export function aggregateClientInvoiceMetrics(
 
     const outstanding = Number(inv.outstanding ?? 0);
     const existing = clientMetrics.get(inv.client_id) ?? {
-      outstandingSum: 0,
+      outstandingByCurrency: {},
       isOverdue: false,
       invoiceCount: 0,
     };
 
-    existing.outstandingSum += outstanding;
+    const currency = inv.currency?.trim().toUpperCase() || "Unknown currency";
+    existing.outstandingByCurrency[currency] = (existing.outstandingByCurrency[currency] ?? 0) + outstanding;
+    const amounts = Object.values(existing.outstandingByCurrency);
+    existing.outstandingSum = amounts.length === 1 ? amounts[0] : undefined;
     existing.invoiceCount += 1;
 
     if (inv.display_status === "overdue" || inv.risk_level != null) {
@@ -86,18 +91,25 @@ export function aggregateClientInvoiceMetrics(
 }
 
 export function sortClientsByComputedKey<
-  T extends { id: string; outstanding?: number; invoices_count?: number },
+  T extends { id: string; outstanding?: number; outstandingByCurrency?: Record<string, number>; invoices_count?: number },
 >(clients: T[], sort: "outstanding" | "invoices_count", dir: "asc" | "desc"): T[] {
   const sorted = [...clients];
 
   sorted.sort((a, b) => {
+    if (sort === "outstanding") {
+      const aCurrencies = Object.keys(a.outstandingByCurrency ?? {}).sort().join(",");
+      const bCurrencies = Object.keys(b.outstandingByCurrency ?? {}).sort().join(",");
+      const currencyOrder = aCurrencies.localeCompare(bCurrencies);
+      if (currencyOrder) return currencyOrder;
+      if (aCurrencies.includes(",")) return a.id.localeCompare(b.id);
+    }
     const aValue =
       sort === "outstanding"
-        ? Number(a.outstanding ?? 0)
+        ? Number(Object.values(a.outstandingByCurrency ?? {})[0] ?? a.outstanding ?? 0)
         : Number(a.invoices_count ?? 0);
     const bValue =
       sort === "outstanding"
-        ? Number(b.outstanding ?? 0)
+        ? Number(Object.values(b.outstandingByCurrency ?? {})[0] ?? b.outstanding ?? 0)
         : Number(b.invoices_count ?? 0);
 
     const primary = aValue - bValue;

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ActionMenu } from "./ActionMenu";
 import { DeleteClientModal } from "./DeleteClientModal";
 import { deleteClient } from "../actions";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatClientCurrencyAmounts } from "@/lib/clients/currencyPresentation";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/state";
 import { resolveClientStatus } from "@/lib/clients/state";
@@ -24,6 +24,7 @@ interface Client {
   is_active: boolean;
   invoicesCount?: number;
   outstanding?: number;
+  outstandingByCurrency?: Record<string, number>;
 }
 
 interface ClientsCardsProps {
@@ -119,7 +120,7 @@ export function ClientsCards({
                         : "text-slate-700"
                     }`}
                   >
-                    {formatMoney(Math.abs(outstanding), workspaceDefaultCurrency)}
+                    {formatClientCurrencyAmounts(client.outstandingByCurrency ?? {})}
                   </div>
                 </div>
               </div>

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser, requireWorkspaceForApi } from "@/lib/auth/server";
+import { requireWorkspaceForApi } from "@/lib/auth/server";
 import { sendReminderForInvoice } from "@/lib/reminders/send";
+
+import { reminderDeliveryResponse } from "@/lib/reminders/deliveryResponse";
 
 type SendReminderPayload = {
   workspaceId: string;
@@ -55,14 +57,15 @@ export async function POST(req: NextRequest) {
     // Validate recipient email if provided (for future use)
     // This check happens in sendReminderForInvoice but we can add it here too
 
-    const { user } = await requireUser();
-    await requireWorkspaceForApi(workspaceId);
+    const auth = await requireWorkspaceForApi(workspaceId);
+    if (!auth.ok) return NextResponse.json({ ok: false, success: false, message: auth.error }, { status: auth.status });
+    const { user, workspace } = auth;
 
     // Call shared reminder sending helper
     // Reminders eligibility: clients must be active AND not archived
     // This rule must match all reminders queries globally.
     const result = await sendReminderForInvoice({
-      workspaceId,
+      workspaceId: workspace.id,
       invoiceId,
       templateId: templateId ?? null,
       ruleId: ruleId ?? null,
@@ -75,9 +78,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          status: "skipped",
           message: result.errorMessage || "Reminder skipped",
-          reminder_log_id: result.reminderLogId,
+          ...reminderDeliveryResponse(result),
           error: result.errorMessage || undefined,
           details: result.skipReason ? { skipReason: result.skipReason } : undefined,
         },
@@ -94,9 +96,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          status: result.status || "failed",
           message: result.errorMessage || "Failed to send reminder",
-          reminder_log_id: result.reminderLogId,
+          ...reminderDeliveryResponse(result),
           error: result.errorMessage || undefined,
         },
         { status: statusCode }
@@ -106,9 +107,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
-        status: result.status || "sent",
-        reminder_log_id: result.reminderLogId,
         message: result.message || "Reminder sent successfully",
+        ...reminderDeliveryResponse(result),
       },
       { status: 200 }
     );

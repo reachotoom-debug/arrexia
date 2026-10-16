@@ -5,6 +5,7 @@ import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { assertWorkspaceMutationAllowed } from "@/lib/billing/entitlementGuard";
 import { EntitlementError } from "@/lib/billing/entitlementErrors";
+import { readAllPages } from "@/lib/db/readAllPages";
 
 type ActionResult = { ok: true } | { ok: false; error: string; code?: string };
 
@@ -214,94 +215,56 @@ export async function unarchiveClient(
       return { ok: false, error: clientError.message };
     }
 
-    // Step 2: Cascade to invoices and payments if requested
+    // Restore invoices before guarded payment restores: the RPC reads active invoices_view.
+    const cascadeErrors: string[] = [];
     if (cascade) {
-      // Get all invoice IDs for this client
-      const { data: invoices, error: invoicesError } = await supabase
-        .from("invoices")
-        .select("id")
-        .eq("workspace_id", workspaceId)
-        .eq("client_id", clientId);
+      try {
+        const { data: invoices } = await readAllPages<{ id: string }>((from, to) => supabase
+          .from("invoices")
+          .select("id")
+          .eq("workspace_id", workspaceId)
+          .eq("client_id", clientId)
+          .order("id", { ascending: true })
+          .range(from, to));
+        const invoiceIds = invoices.map((invoice) => invoice.id);
 
-      if (invoicesError) {
-        console.error("[unarchiveClient] failed to fetch invoices for cascade", {
-          error: invoicesError.message,
-          workspaceId,
-          clientId,
-        });
-        // Continue anyway - client is unarchived, cascade is optional
-      } else {
-        const invoiceIds = invoices?.map((inv) => inv.id) || [];
-
-        // Unarchive all invoices for this client
+        // Preserve the existing cascade scope: payments are considered when invoices exist.
         if (invoiceIds.length > 0) {
           const { error: invoicesUpdateError } = await supabase
             .from("invoices")
             .update({ archived_at: null })
             .eq("workspace_id", workspaceId)
             .eq("client_id", clientId);
+          if (invoicesUpdateError) throw invoicesUpdateError;
 
-          if (invoicesUpdateError) {
-            console.error("[unarchiveClient] failed to cascade unarchive invoices", {
-              error: invoicesUpdateError.message,
-              workspaceId,
-              clientId,
-              invoiceCount: invoiceIds.length,
-            });
-            // Continue anyway - client is unarchived
-          } else {
-            console.log("[unarchiveClient] cascaded unarchive to invoices", {
-              workspaceId,
-              clientId,
-              invoiceCount: invoiceIds.length,
-            });
-          }
-
-          // Unarchive all payments for this client (via client_id) OR for these invoices (via invoice_id)
-          // Payments can have both client_id and invoice_id, so we need to handle both
-          let paymentsQuery = supabase
+          // Finish the complete, ordered read before restoring any payment.
+          const { data: payments } = await readAllPages<{ id: string }>((from, to) => supabase
             .from("payments")
             .select("id")
-            .eq("workspace_id", workspaceId);
-          
-          // Build OR condition: client_id = clientId OR invoice_id IN (invoiceIds)
-          if (invoiceIds.length > 0) {
-            paymentsQuery = paymentsQuery.or(`client_id.eq.${clientId},invoice_id.in.(${invoiceIds.join(",")})`);
-          } else {
-            paymentsQuery = paymentsQuery.eq("client_id", clientId);
-          }
-          
-          const { data: paymentsToUnarchive, error: paymentsFetchError } = await paymentsQuery;
+            .eq("workspace_id", workspaceId)
+            .not("archived_at", "is", null)
+            .or(`client_id.eq.${clientId},invoice_id.in.(${invoiceIds.join(",")})`)
+            .order("id", { ascending: true })
+            .range(from, to));
 
-          if (paymentsFetchError) {
-            console.error("[unarchiveClient] failed to fetch payments for cascade", {
-              error: paymentsFetchError.message,
-              workspaceId,
-              clientId,
-            });
-          } else if (paymentsToUnarchive && paymentsToUnarchive.length > 0) {
-            const paymentIds = paymentsToUnarchive.map((p) => p.id);
-            const { error: paymentsUpdateError } = await supabase
-              .from("payments")
-              .update({ archived_at: null })
-              .eq("workspace_id", workspaceId)
-              .in("id", paymentIds);
-
-            if (paymentsUpdateError) {
-              console.error("[unarchiveClient] failed to cascade unarchive payments", {
-                error: paymentsUpdateError.message,
-                workspaceId,
-                clientId,
-              });
-            } else {
-              console.log("[unarchiveClient] cascaded unarchive to payments", {
-                workspaceId,
-                clientId,
-                paymentCount: paymentIds.length,
-              });
+          for (const payment of payments) {
+            try {
+              const { data: restored, error: restoreError } = await supabase.rpc(
+                "rpc_unarchive_payment_manual",
+                { p_workspace_id: workspaceId, p_payment_id: payment.id }
+              );
+              if (restoreError) throw restoreError;
+              if (!restored || (restored as { ok?: boolean }).ok !== true) {
+                throw new Error("Payment restore did not confirm success");
+              }
+            } catch (error) {
+              // Keep successful restores, report partial failure, and never retry a rejected restore.
+              cascadeErrors.push(`Payment ${payment.id}: ${getErrorMessage(error)}`);
             }
           }
         }
+      } catch (error) {
+        cascadeErrors.push(getErrorMessage(error));
       }
     }
 
@@ -310,6 +273,12 @@ export async function unarchiveClient(
     revalidatePath(`/${workspaceId}/clients/${clientId}`);
     revalidatePath(`/${workspaceId}/invoices`);
     revalidatePath(`/${workspaceId}/payments`);
+    if (cascadeErrors.length > 0) {
+      return {
+        ok: false,
+        error: `Client restored, but cascade restoration was incomplete: ${cascadeErrors.join("; ")}`,
+      };
+    }
     return { ok: true };
   } catch (e) {
     if (e instanceof EntitlementError) {

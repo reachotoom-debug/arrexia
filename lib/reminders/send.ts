@@ -38,6 +38,7 @@ import {
   type TrialUsageReservation,
 } from "@/lib/billing/entitlementGuard";
 import { EntitlementError } from "@/lib/billing/entitlementErrors";
+import { dispatchClaimedReminder } from "@/lib/reminders/deliveryClaim";
 import { ensurePublicInvoiceUrl } from "@/lib/invoices/ensurePublicAccessToken";
 
 // Dynamic import for nodemailer
@@ -68,6 +69,8 @@ export interface SendReminderOptions {
 
 export interface SendReminderResult {
   success: boolean;
+  historyPersisted?: boolean;
+  deliveryUncertain?: boolean;
   status: "sent" | "failed" | "skipped"; // Status of the reminder attempt
   message?: string;
   errorMessage?: string;
@@ -842,6 +845,7 @@ export async function sendReminderForInvoice(
   // 6) Attempt email send with timeout (8-10 seconds)
   let sendError: Error | null = null;
   let sendSuccess = false;
+  let deliveryAttempted = false;
   const EMAIL_TIMEOUT_MS = 9000; // 9 seconds
 
   const fromEmail = emailSettings?.from_email || settings?.from_email || null;
@@ -879,62 +883,80 @@ export async function sendReminderForInvoice(
   }
 
   try {
-    if (emailProvider === "resend") {
-      const sendResult = await sendEmail({
-        to: toEmail,
-        subject,
-        html: emailHtml,
-        text: emailText,
-        replyTo: collectionsReplyTo,
-      });
+    const dispatched = await dispatchClaimedReminder(supabase, {
+      workspaceId,
+      invoiceId: invoice.id,
+      ruleId: ruleId ?? null,
+      scheduledDate: ruleBoundOccurrenceScheduledDate,
+      evaluationDate: resolveWorkspaceEvaluationDate(new Date(), workspaceTimeZone),
+      source,
+    }, async () => {
+      deliveryAttempted = true;
+      if (emailProvider === "resend") {
+        const sendResult = await sendEmail({
+          to: toEmail,
+          subject,
+          html: emailHtml,
+          text: emailText,
+          replyTo: collectionsReplyTo,
+        });
 
-      if (!sendResult.success) {
-        throw new Error(sendResult.error || "Failed to send email");
+        if (!sendResult.success) {
+          throw new Error(sendResult.error || "Failed to send email");
+        }
+
+        sendSuccess = true;
+      } else {
+        // Use SMTP (nodemailer)
+        try {
+          nodemailer = await import("nodemailer");
+        } catch {
+          throw new Error(
+            "nodemailer package is not installed. Please install it with: npm install nodemailer @types/nodemailer"
+          );
+        }
+
+        const transporter = nodemailer.createTransport({
+          host: emailSettings!.smtp_host,
+          port: emailSettings!.smtp_port,
+          secure: emailSettings!.use_tls ?? true,
+          auth: emailSettings!.smtp_username && emailSettings!.smtp_password
+            ? {
+                user: emailSettings!.smtp_username,
+                pass: emailSettings!.smtp_password,
+              }
+            : undefined,
+        });
+
+        // Wrap SMTP send in a timeout
+        const sendPromise = transporter.sendMail({
+          from: fromEmail
+            ? fromName
+              ? `${fromName} <${fromEmail}>`
+              : fromEmail
+            : undefined,
+          to: toEmail,
+          replyTo: collectionsReplyTo,
+          subject,
+          html: emailHtml,
+          text: emailText,
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Email send timeout (9s)")), EMAIL_TIMEOUT_MS);
+        });
+
+        await Promise.race([sendPromise, timeoutPromise]);
+        sendSuccess = true;
       }
-
-      sendSuccess = true;
-    } else {
-      // Use SMTP (nodemailer)
-      try {
-        nodemailer = await import("nodemailer");
-      } catch {
-        throw new Error(
-          "nodemailer package is not installed. Please install it with: npm install nodemailer @types/nodemailer"
-        );
+    });
+    if (!dispatched) {
+      if (reminderReservation) {
+        await releaseTrialUsageReservation(workspaceId, reminderReservation.resource, reminderReservation.reservationId, 1);
+        reminderReservation = null;
       }
-
-      const transporter = nodemailer.createTransport({
-        host: emailSettings!.smtp_host,
-        port: emailSettings!.smtp_port,
-        secure: emailSettings!.use_tls ?? true,
-        auth: emailSettings!.smtp_username && emailSettings!.smtp_password
-          ? {
-              user: emailSettings!.smtp_username,
-              pass: emailSettings!.smtp_password,
-            }
-          : undefined,
-      });
-
-      // Wrap SMTP send in a timeout
-      const sendPromise = transporter.sendMail({
-        from: fromEmail
-          ? fromName
-            ? `${fromName} <${fromEmail}>`
-            : fromEmail
-          : undefined,
-        to: toEmail,
-        replyTo: collectionsReplyTo,
-        subject,
-        html: emailHtml,
-        text: emailText,
-      });
-
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Email send timeout (9s)")), EMAIL_TIMEOUT_MS);
-      });
-
-      await Promise.race([sendPromise, timeoutPromise]);
-      sendSuccess = true;
+      return { success: false, status: "skipped", skipReason: "delivery_already_claimed",
+        errorMessage: "Reminder delivery already attempted or in progress; reconcile its outcome before retrying." };
     }
   } catch (err) {
     sendError = err instanceof Error ? err : new Error(String(err));
@@ -983,23 +1005,27 @@ export async function sendReminderForInvoice(
   );
 
   if (sendSuccess) {
+    if (reminderReservation) {
+      try {
+        await finalizeTrialUsageReservation(workspaceId, reminderReservation.reservationId);
+      } catch (error) {
+        console.error("[sendReminderForInvoice] Accepted reminder usage finalization needs reconciliation", error);
+      }
+      reminderReservation = null;
+    }
     if (!reminderId) {
       const historyError =
         persistError ??
         "Reminder email sent, but history could not be saved.";
       return {
-        success: false,
-        status: "failed",
+        success: true,
+        status: "sent",
+        historyPersisted: false,
         errorMessage: historyError,
         message: historyError,
         reminderId,
         reminderLogId: reminderId,
       };
-    }
-
-    if (reminderReservation) {
-      await finalizeTrialUsageReservation(workspaceId, reminderReservation.reservationId);
-      reminderReservation = null;
     }
 
     return {
@@ -1023,7 +1049,10 @@ export async function sendReminderForInvoice(
   return {
     success: false,
     status: "failed",
-    errorMessage: finalErrorMessage,
+    errorMessage: deliveryAttempted
+      ? `${finalErrorMessage} Delivery may have occurred; reconcile before retrying.`
+      : finalErrorMessage,
+    deliveryUncertain: deliveryAttempted,
     reminderId,
     reminderLogId: reminderId,
   };

@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatClientCurrencyAmounts } from "@/lib/clients/currencyPresentation";
 import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 import { buildClientCardContactLines } from "@/lib/clients/clientCardPresentation";
 import { resolveClientStatus } from "@/lib/clients/state";
@@ -25,6 +25,7 @@ interface Client {
   is_active: boolean;
   invoicesCount?: number;
   outstanding?: number;
+  outstandingByCurrency?: Record<string, number>;
   hasOverdueInvoices?: boolean;
   is_overdue?: boolean;
 }
@@ -142,7 +143,7 @@ export function ClientsCardView({
                 meta={client.email || contactLines.length > 0 ? metaNodes : undefined}
                 amount={
                   <span className={`text-lg font-semibold tabular-nums ${amountColor}`}>
-                    {formatMoney(Math.abs(outstanding), workspaceDefaultCurrency)}
+                    {formatClientCurrencyAmounts(client.outstandingByCurrency ?? {})}
                   </span>
                 }
                 status={statusBadge}

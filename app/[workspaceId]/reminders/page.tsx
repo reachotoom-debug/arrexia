@@ -1,3 +1,4 @@
+import { readAllPages } from "@/lib/db/readAllPages";
 import { requireWorkspace } from "@/lib/auth/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
@@ -99,16 +100,16 @@ export default async function RemindersPage({
       .select("default_currency, auto_send_reminders")
       .eq("workspace_id", workspaceId)
       .maybeSingle(),
-    supabase
+    readAllPages((from, to) => supabase
       .from("reminder_rules")
       .select("is_enabled")
-      .eq("workspace_id", workspaceId),
-    supabase
+      .eq("workspace_id", workspaceId).order("id", { ascending: true }).range(from, to)),
+    readAllPages((from, to) => supabase
       .from("reminders")
       .select("status, sent_at, created_at")
       .eq("workspace_id", workspaceId)
       .gte("sent_at", thirtyDaysAgo.toISOString())
-      .in("status", ["sent", "failed"]),
+      .in("status", ["sent", "failed"]).order("id", { ascending: true }).range(from, to)),
   ]);
 
   const defaultCurrency = settingsResult.data?.default_currency ?? "USD";
@@ -264,7 +265,7 @@ export default async function RemindersPage({
 
   const hasAnyEligible = suggestedReminders.length > 0;
 
-  const { data: reminderRows, error: reminderRowsError } = await supabase
+  const { data: reminderRows } = await readAllPages((from, to) => supabase
     .from("reminders")
     .select(
       `
@@ -297,19 +298,7 @@ export default async function RemindersPage({
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false, nullsFirst: false })
     .order("updated_at", { ascending: false, nullsFirst: false })
-    .limit(50);
-
-  if (reminderRowsError) {
-    console.error("[RemindersPage] history load error", {
-      raw: reminderRowsError,
-      message: reminderRowsError.message,
-      code: reminderRowsError.code,
-      details: (reminderRowsError as { details?: string })?.details,
-      hint: (reminderRowsError as { hint?: string })?.hint,
-    });
-
-    throw reminderRowsError;
-  }
+    .order("id", { ascending: true }).range(from, to));
 
   const safeHistory = reminderRows ?? [];
 

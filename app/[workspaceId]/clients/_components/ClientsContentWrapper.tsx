@@ -21,6 +21,7 @@ interface Client {
   is_active: boolean;
   invoicesCount?: number;
   outstanding?: number;
+  outstandingByCurrency?: Record<string, number>;
 }
 
 interface ClientsContentWrapperProps {

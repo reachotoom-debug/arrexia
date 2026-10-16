@@ -245,7 +245,7 @@ export function DailyActionCenterView({
             }
           />
           <SummaryMetric
-            label="High-risk customers"
+            label="High-priority customers"
             value={String(summary.highRiskCustomerCount)}
             icon={ShieldAlert}
             iconClassName="text-rose-600"
@@ -311,7 +311,7 @@ export function DailyActionCenterView({
                         </span>
                         {item.isHighRisk ? (
                           <span className="inline-flex w-fit rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-inset ring-red-200">
-                            High risk
+                            High priority
                           </span>
                         ) : null}
                       </div>

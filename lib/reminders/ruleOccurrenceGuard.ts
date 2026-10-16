@@ -1,3 +1,4 @@
+import { readAllPages } from "@/lib/db/readAllPages";
 /**
  * Pre-send rule occurrence duplicate guard (R2C).
  * Reuses canonical R2A history semantics without reimplementing eligibility.
@@ -16,11 +17,11 @@ export async function loadRuleOccurrenceHistory(
   workspaceId: string,
   invoiceId: string
 ): Promise<ReminderHistoryEntry[]> {
-  const { data, error } = await supabase
+  const { data, error } = await readAllPages((from, to) => supabase
     .from("reminders")
     .select("rule_id, status, sent_at, scheduled_at")
     .eq("workspace_id", workspaceId)
-    .eq("invoice_id", invoiceId);
+    .eq("invoice_id", invoiceId).order("id", { ascending: true }).range(from, to));
 
   if (error) {
     console.error("[loadRuleOccurrenceHistory] history load error", error);

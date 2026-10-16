@@ -2,7 +2,7 @@ import { requireWorkspace } from "@/lib/auth/server";
 import { getEligibleReminders } from "@/lib/reminders/getEligibleReminders";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getDashboardData, getDashboardSummary } from "./_utils/dataLoader";
+import { getDashboardCurrencies, getDashboardData, getDashboardSummary } from "./_utils/dataLoader";
 import {
   DASHBOARD_VIEW_LABELS,
   resolveDashboardView,
@@ -52,9 +52,13 @@ export default async function DashboardPage({
   const { view } = resolveDashboardView(viewParam);
   const isOverview = view === "standard";
 
-  const [dashboardSummary, dashboardData, eligibleReminders] = await Promise.all([
-    getDashboardSummary(workspaceId),
-    isOverview ? Promise.resolve(null) : getDashboardData(workspaceId),
+  const currencies = await getDashboardCurrencies(workspaceId);
+  const [scopes, eligibleReminders] = await Promise.all([
+    Promise.all(currencies.map(async currency => ({
+      currency,
+      dashboardSummary: await getDashboardSummary(workspaceId, currency),
+      dashboardData: isOverview ? null : await getDashboardData(workspaceId, currency),
+    }))),
     isOverview ? getEligibleReminders(workspaceId) : Promise.resolve([]),
   ]);
 
@@ -66,12 +70,12 @@ export default async function DashboardPage({
 
   const sectionHeader = {
     standard: {
-      title: "Cash Position",
-      description: "Includes all invoices, clients, and total exposure",
+      title: "Receivables Overview",
+      description: "Issued, non-archived invoice balances across all client statuses",
     },
     "ar-focus": {
       title: "Collection Priorities",
-      description: "Active clients only - focus on overdue invoices to act on now",
+      description: "Overdue ledger balances across all client statuses; operational queues use active clients",
     },
     "owner-overview": {
       title: "Performance Snapshot",
@@ -105,12 +109,13 @@ export default async function DashboardPage({
         ))}
       </ScrollTabStrip>
 
+      {isOverview && <DailyActionCenterCta workspaceId={workspaceId} remindersReadyCount={eligibleReminders.length} />}
+
+      {scopes.map(({ currency, dashboardSummary, dashboardData }) => (
+        <section key={currency} className="space-y-6">
+          {currencies.length > 1 && <h3 className="text-lg font-semibold">{currency} · amounts shown separately, without conversion</h3>}
       {view === "standard" && (
         <section className="mt-6 space-y-6">
-          <DailyActionCenterCta
-            workspaceId={workspaceId}
-            remindersReadyCount={eligibleReminders.length}
-          />
           <DashboardKpiRow summary={dashboardSummary} showPaymentsLast30Days />
           <DashboardInsight summary={dashboardSummary} workspaceId={workspaceId} />
         </section>
@@ -123,6 +128,8 @@ export default async function DashboardPage({
       {view === "owner-overview" && dashboardData && (
         <OwnerOverviewView data={dashboardData} workspaceId={workspaceId} />
       )}
+        </section>
+      ))}
     </div>
   );
 }

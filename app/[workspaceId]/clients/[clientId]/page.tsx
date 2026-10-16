@@ -1,7 +1,8 @@
+import { readAllPages } from "@/lib/db/readAllPages";
 import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import Link from "next/link";
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatClientCurrencyAmounts, sumClientCurrencyAmounts } from "@/lib/clients/currencyPresentation";
 import { getPaymentTermsLabel } from "@/lib/utils/payment-terms";
 import { KPI } from "@/app/[workspaceId]/dashboard/_components/KPI";
 import { ArchivedBanner } from "@/components/ui/archived-banner";
@@ -47,7 +48,7 @@ export default async function ClientPage({ params }: ClientPageProps) {
 
   // Fetch client invoices - use invoices_view to get paid/outstanding (total_paid/outstanding_amount were dropped)
   // Always exclude archived invoices by default (invoices_view already excludes archived)
-  const { data: invoices, error: invoicesError } = await supabase
+  const { data: invoices } = await readAllPages<any>((from, to) => supabase
     .from("invoices_view")
     .select(
       `
@@ -66,19 +67,8 @@ export default async function ClientPage({ params }: ClientPageProps) {
     .eq("client_id", clientId)
     .eq("workspace_id", workspaceId)
     .neq("base_status", "void") // Exclude void invoices from client stats
-    .order("issue_date", { ascending: false });
-
-  // Log invoice query errors for debugging (dev-only)
-  if (invoicesError && process.env.NODE_ENV === "development") {
-    console.error("[ClientPage] Failed to load invoices:", {
-      code: invoicesError.code,
-      message: invoicesError.message,
-      details: invoicesError.details,
-      hint: invoicesError.hint,
-      workspaceId,
-      clientId,
-    });
-  }
+    .order("issue_date", { ascending: false })
+    .order("id", { ascending: true }).range(from, to));
 
   // Use fields from invoices_view (total, paid, outstanding)
   const invoicesWithTotals = (invoices || []).map((invoice) => ({
@@ -98,15 +88,11 @@ export default async function ClientPage({ params }: ClientPageProps) {
 
   // Calculate metrics - exclude void and draft from collectible outstanding KPIs
   const totalInvoices = invoicesWithTotals.length;
-  const totalBilled = invoicesWithTotals.reduce(
-    (sum, inv) => sum + inv.total,
-    0
-  );
-  const totalPaid = invoicesWithTotals.reduce((sum, inv) => sum + inv.paid, 0);
-  const outstandingBalance = collectibleInvoices.reduce(
-    (sum, inv) => sum + inv.outstanding,
-    0
-  );
+  const formatTotals = (rows: typeof invoicesWithTotals, field: "total" | "paid" | "outstanding") =>
+    formatClientCurrencyAmounts(sumClientCurrencyAmounts(rows, (invoice) => invoice[field]));
+  const totalBilled = formatTotals(invoicesWithTotals, "total");
+  const totalPaid = formatTotals(invoicesWithTotals, "paid");
+  const outstandingBalance = formatTotals(collectibleInvoices, "outstanding");
 
   return (
     <div className="mx-auto w-full max-w-5xl min-w-0 space-y-6">
@@ -185,12 +171,12 @@ export default async function ClientPage({ params }: ClientPageProps) {
           <KPI title="Active invoices" value={totalInvoices} />
           <KPI
             title="Active billed"
-            value={formatMoney(totalBilled, workspaceDefaultCurrency)}
+            value={totalBilled}
           />
-          <KPI title="Active paid" value={formatMoney(totalPaid, workspaceDefaultCurrency)} />
+          <KPI title="Active paid" value={totalPaid} />
           <KPI
             title="Active outstanding"
-            value={formatMoney(outstandingBalance, workspaceDefaultCurrency)}
+            value={outstandingBalance}
           />
         </div>
         <p className="text-xs text-slate-500">

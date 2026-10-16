@@ -323,12 +323,12 @@ export function buildReadyRemindersMetricCards(
         detail:
           summary.outstandingDetail === "Totals shown separately by currency."
             ? summary.outstandingDetail
-            : "Total overdue amount",
+            : "Outstanding on all eligible invoices",
       },
       {
         label: "Customers Today",
         value: String(summary.distinctCustomerCount),
-        detail: "Clients with overdue invoices",
+        detail: "Clients with eligible reminders",
       },
       {
         label: "Rules Due Today",

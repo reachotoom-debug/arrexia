@@ -46,7 +46,7 @@ export function RevenueOverviewChart({
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
         <div className="mb-4">
           <h3 className="text-sm font-medium text-slate-900">
-            Revenue Overview (Last 12 Months)
+            Invoices Issued & Payments Received (Last 12 Months)
           </h3>
           <p className="text-xs text-muted-foreground mt-1">
             Comparison of invoiced amounts and payments received.
@@ -61,7 +61,7 @@ export function RevenueOverviewChart({
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
       <div className="mb-4">
         <h3 className="text-sm font-medium text-slate-900">
-          Revenue Overview (Last 12 Months)
+          Invoices Issued & Payments Received (Last 12 Months)
         </h3>
         <p className="text-xs text-muted-foreground mt-1">
           Bars show invoices issued, line shows payments received.
@@ -71,7 +71,7 @@ export function RevenueOverviewChart({
       {!hasData ? (
         totalInvoiced === 0 ? (
           <ChartEmptyState
-            title="No revenue activity yet"
+            title="No invoice or payment activity yet"
             description="As you raise invoices and record payments, this chart will show billed vs collected amounts by month."
             href={workspaceId ? `/${workspaceId}/invoices/new` : undefined}
             actionLabel={workspaceId ? "Create first invoice" : undefined}
@@ -85,7 +85,7 @@ export function RevenueOverviewChart({
           />
         ) : (
           <ChartEmptyState
-            title="No revenue data yet"
+            title="No invoice or payment data yet"
             description="Once you start creating invoices and receiving payments, we'll show trends here."
           />
         )

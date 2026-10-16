@@ -77,12 +77,12 @@ export function SendReminderButton({
         setStatus("sent");
 
         // Success toast with client name and invoice number
-        const description = [clientName, invoiceNumber]
+        const description = res.historyPersisted === false ? `Email accepted, but history needs reconciliation. Do not resend. ${res.message}` : [clientName, invoiceNumber]
           .filter(Boolean)
           .join(" • ") || undefined;
 
         toast({
-          title: "Reminder sent",
+          title: res.historyPersisted === false ? "Email sent · history needs attention" : "Reminder sent",
           description,
           variant: "default",
         });
@@ -97,11 +97,12 @@ export function SendReminderButton({
           variant: "default",
         });
       } else {
-        // Failed: keep button enabled, show error toast
-        setStatus("idle");
+        // An uncertain provider outcome must not invite an immediate retry.
+        setStatus(res.deliveryUncertain ? "skipped" : "idle");
+        if (res.deliveryUncertain) setSkipReason("Delivery uncertain. Reconcile the provider outcome before retrying.");
 
         toast({
-          title: "Failed to send reminder",
+          title: res.deliveryUncertain ? "Delivery needs reconciliation" : "Failed to send reminder",
           description: res.error || res.message || "Please try again.",
           variant: "destructive",
         });
@@ -128,7 +129,7 @@ export function SendReminderButton({
   };
 
   // Determine tooltip text based on status
-  let tooltipText = showEmailLabel ? "Email reminder" : "Send reminder";
+  let tooltipText = "Send email now (sends immediately)";
   if (!clientEmail) {
     tooltipText = "Client email missing";
   } else if (isLoading) {
@@ -150,7 +151,7 @@ export function SendReminderButton({
               size={status === "sent" ? "sm" : showEmailLabel ? "sm" : "icon"}
               onClick={handleClick}
               disabled={isDisabled}
-              aria-label={showEmailLabel ? "Email" : "Send reminder"}
+              aria-label={"Send email now (sends immediately)"}
               className={
                 status === "sent"
                   ? "h-8 px-2"
@@ -173,7 +174,7 @@ export function SendReminderButton({
               )}
             </Button>
             {showEmailLabel && status !== "sent" ? (
-              <span className="text-sm font-medium text-slate-800">Email</span>
+              <span className="text-sm font-medium text-slate-800">Send email now</span>
             ) : null}
           </div>
         </TooltipTrigger>

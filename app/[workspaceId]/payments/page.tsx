@@ -630,9 +630,9 @@ export default async function PaymentsPage({ params, searchParams }: PaymentsPag
         iconContainerClassName="bg-violet-50"
       />
       <KpiCard
-        label="Success Rate"
+        label="Effective Payment Records (%)"
         value={paymentKpiSummary?.successRateLabel ?? "Unavailable"}
-        supportingText="Effective / active payments"
+        supportingText="Completed, paid or legacy status / active records"
         icon={CheckCircle2}
         iconClassName="text-emerald-600"
         iconContainerClassName="bg-emerald-50"

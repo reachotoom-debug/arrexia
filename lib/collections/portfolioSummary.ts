@@ -1,7 +1,7 @@
 import { computeOutstandingByCurrency } from "@/lib/actions/collectionActivity";
 import { formatMoney } from "@/lib/utils/format-money";
 
-/** Escalation rule: recommend escalate when both thresholds are met. Amount is compared in default currency; no conversion applied. */
+/** Escalation rule: recommend escalate when both thresholds are met. Amount is compared in the invoice currency; no conversion applied. */
 export const COLLECTIONS_ESCALATION_MIN_OVERDUE_DAYS = 30;
 export const COLLECTIONS_ESCALATION_MIN_OUTSTANDING = 5000;
 
@@ -77,11 +77,11 @@ export function getRiskBadgeClasses(riskLevel: string | null | undefined): strin
 export function getRiskLabel(riskLevel: string | null | undefined): string {
   switch (riskLevel) {
     case "high":
-      return "High";
+      return "High priority";
     case "medium":
-      return "Medium";
+      return "Medium priority";
     case "low":
-      return "Low";
+      return "Low priority";
     default:
       return "—";
   }

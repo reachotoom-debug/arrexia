@@ -38,7 +38,7 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
       {/* Top 4 AR-specific KPIs */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <KPI
-          label="Collectible Outstanding"
+          label="Overdue Outstanding"
           value={fmtAggregate(data.arFocus.collectibleOutstanding)}
           icon={AlertTriangle}
           iconBgColor="bg-blue-100"
@@ -50,7 +50,7 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
           iconBgColor="bg-red-100"
         />
         <KPI
-          label="High-Risk Exposure"
+          label="High-Priority Overdue"
           value={fmtAggregate(data.arFocus.highRiskExposure)}
           icon={Target}
           iconBgColor="bg-red-100"
@@ -70,7 +70,7 @@ export function ArFocusView({ data, workspaceId }: ArFocusViewProps) {
             <div>
               <h3 className="text-sm font-semibold text-slate-900">Where to Collect First</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                Prioritized overdue invoices based on risk and amount
+                Prioritized overdue invoices based on age and amount; these are collection priorities, not credit-risk assessments
               </p>
             </div>
           </div>

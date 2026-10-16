@@ -274,7 +274,7 @@ describe("Reminders Automation Center presentation (Task 4)", () => {
 
     assert.match(buttonSrc, /sendReminderAction/);
     assert.match(buttonSrc, /showEmailLabel/);
-    assert.match(buttonSrc, />Email</);
+    assert.match(buttonSrc, />Send email now</);
     assert.match(actionsSrc, /sendReminderForInvoice/);
   });
 

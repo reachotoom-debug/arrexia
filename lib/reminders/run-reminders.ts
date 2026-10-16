@@ -1,3 +1,4 @@
+import { readAllPages } from "@/lib/db/readAllPages";
 /**
  * Automated reminder runner (R2C + R2F master automation gate).
  * Uses canonical getEligibleReminders() — same contract as Suggested Reminders.
@@ -25,11 +26,12 @@ export type EntitlementExecutionSkipReason =
   | "not_entitled"
   | "trial_automation_limit_reached";
 
+import type { ReminderExecutionSummary } from "./executeReminderRun";
 export type { ReminderExecutionSummary } from "./executeReminderRun";
 export { executeEligibleReminderCandidates } from "./executeReminderRun";
 export type { SendReminderForInvoiceFn } from "./executeReminderRun";
 
-export interface ReminderRunResult {
+export interface ReminderRunResult extends ReminderExecutionSummary {
   workspaceId: string;
   candidatesEligible: number;
   invoicesProcessed: number;
@@ -42,7 +44,6 @@ export interface ReminderRunResult {
   emailSkipReason?: EmailSkipReason;
   /** Present when entitlement blocks automatic execution. */
   entitlementSkipReason?: EntitlementExecutionSkipReason;
-  errors: Array<{ invoiceId: string; ruleId?: string; error: string }>;
 }
 
 export type RunDueRemindersOptions = {
@@ -65,6 +66,8 @@ function emptyRunResult(workspaceId: string): ReminderRunResult {
     remindersSent: 0,
     remindersFailed: 0,
     remindersSkipped: 0,
+    remindersUncertain: 0,
+    warnings: [],
     errors: [],
   };
 }
@@ -180,6 +183,7 @@ export async function runDueRemindersForAllWorkspaces(
   totalInvoicesProcessed: number;
   totalRemindersSent: number;
   totalRemindersFailed: number;
+  totalRemindersUncertain: number;
   workspaceResults: ReminderRunResult[];
   errors: Array<{ workspaceId: string; error: string }>;
 }> {
@@ -188,29 +192,12 @@ export async function runDueRemindersForAllWorkspaces(
   const errors: Array<{ workspaceId: string; error: string }> = [];
 
   try {
-    const { data: workspaces, error: workspacesError } = await supabase
+    const { data: workspaces } = await readAllPages<{ id: string }>((from, to) => supabase
       .from("workspaces")
       .select("id")
-      .order("created_at", { ascending: true });
-
-    if (workspacesError) {
-      console.error(
-        "[runDueRemindersForAllWorkspaces] Error loading workspaces:",
-        workspacesError
-      );
-      errors.push({
-        workspaceId: "all",
-        error: `Failed to load workspaces: ${workspacesError.message}`,
-      });
-      return {
-        workspacesProcessed: 0,
-        totalInvoicesProcessed: 0,
-        totalRemindersSent: 0,
-        totalRemindersFailed: 0,
-        workspaceResults: [],
-        errors,
-      };
-    }
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to));
 
     if (!workspaces || workspaces.length === 0) {
       console.log("[runDueRemindersForAllWorkspaces] No workspaces found");
@@ -219,6 +206,7 @@ export async function runDueRemindersForAllWorkspaces(
         totalInvoicesProcessed: 0,
         totalRemindersSent: 0,
         totalRemindersFailed: 0,
+        totalRemindersUncertain: 0,
         workspaceResults: [],
         errors: [],
       };
@@ -266,6 +254,7 @@ export async function runDueRemindersForAllWorkspaces(
       totalInvoicesProcessed,
       totalRemindersSent,
       totalRemindersFailed,
+      totalRemindersUncertain: workspaceResults.reduce((sum, r) => sum + r.remindersUncertain, 0),
       workspaceResults,
       errors,
     };
@@ -280,6 +269,7 @@ export async function runDueRemindersForAllWorkspaces(
       totalInvoicesProcessed: 0,
       totalRemindersSent: 0,
       totalRemindersFailed: 0,
+      totalRemindersUncertain: 0,
       workspaceResults: [],
       errors,
     };

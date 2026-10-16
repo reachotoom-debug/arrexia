@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
+import { formatClientCurrencyAmounts } from "@/lib/clients/currencyPresentation";
 import { formatCurrency } from "@/lib/format/currency";
 
 interface ArchiveConfirmDialogProps {
@@ -10,6 +11,7 @@ interface ArchiveConfirmDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   outstanding: number;
+  outstandingByCurrency?: Record<string, number>;
   workspaceId: string;
   clientId: string;
   action: "archive" | "inactivate";
@@ -21,6 +23,7 @@ export function ArchiveConfirmDialog({
   onClose,
   onConfirm,
   outstanding,
+  outstandingByCurrency,
   workspaceId,
   clientId,
   action,
@@ -28,7 +31,9 @@ export function ArchiveConfirmDialog({
 }: ArchiveConfirmDialogProps) {
   if (!isOpen) return null;
 
-  const formattedOutstanding = formatCurrency(outstanding, {
+  const formattedOutstanding = outstandingByCurrency
+    ? formatClientCurrencyAmounts(outstandingByCurrency)
+    : formatCurrency(outstanding, {
     currency: workspaceDefaultCurrency,
   });
 

@@ -1,3 +1,4 @@
+import { formatYearMonth } from "@/lib/dashboard/paymentMonthlySeries";
 import { RevenueOverviewChart } from "@/components/dashboard/RevenueOverviewChart";
 import { StatusFunnelChart } from "@/components/dashboard/StatusFunnelChart";
 import { ChartEmptyState } from "./ChartEmptyState";
@@ -43,10 +44,10 @@ export function OwnerOverviewView({ data, workspaceId }: OwnerOverviewViewProps)
     );
   }
 
-  const revenueChartData = invoicedMonthly.map((inv, idx) => {
-    const collected = collectedMonthly[idx]?.amount ?? 0;
+  const revenueChartData = invoicedMonthly.map((inv) => {
+    const collected = collectedMonthly.find(row => row.month === inv.month)?.amount ?? 0;
     const monthLabel = inv.month
-      ? new Date(`${inv.month}-01`).toLocaleDateString("en-US", { month: "short" })
+      ? formatYearMonth(inv.month)
       : "—";
 
     return {

@@ -228,6 +228,7 @@ describe("integration contracts", () => {
       "utf8"
     );
     assert.match(src, /countsTowardClientCollectibleOutstanding/);
-    assert.match(src, /collectibleInvoices\.reduce/);
+    assert.match(src, /outstandingBalance = formatTotals\(collectibleInvoices, "outstanding"\)/);
+    assert.match(src, /formatClientCurrencyAmounts\(sumClientCurrencyAmounts\(rows,/);
   });
 });

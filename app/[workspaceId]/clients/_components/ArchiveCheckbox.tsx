@@ -16,6 +16,7 @@ type Props = {
 export function ArchiveCheckbox({ workspaceId, clientId, initialArchived, disabled }: Props) {
   const [checked, setChecked] = React.useState<boolean>(initialArchived);
   const [pending, startTransition] = React.useTransition();
+  const [outstandingByCurrency, setOutstandingByCurrency] = React.useState<Record<string, number>>({});
   const [showConfirm, setShowConfirm] = React.useState(false);
   const [outstanding, setOutstanding] = React.useState<number>(0);
   const [pendingAction, setPendingAction] = React.useState<boolean | null>(null);
@@ -91,7 +92,7 @@ export function ArchiveCheckbox({ workspaceId, clientId, initialArchived, disabl
         return;
       }
 
-      if (outstandingResult.outstanding > 0) {
+      if (outstandingResult.hasOutstanding) {
         // Show confirmation dialog
         console.log("[ArchiveCheckbox] onChange: showing confirmation dialog", { 
           workspaceId, 
@@ -99,6 +100,7 @@ export function ArchiveCheckbox({ workspaceId, clientId, initialArchived, disabl
           outstanding: outstandingResult.outstanding 
         });
         setOutstanding(outstandingResult.outstanding);
+        setOutstandingByCurrency(outstandingResult.outstandingByCurrency);
         setPendingAction(true);
         setShowConfirm(true);
       } else {
@@ -152,6 +154,7 @@ export function ArchiveCheckbox({ workspaceId, clientId, initialArchived, disabl
           onClose={handleCancel}
           onConfirm={handleConfirm}
           outstanding={outstanding}
+          outstandingByCurrency={outstandingByCurrency}
           workspaceId={workspaceId}
           clientId={clientId}
           action="archive"

@@ -12,7 +12,7 @@ import { DeleteClientModal } from "./DeleteClientModal";
 
 import { deleteClient } from "../actions";
 
-import { formatMoney } from "@/lib/invoices/utils";
+import { formatClientCurrencyAmounts } from "@/lib/clients/currencyPresentation";
 
 import { getPaymentTermsLabel } from "@/lib/utils/payment-terms";
 
@@ -59,6 +59,7 @@ interface Client {
   invoicesCount?: number;
 
   outstanding?: number;
+  outstandingByCurrency?: Record<string, number>;
 
 }
 
@@ -309,7 +310,7 @@ export function ClientsTable({
 
                     >
 
-                      {formatMoney(Math.abs(outstanding), workspaceDefaultCurrency)}
+                      {formatClientCurrencyAmounts(client.outstandingByCurrency ?? {})}
 
                     </td>
 
