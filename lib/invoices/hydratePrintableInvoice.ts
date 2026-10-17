@@ -1,7 +1,7 @@
 import { buildInvoiceBranding } from "@/app/[workspaceId]/invoices/_utils/branding";
 import { getClientPhone, getClientWhatsApp } from "@/lib/clients/clientContact";
 import type { Database } from "@/types/supabase/index";
-import { PAYMENT_TERMS_OPTIONS } from "@/lib/invoices/paymentTerms";
+import { formatPaymentTermsLabel } from "@/lib/invoices/paymentTerms";
 import type { PrintableInvoice } from "./invoice-pdf-shared";
 
 type SettingsRow = Database["public"]["Tables"]["settings"]["Row"];
@@ -35,6 +35,7 @@ type ClientRow = {
 
 type PaymentRow = {
   amount: number | null;
+  net_amount?: number | null;
   status: string | null;
   archived_at?: string | null;
 };
@@ -44,17 +45,7 @@ function coerceMoney(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function formatPaymentTermsLabel(
-  paymentTerms: string | null | undefined,
-  paymentTermsDays: number | null | undefined
-): string {
-  if (!paymentTerms) return "—";
-  const option = PAYMENT_TERMS_OPTIONS.find((o) => o.code === paymentTerms);
-  if (paymentTerms === "custom" && paymentTermsDays != null) {
-    return `Custom (${paymentTermsDays} days)`;
-  }
-  return option?.label ?? paymentTerms;
-}
+export { formatPaymentTermsLabel } from "./paymentTerms";
 
 /** Fallback when invoices_view row is unavailable (e.g. archived invoice). */
 export function sumCompletedPayments(payments: PaymentRow[]): number {
@@ -64,10 +55,9 @@ export function sumCompletedPayments(payments: PaymentRow[]): number {
       (p) =>
         p.status === "completed" ||
         p.status === "paid" ||
-        p.status == null ||
-        p.status === ""
+        p.status == null
     )
-    .reduce((sum, p) => sum + coerceMoney(p.amount), 0);
+    .reduce((sum, p) => sum + coerceMoney(p.net_amount ?? p.amount), 0);
 }
 
 /**

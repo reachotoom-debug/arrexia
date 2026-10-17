@@ -1018,7 +1018,7 @@ export async function getDashboardSummary(workspaceId: string, scopeCurrency?: s
       )
       .eq("workspace_id", workspaceId)
       .is("archived_at", null)
-      .not("base_status", "in", '("draft","void")').order("id", { ascending: true }).range(from, to)),
+      .order("id", { ascending: true }).range(from, to)),
     readAllPages((from, to) => supabase
       .from("payments_view")
       .select("amount, net_amount, payment_date, created_at, status, currency")
@@ -1077,7 +1077,13 @@ export async function getDashboardSummary(workspaceId: string, scopeCurrency?: s
     now
   );
 
-  const safeInvoices = invoicesRaw.filter(inv => (inv.currency?.trim().toUpperCase() || fallbackCurrency) === defaultCurrency).map((inv) => ({
+  const currencyInvoices = invoicesRaw.filter(inv => (inv.currency?.trim().toUpperCase() || fallbackCurrency) === defaultCurrency);
+  const invoiceActivity = {
+    issuedCount: currencyInvoices.filter(inv => inv.base_status !== "draft" && inv.base_status !== "void").length,
+    draftCount: currencyInvoices.filter(inv => inv.base_status === "draft").length,
+    voidCount: currencyInvoices.filter(inv => inv.base_status === "void").length,
+  };
+  const safeInvoices = currencyInvoices.filter(inv => inv.base_status !== "draft" && inv.base_status !== "void").map((inv) => ({
     id: inv.id,
     totalAmount: toNumber(inv.total),
     paidAmount: toNumber(inv.paid),
@@ -1228,6 +1234,7 @@ export async function getDashboardSummary(workspaceId: string, scopeCurrency?: s
 
   return {
     defaultCurrency,
+    invoiceActivity,
     totals: {
       totalInvoiced: totalInvoicedAllTime,
       totalCollected: totalCollectedAllTime,

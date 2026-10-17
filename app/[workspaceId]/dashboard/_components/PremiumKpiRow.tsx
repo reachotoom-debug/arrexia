@@ -6,6 +6,7 @@ import { MetricCard } from "./MetricCard";
 export interface DashboardSummaryPremium {
   /** Workspace default currency for formatting (e.g. from settings.default_currency) */
   defaultCurrency?: string;
+  invoiceActivity?: { issuedCount: number; draftCount: number; voidCount: number };
   totals: {
     totalInvoiced: number;
     totalCollected: number;

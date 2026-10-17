@@ -15,6 +15,7 @@ type DashboardInsight = {
 interface DashboardInsightProps {
   summary: DashboardSummaryPremium | null;
   workspaceId: string;
+  isMultiCurrency?: boolean;
 }
 
 function formatCurrencyAmount(value: number, currencyCode: string): string {
@@ -33,10 +34,18 @@ const GOOD_COLLECTION_RATE = 0.85;
 const IMPROVING_DELTA = -10;
 const WORSENING_DELTA = 10;
 
-function getDashboardInsight(summary: DashboardSummaryPremium): DashboardInsight {
+function getDashboardInsight(summary: DashboardSummaryPremium, isMultiCurrency: boolean): DashboardInsight {
   const { totals, deltas } = summary;
 
   if (totals.totalInvoiced === 0 && totals.totalOutstanding === 0) {
+    if (summary.invoiceActivity && (isMultiCurrency || Object.values(summary.invoiceActivity).some(count => count > 0))) {
+      const { draftCount, voidCount } = summary.invoiceActivity;
+      return {
+        level: "neutral",
+        title: `No issued ${summary.defaultCurrency ?? "USD"} receivables.`,
+        detail: `${draftCount} draft${draftCount === 1 ? "" : "s"} and ${voidCount} void invoice${voidCount === 1 ? "" : "s"} in this currency. Draft, void and archived invoices are excluded from receivables.`,
+      };
+    }
     return FIRST_RUN_DASHBOARD_INSIGHT;
   }
 
@@ -112,12 +121,12 @@ function getDashboardInsight(summary: DashboardSummaryPremium): DashboardInsight
   };
 }
 
-export function DashboardInsight({ summary, workspaceId }: DashboardInsightProps) {
+export function DashboardInsight({ summary, workspaceId, isMultiCurrency = false }: DashboardInsightProps) {
   if (!summary || !summary.totals) {
     return null;
   }
 
-  const insight = getDashboardInsight(summary);
+  const insight = getDashboardInsight(summary, isMultiCurrency);
   const { totals } = summary;
   const workspaceCurrency = summary.defaultCurrency ?? "USD";
 

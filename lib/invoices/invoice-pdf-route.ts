@@ -83,10 +83,15 @@ export async function getInvoicePdfResponse(
         .maybeSingle(),
       supabase
         .from("payments")
-        .select("amount, status, archived_at")
+        .select("amount, net_amount, status, archived_at")
         .eq("invoice_id", invoiceId)
+        .eq("workspace_id", workspaceId)
         .is("archived_at", null),
     ]);
+
+  if (invoiceViewRes.error || paymentsRes.error) {
+    return NextResponse.json({ error: "Failed to load invoice balances" }, { status: 500 });
+  }
 
   if (itemsRes.error) {
     return NextResponse.json({ error: "Failed to load invoice items" }, { status: 500 });

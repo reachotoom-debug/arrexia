@@ -33,6 +33,24 @@ function install(tables: Record<string, Row[]>, failTable?: string) {
   return mock.method(server, "supabaseServer", async () => database(tables, failTable) as never);
 }
 const settings = [{ workspace_id: "w", default_currency: "USD", timezone: "Asia/Amman" }];
+it("draft-only EUR activity remains visible without entering receivables totals", async () => {
+  const base = {workspace_id:"w",archived_at:null,total:100,paid:0,outstanding:100};
+  const spy = install({settings,invoices_view:[
+    {...base,id:"eur",currency:"EUR",base_status:"draft"},
+    {...base,id:"usd",currency:"USD",base_status:"sent"},
+    {...base,id:"void",currency:"USD",base_status:"void"},
+    {...base,id:"archived",currency:"USD",base_status:"sent",archived_at:"2026-10-01"},
+  ]});
+  try {
+    assert.deepEqual(await getDashboardCurrencies("w"),["EUR","USD"]);
+    const eur = await getDashboardSummary("w","EUR");
+    const usd = await getDashboardSummary("w","USD");
+    assert.deepEqual(eur.invoiceActivity,{issuedCount:0,draftCount:1,voidCount:0});
+    assert.equal(eur.totals.totalOutstanding,0);
+    assert.deepEqual(usd.invoiceActivity,{issuedCount:1,draftCount:0,voidCount:1});
+    assert.equal(usd.totals.totalOutstanding,100);
+  } finally { spy.mock.restore(); }
+});
 it("dashboard loaders separate currencies and place September receipts on August invoices in September beyond 1000 rows", async () => {
   mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-15T12:00:00Z").getTime() });
   const invoice = { workspace_id: "w", client_id: "c", client_name: "Client", base_status: "sent", display_status: "sent", issue_date: "2026-08-10", due_date: "2026-11-10", archived_at: null, client_is_active: true, client_archived_at: null };

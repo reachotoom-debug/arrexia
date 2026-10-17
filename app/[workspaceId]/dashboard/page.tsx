@@ -117,7 +117,7 @@ export default async function DashboardPage({
       {view === "standard" && (
         <section className="mt-6 space-y-6">
           <DashboardKpiRow summary={dashboardSummary} showPaymentsLast30Days />
-          <DashboardInsight summary={dashboardSummary} workspaceId={workspaceId} />
+          <DashboardInsight summary={dashboardSummary} workspaceId={workspaceId} isMultiCurrency={currencies.length > 1} />
         </section>
       )}
 

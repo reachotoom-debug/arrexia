@@ -199,7 +199,7 @@ export async function sendInvoiceEmail(options: {
 
       .from("payments")
 
-      .select("amount, status, archived_at")
+      .select("amount, net_amount, status, archived_at")
 
       .eq("invoice_id", invoiceId)
 

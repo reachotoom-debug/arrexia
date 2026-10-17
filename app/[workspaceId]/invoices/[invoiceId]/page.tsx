@@ -5,7 +5,7 @@ import { requireWorkspace } from "@/lib/auth/server";
 import { createRoutePerf, perfTime } from "@/lib/perf/server";
 import { isSandboxSenderActive, getResendTestRecipientEmail } from "@/lib/email/sendEmail";
 import { formatCurrency } from "@/lib/format/currency";
-import { PAYMENT_TERMS_OPTIONS } from "@/lib/invoices/paymentTerms";
+import { formatPaymentTermsLabel } from "@/lib/invoices/paymentTerms";
 import { SendInvoiceButton } from "./_components/SendInvoiceButton";
 import { DownloadInvoicePdfButton } from "./_components/DownloadInvoicePdfButton";
 import { ArchivedBanner } from "@/components/ui/archived-banner";
@@ -521,21 +521,7 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
             <div className="flex justify-between">
               <dt className="text-slate-500">Payment Terms</dt>
               <dd>
-                {(() => {
-                  const termsOption = PAYMENT_TERMS_OPTIONS.find(
-                    (opt) => opt.code === invoice.payment_terms
-                  );
-                  let label = termsOption?.label ?? "Custom";
-
-                  if (
-                    invoice.payment_terms === "custom" &&
-                    invoice.payment_terms_days != null
-                  ) {
-                    label = `Custom (${invoice.payment_terms_days} days)`;
-                  }
-
-                  return label;
-                })()}
+                {formatPaymentTermsLabel(invoice.payment_terms, invoice.payment_terms_days)}
               </dd>
             </div>
             {invoice.po_number && (

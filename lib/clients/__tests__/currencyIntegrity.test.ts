@@ -26,5 +26,5 @@ it('keeps billed, paid, and negative balances separate without workspace currenc
  const rows=[{currency:'USD',total:100,paid:20},{currency:'EUR',total:200,paid:30},{currency:null,total:-5,paid:0}];
  assert.deepEqual(sumClientCurrencyAmounts(rows,r=>r.total),{USD:100,EUR:200,'Unknown currency':-5});
  assert.deepEqual(sumClientCurrencyAmounts(rows,r=>r.paid),{USD:20,EUR:30,'Unknown currency':0});
- assert.match(formatClientCurrencyAmounts({'EUR':-5,'USD':100}),/EUR -5.00 \/ USD 100.00/);
+ assert.match(formatClientCurrencyAmounts({'EUR':-5,'USD':100}),/-\u20ac5.00 EUR \/ \$100.00 USD/);
 });

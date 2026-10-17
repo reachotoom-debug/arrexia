@@ -82,7 +82,7 @@ describe("client warning presentation", () => {
     });
     const node = ArchiveConfirmDialog({isOpen:true,onClose(){},onConfirm(){},outstanding:0,outstandingByCurrency:{USD:10,EUR:20},workspaceId:"w",clientId:"c",action:"archive",workspaceDefaultCurrency:"JPY"});
     const serialized=JSON.stringify(node);
-    assert.match(serialized,/EUR 20.00 \/ USD 10.00/);
+    assert.match(serialized,/\u20ac20.00 EUR \/ \$10.00 USD/);
     assert.ok(!serialized.includes("INVALID WORKSPACE TOTAL"));
     for (const file of ["app/[workspaceId]/clients/_components/ArchiveCheckbox.tsx","app/[workspaceId]/clients/[clientId]/_components/ToggleClientActive.tsx"]) {
       const source=readFileSync(file,"utf8");

@@ -120,3 +120,16 @@ export function calculateDueDate(
   return computeDueDate(issueDate, days);
 }
 
+
+export function formatPaymentTermsLabel(
+  paymentTerms: string | null | undefined,
+  paymentTermsDays: number | null | undefined
+): string {
+  if (!paymentTerms) return "—";
+  const option = PAYMENT_TERMS_OPTIONS.find((o) => o.code === paymentTerms);
+  if (paymentTerms === "custom" && paymentTermsDays != null) {
+    return `Custom (${paymentTermsDays} days)`;
+  }
+  return option?.label ?? paymentTerms;
+}
+
