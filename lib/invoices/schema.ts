@@ -23,7 +23,8 @@ export const InvoiceFormSchema = z.object({
 
   invoiceNumber: z
     .string("Invoice number is required")
-    .regex(/^INV-\d{4}$/, "Invalid invoice format (expected INV-0001)"),
+    .trim()
+    .min(1, "Invoice number is required"),
 
   issueDate: z.string("Issue date is required"),
 
