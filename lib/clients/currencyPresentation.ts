@@ -2,10 +2,12 @@ import { formatCurrency } from "@/lib/format/currency";
 
 /** Display currency balances without implying conversion or netting currencies. */
 export function formatClientCurrencyAmounts(totals: Record<string, number>): string {
-  return Object.entries(totals)
+  const entries = Object.entries(totals);
+  const isMixedCurrency = entries.length > 1;
+  return entries
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([currency, amount]) => /^[A-Z]{3}$/.test(currency)
-      ? `${formatCurrency(amount, { currency })} ${currency}`
+      ? `${formatCurrency(amount, { currency })}${isMixedCurrency ? ` ${currency}` : ""}`
       : `${currency} ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
     .join(" / ") || "--";
 }

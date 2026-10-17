@@ -1270,11 +1270,16 @@ export async function getDashboardCurrencies(workspaceId: string): Promise<strin
   const supabase = await supabaseServer();
   const [settings, invoices, payments] = await Promise.all([
     supabase.from("settings").select("default_currency").eq("workspace_id", workspaceId).maybeSingle(),
-    readAllPages((from, to) => supabase.from("invoices_view").select("currency").eq("workspace_id", workspaceId).order("id", { ascending: true }).range(from, to)),
-    readAllPages((from, to) => supabase.from("payments_view").select("currency").eq("workspace_id", workspaceId).order("id", { ascending: true }).range(from, to)),
+    readAllPages((from, to) => supabase.from("invoices_view").select("currency").eq("workspace_id", workspaceId)
+      .is("archived_at", null).not("base_status", "in", '("draft","void")').order("id", { ascending: true }).range(from, to)),
+    readAllPages((from, to) => supabase.from("payments_view").select("currency, status").eq("workspace_id", workspaceId)
+      .is("archived_at", null).order("id", { ascending: true }).range(from, to)),
   ]);
   if (settings.error) throw settings.error;
   const fallback = settings.data?.default_currency || "USD";
-  const currencies = new Set([...invoices.data, ...payments.data].map(row => row.currency?.trim().toUpperCase() || fallback));
+  // Currency sections follow actual ledger activity, not draft/void documents.
+  // Match canonical effective-payment statuses without hiding payment-only currencies.
+  const effectivePayments = payments.data.filter(row => row.status == null || row.status === "completed" || row.status === "paid");
+  const currencies = new Set([...invoices.data, ...effectivePayments].map(row => row.currency?.trim().toUpperCase() || fallback));
   return currencies.size ? [...currencies].sort() : [fallback];
 }

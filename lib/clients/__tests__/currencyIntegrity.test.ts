@@ -22,6 +22,13 @@ it('does not publish partial client balances after later page failure', async ()
 });
 
 import { formatClientCurrencyAmounts, sumClientCurrencyAmounts } from '../currencyPresentation';
+it('omits redundant ISO suffix for single balances while identifying mixed dollar currencies', () => {
+ assert.equal(formatClientCurrencyAmounts({USD:20000}),'$20,000.00');
+ assert.equal(formatClientCurrencyAmounts({CAD:20}),'CA$20.00');
+ assert.equal(formatClientCurrencyAmounts({USD:20,CAD:30}),'CA$30.00 CAD / $20.00 USD');
+ assert.equal(formatClientCurrencyAmounts({'Unknown currency':20}),'Unknown currency 20.00');
+ assert.equal(formatClientCurrencyAmounts({}),'--');
+});
 it('keeps billed, paid, and negative balances separate without workspace currency fallback', () => {
  const rows=[{currency:'USD',total:100,paid:20},{currency:'EUR',total:200,paid:30},{currency:null,total:-5,paid:0}];
  assert.deepEqual(sumClientCurrencyAmounts(rows,r=>r.total),{USD:100,EUR:200,'Unknown currency':-5});
